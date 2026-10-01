@@ -1,0 +1,53 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="freesnip.App"
+             RequestedThemeVariant="Dark">
+    <!-- Shared design system: single source of truth for colors/fonts/sizes (ISSUE_001) -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://freesnip.editor/Themes/DesignSystem.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+        <Style Selector="ScrollBar">
+            <Setter Property="AllowAutoHide" Value="False" />
+        </Style>
+        <Style Selector="ScrollBar[Orientation=Vertical]">
+            <Setter Property="Theme" Value="{DynamicResource FreeSnipScrollBarVertical}" />
+        </Style>
+        <Style Selector="ScrollBar[Orientation=Horizontal]">
+            <Setter Property="Theme" Value="{DynamicResource FreeSnipScrollBarHorizontal}" />
+        </Style>
+        <Style Selector="FlyoutPresenter">
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        </Style>
+    </Application.Styles>
+
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon ToolTipText="FreeSnip v3.0" Clicked="OnTrayIconClicked">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Capture Region (PrintScreen)" Click="OnCaptureRegionClick" Icon="avares://FreeSnip/icons/ruler-crop.png" />
+                        <NativeMenuItem Header="Repeat Last Region" Click="OnCaptureLastRegionClick" Icon="avares://FreeSnip/icons/repeat.png" />
+                        <NativeMenuItem Header="Capture Window (Alt+PrintScreen)" Click="OnCaptureWindowClick" Icon="avares://FreeSnip/icons/shape_square_add.png" />
+                        <NativeMenuItem Header="Capture Fullscreen (Ctrl+PrintScreen)" Click="OnCaptureFullscreenClick" Icon="avares://FreeSnip/icons/fullscreen.png" />
+                        <NativeMenuItem Header="Scroll Capture (Space)" Click="OnScrollCaptureClick" Icon="avares://FreeSnip/icons/scroll-capture.png" />
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Open From Clipboard" Click="OnOpenFromClipboardClick" Icon="avares://FreeSnip/icons/clipboard.png" />
+                        <NativeMenuItem Header="Show Capture History" Click="OnShowHistoryClick" Icon="avares://FreeSnip/icons/folder_explore.png" />
+                        <NativeMenuItemSeparator />
+                        <NativeMenuItem Header="Settings" Click="OnSettingsClick" Icon="avares://FreeSnip/icons/wrench.png" />
+                        <NativeMenuItem Header="View Logs" Click="OnViewLogsClick" Icon="avares://FreeSnip/icons/log.png" />
+                        <NativeMenuItem Header="Exit" Click="OnExitClick" Icon="avares://FreeSnip/icons/cross.png" />
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
+</Application>

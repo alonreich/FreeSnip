@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="freesnip.editor.forms.ResizeWindow"
+        Title="Resize Image"
+        AutomationProperties.Name="Resize image"
+        SizeToContent="WidthAndHeight"
+        MinWidth="430" MinHeight="300"
+        Background="{DynamicResource FreeSnipPanelDarkBrush}"
+        WindowStartupLocation="CenterOwner"
+        Topmost="False"
+        CanResize="True">
+    <!-- ISSUE_012: theme is set once at the Application level (App.axaml). -->
+    <StackPanel Margin="20" Spacing="15">
+        <Grid ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+            <StackPanel Grid.Column="0" Spacing="15">
+                <!-- ISSUE_016: two-way bound checkbox -->
+                <CheckBox Name="RatioCheckbox" Content="Maintain Aspect Ratio" AutomationProperties.Name="Maintain aspect ratio" Cursor="Hand" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" IsChecked="True" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                <TextBlock Name="CurrentSizeText" Text="Current: 0 x 0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="12" />
+                
+                <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto" VerticalAlignment="Center">
+                    <TextBlock Text="Width:" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" Margin="0,0,10,0"/>
+                    <!-- ISSUE_016: text inputs kept in sync from the code-behind (result properties are read at OK time). -->
+                    <TextBox Name="WidthInput" Grid.Column="1" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Watermark="px" AutomationProperties.Name="New width in pixels" ToolTip.Tip="New width in pixels" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                    
+                    <TextBlock Text="Height:" Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" Margin="15,0,10,0"/>
+                    <TextBox Name="HeightInput" Grid.Column="3" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Watermark="px" AutomationProperties.Name="New height in pixels" ToolTip.Tip="New height in pixels" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                </Grid>
+
+                <StackPanel Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button Content="20%" MinWidth="56" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Cursor="Hand" HorizontalContentAlignment="Center" Click="OnPresetClick" Tag="20" AutomationProperties.Name="Scale to 20 percent" ToolTip.Tip="Five times smaller"/>
+                        <Button Content="50%" MinWidth="56" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Cursor="Hand" HorizontalContentAlignment="Center" Click="OnPresetClick" Tag="50" AutomationProperties.Name="Scale to 50 percent" ToolTip.Tip="Half size"/>
+                        <Button Content="100%" MinWidth="56" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Cursor="Hand" HorizontalContentAlignment="Center" Click="OnPresetClick" Tag="100" AutomationProperties.Name="Scale to 100 percent" ToolTip.Tip="Original size"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Button Content="200%" MinWidth="56" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Cursor="Hand" HorizontalContentAlignment="Center" Click="OnPresetClick" Tag="200" AutomationProperties.Name="Scale to 200 percent" ToolTip.Tip="Twice as big"/>
+                        <Button Content="500%" MinWidth="56" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Cursor="Hand" HorizontalContentAlignment="Center" Click="OnPresetClick" Tag="500" AutomationProperties.Name="Scale to 500 percent" ToolTip.Tip="Five times bigger"/>
+                        <Button Content="Fit" MinWidth="56" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Cursor="Hand" HorizontalContentAlignment="Center" Click="OnPresetClick" Tag="Fit" AutomationProperties.Name="Fit to screen" ToolTip.Tip="Biggest size that still fits on this screen"/>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+            
+            <StackPanel Grid.Column="1" Margin="20,0,0,0" HorizontalAlignment="Center">
+                <TextBlock Name="PercentText" Text="100%" HorizontalAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" FontWeight="Bold" Margin="0,0,0,6"/>
+                <!-- Log-scaled track: -100 = 20% (five times smaller), 0 = 100%, +100 = 500% (five times bigger).
+                     100% therefore sits dead centre, where the magnetic snap in the code-behind catches it. -->
+                <Slider Name="SizeSlider" Orientation="Vertical" MinHeight="140" Cursor="Hand" AutomationProperties.Name="Scale percentage"
+                        Minimum="-100" Maximum="100" Value="0" IsVisible="True" 
+                        ToolTip.Tip="Drag down to shrink to 20%, up to enlarge to 500%. Centre snaps back to 100%." />
+                <TextBlock Name="ScaleHintText" Text="20% – 500%" HorizontalAlignment="Center" Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" />
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,20,0,0">
+            <Button Name="OkButton" Content="OK" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" AutomationProperties.Name="Apply new size" Cursor="Hand" HorizontalContentAlignment="Center" Click="OnOkClick" IsDefault="True" Background="{DynamicResource FreeSnipAccentBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+            <Button Content="Cancel" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" AutomationProperties.Name="Cancel resize" Cursor="Hand" HorizontalContentAlignment="Center" Click="OnCancelClick" IsCancel="True" />
+        </StackPanel>
+    </StackPanel>
+</Window>

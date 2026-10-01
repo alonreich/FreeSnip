@@ -1,0 +1,1113 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Avalonia.Svg.Skia"
+        x:Class="freesnip.editor.forms.ImageEditorWindow"
+        Title="FreeSnip Editor"
+        Background="{DynamicResource FreeSnipCanvasBrush}"
+        ShowInTaskbar="True"
+        CanResize="True"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="32"
+        MinWidth="880" MinHeight="630"
+        WindowStartupLocation="Manual"
+        Cursor="Arrow"
+        Focusable="True">
+    <Window.Resources>
+        <GridLength x:Key="SliderPreContentMargin">0</GridLength>
+        <GridLength x:Key="SliderPostContentMargin">0</GridLength>
+
+        <VisualBrush x:Key="CheckerboardBrush" TileMode="Tile" SourceRect="0,0,20,20" DestinationRect="0,0,20,20">
+            <VisualBrush.Visual>
+                <Canvas Width="20" Height="20">
+                    <Rectangle Width="10" Height="10" Fill="{DynamicResource FreeSnipCheckerDarkBrush}" />
+                    <Rectangle Width="10" Height="10" Fill="{DynamicResource FreeSnipCheckerDarkBrush}" Canvas.Left="10" Canvas.Top="10" />
+                    <Rectangle Width="10" Height="10" Fill="{DynamicResource FreeSnipCheckerLightBrush}" Canvas.Left="10" />
+                    <Rectangle Width="10" Height="10" Fill="{DynamicResource FreeSnipCheckerLightBrush}" Canvas.Top="10" />
+                </Canvas>
+            </VisualBrush.Visual>
+        </VisualBrush>
+
+        <ControlTheme x:Key="BottomToolbarScrollBarThumb" TargetType="Thumb">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="#60FFFFFF" CornerRadius="2" />
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border">
+                <Setter Property="Background" Value="#A0FFFFFF" />
+            </Style>
+            <Style Selector="^:pressed /template/ Border">
+                <Setter Property="Background" Value="#D0FFFFFF" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="BottomToolbarScrollBarPage" TargetType="RepeatButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+
+        <ControlTheme x:Key="BottomToolbarScrollBarTheme" TargetType="ScrollBar">
+            <Setter Property="Height" Value="6" />
+            <Setter Property="MinHeight" Value="6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#80FFFFFF" />
+            <Setter Property="Opacity" Value="0.8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="AllowAutoHide" Value="False" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid Background="{TemplateBinding Background}" Height="6" Cursor="Hand">
+                        <Track Name="PART_Track" Orientation="Horizontal"
+                               Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}" Cursor="Hand">
+                            <Track.DecreaseButton>
+                                <RepeatButton Name="PART_PageLeftButton" Theme="{StaticResource BottomToolbarScrollBarPage}" Interval="60" Delay="250" />
+                            </Track.DecreaseButton>
+                            <Track.Thumb>
+                                <Thumb Theme="{StaticResource BottomToolbarScrollBarThumb}" MinWidth="30" Height="4" Margin="0,1" />
+                            </Track.Thumb>
+                            <Track.IncreaseButton>
+                                <RepeatButton Name="PART_PageRightButton" Theme="{StaticResource BottomToolbarScrollBarPage}" Interval="60" Delay="250" />
+                            </Track.IncreaseButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </Window.Resources>
+
+    
+    <Window.Styles>
+        <Style Selector="Button.toolbar">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Background" Value="Transparent" />
+            
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.1" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.action">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Background" Value="{DynamicResource FreeSnipActionButtonBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="ActionBorder" 
+                            Background="{TemplateBinding Background}" 
+                            BorderBrush="{TemplateBinding BorderBrush}" 
+                            BorderThickness="{TemplateBinding BorderThickness}" 
+                            CornerRadius="4" 
+                            BoxShadow="0 2 5 0 #88000000">
+                        <Border.Transitions>
+                            <Transitions>
+                                <BrushTransition Property="Background" Duration="0:0:0.4" />
+                                <BrushTransition Property="BorderBrush" Duration="0:0:0.4" />
+                                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.05" />
+                                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.05" />
+                            </Transitions>
+                        </Border.Transitions>
+                        <ContentPresenter Content="{TemplateBinding Content}" 
+                                          HorizontalAlignment="Center" 
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.action:pressed /template/ Border#ActionBorder">
+            <Setter Property="RenderTransform" Value="scale(0.96) translateY(1px)" />
+            <Setter Property="BoxShadow" Value="0 1 2 0 #AA000000" />
+        </Style>
+        <Style Selector="Button.action:hover /template/ Border#ActionBorder">
+            <Setter Property="Opacity" Value="0.85" />
+        </Style>
+        <Style Selector="Button.context-delete">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipDestructiveBrush}" />
+        </Style>
+        <Style Selector="Button.context-apply">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipSuccessBrush}" />
+        </Style>
+        <Style Selector="Button.toolbar:disabled /template/ ContentPresenter">
+            <Setter Property="Opacity" Value="0.35" />
+        </Style>
+        <Style Selector="Button.toolbar /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipToolbarBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1,1,2,2" />
+            <Setter Property="BorderBrush" Value="#44000000" />
+            <Setter Property="Transitions">
+                <Transitions>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.toolbar:hover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}" />
+        </Style>
+        <Style Selector="Button.toolbar:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipPressedBrush}" />
+            <Setter Property="BorderThickness" Value="2,2,1,1" />
+            <Setter Property="BorderBrush" Value="#88000000" />
+        </Style>
+        <Style Selector="Button.toolbar.selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="#660078D7" />
+            <Setter Property="BorderThickness" Value="2,2,1,1" />
+            <Setter Property="BorderBrush" Value="#88000000" />
+        </Style>
+
+        <Style Selector="Button.cropmode">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipActionButtonBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Width" Value="96" />
+            <Setter Property="Height" Value="74" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.cropmode /template/ ContentPresenter">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}" />
+            <Setter Property="Background" Value="{DynamicResource FreeSnipActionButtonBrush}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.cropmode:hover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}" />
+            <Setter Property="BorderBrush" Value="#A0A0A0" />
+        </Style>
+        <Style Selector="Button.cropmode:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipPressedBrush}" />
+            <Setter Property="BorderBrush" Value="#666666" />
+        </Style>
+        <Style Selector="Button.cropmode.selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipAccentBrush}" />
+            <Setter Property="BorderBrush" Value="#FFFFFF" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        
+        
+
+        <Style Selector="Button.destructive">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipDestructiveBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Button.destructive /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipDestructiveBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Button.destructive TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipDestructiveHoverBrush}" />
+        </Style>
+        <Style Selector="Button.destructive:hover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipDestructiveBrush}" />
+            <Setter Property="BorderThickness" Value="2,2,1,1" />
+            <Setter Property="BorderBrush" Value="#88000000" />
+        </Style>
+        <Style Selector="Button.destructive:hover TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+        </Style>
+        <Style Selector="Button.destructive:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipDestructiveHoverBrush}" />
+            <Setter Property="BorderThickness" Value="2,2,1,1" />
+            <Setter Property="BorderBrush" Value="#88000000" />
+        </Style>
+        <Style Selector="Button.destructive:pressed TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+        </Style>
+        
+        <Style Selector="ScrollBar">
+            <Setter Property="AllowAutoHide" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="ScrollBar[Orientation=Vertical]">
+            <Setter Property="Theme" Value="{StaticResource FreeSnipScrollBarVertical}" />
+        </Style>
+        <Style Selector="ScrollBar[Orientation=Horizontal]">
+            <Setter Property="Theme" Value="{StaticResource FreeSnipScrollBarHorizontal}" />
+        </Style>
+        <Style Selector="FlyoutPresenter ScrollBar">
+            <Setter Property="AllowAutoHide" Value="False" />
+        </Style>
+        <Style Selector="FlyoutPresenter ScrollBar[Orientation=Vertical]">
+            <Setter Property="Theme" Value="{StaticResource FreeSnipScrollBarVertical}" />
+        </Style>
+        <Style Selector="FlyoutPresenter ScrollBar[Orientation=Horizontal]">
+            <Setter Property="Theme" Value="{StaticResource FreeSnipScrollBarHorizontal}" />
+        </Style>
+        <Style Selector="Button.color-preset">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                        <Border Name="ColorCircle"
+                                Width="16" Height="16"
+                                CornerRadius="8"
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource FreeSnipSecondaryButtonBrush}"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                            <Border.Transitions>
+                                <Transitions>
+                                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.05" />
+                                    <BrushTransition Property="BorderBrush" Duration="0:0:0.1" />
+                                </Transitions>
+                            </Border.Transitions>
+                        </Border>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.color-preset:hover /template/ Border#ColorCircle">
+            <Setter Property="RenderTransform" Value="scale(1.15)" />
+        </Style>
+        <Style Selector="Button.color-preset:pressed /template/ Border#ColorCircle">
+            <Setter Property="RenderTransform" Value="scale(0.92)" />
+        </Style>
+        <Style Selector="Button.color-preset.selected /template/ Border#ColorCircle">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector=":is(Shape).selection-indicator">
+            <Setter Property="Stroke" Value="Yellow"/>
+            <Setter Property="StrokeThickness" Value="1"/>
+            <Setter Property="StrokeDashArray" Value="4,2"/>
+            <Style.Animations>
+                <Animation Duration="0:0:1.5" IterationCount="Infinite">
+                    <KeyFrame KeyTime="0:0:0">
+                        <Setter Property="StrokeDashOffset" Value="0"/>
+                    </KeyFrame>
+                    <KeyFrame KeyTime="0:0:1.5">
+                        <Setter Property="StrokeDashOffset" Value="6"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Button.thickness">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Button.thickness:hover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}" />
+            <Setter Property="CornerRadius" Value="3" />
+        </Style>
+        <Style Selector="Button.thickness.selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipSelectedSurfaceBrush}" />
+            <Setter Property="CornerRadius" Value="3" />
+        </Style>
+        <Style Selector="Button.thickness.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+            <Setter Property="BorderThickness" Value="1.5" />
+        </Style>
+        <Style Selector="Button.line-size-btn">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Margin" Value="0,0,5,0" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.line-size-btn:hover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipAccentBrush}" />
+        </Style>
+        <Style Selector="Button.flyout-thickness">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinWidth" Value="36" />
+            <Setter Property="Background" Value="{DynamicResource FreeSnipSecondaryButtonBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.flyout-thickness:hover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipAccentBrush}" />
+        </Style>
+        <Style Selector="Button.flyout-thickness.selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipSelectedSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipAccentBrush}" />
+        </Style>
+        <Style Selector="Slider.thickness-slider">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipAccentDarkBrush}" />
+            <Setter Property="Background" Value="{DynamicResource FreeSnipSliderTrackBrush}" />
+            <Setter Property="ClipToBounds" Value="False" />
+        </Style>
+        <Style Selector="Slider.thickness-slider /template/ Track#PART_Track">
+            <Setter Property="ClipToBounds" Value="False" />
+        </Style>
+        <Style Selector="Slider.thickness-slider /template/ Grid#HorizontalTemplate">
+            <Setter Property="ClipToBounds" Value="False" />
+        </Style>
+        <Style Selector="Slider.thickness-slider /template/ Thumb">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="ClipToBounds" Value="False" />
+        </Style>
+        <Style Selector="Slider.pixelate-strength">
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipAccentDarkBrush}" />
+            <Setter Property="Background" Value="{DynamicResource FreeSnipSliderTrackBrush}" />
+            <Setter Property="ClipToBounds" Value="False" />
+        </Style>
+        <Style Selector="Slider.pixelate-strength /template/ Thumb">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="ClipToBounds" Value="False" />
+        </Style>
+        
+        <Style Selector="Button.zoom-text">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipToolbarTextBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.1" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.zoom-text:hover">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}" />
+        </Style>
+        <Style Selector="Button.zoom-text:pressed">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipPressedBrush}" />
+        </Style>
+        
+        <Style Selector="Button.emoji-btn">
+            <Setter Property="FontFamily" Value="avares://freesnip.editor/Drawing/Emoji/#Twemoji Mozilla"/>
+            <Setter Property="FontSize" Value="32"/>
+            <Setter Property="Width" Value="50"/>
+            <Setter Property="Height" Value="50"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.08" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.emoji-btn:hover">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}" />
+        </Style>
+        <Style Selector="Button.emoji-btn:pressed">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipPressedBrush}" />
+        </Style>
+        
+        <Style Selector="Border.counter">
+            <Setter Property="Background" Value="Red" />
+            <Setter Property="CornerRadius" Value="17.5" />
+            <Setter Property="Width" Value="35" />
+            <Setter Property="Height" Value="35" />
+        </Style>
+        <Style Selector="Border.counter TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+            <Setter Property="FontSize" Value="21" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        
+        <Style Selector="Control.ink-stamp">
+            <Style.Animations>
+                <Animation Duration="0:0:0.28" FillMode="Forward">
+                    <KeyFrame KeyTime="0:0:0">
+                        <Setter Property="Opacity" Value="0"/>
+                        <Setter Property="RenderTransform" Value="scale(0.6)"/>
+                    </KeyFrame>
+                    <KeyFrame KeyTime="0:0:0.18">
+                        <Setter Property="Opacity" Value="1"/>
+                        <Setter Property="RenderTransform" Value="scale(1.12)"/>
+                    </KeyFrame>
+                    <KeyFrame KeyTime="0:0:0.28">
+                        <Setter Property="Opacity" Value="1"/>
+                        <Setter Property="RenderTransform" Value="scale(1)"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Control.ink-dissolve">
+            <Style.Animations>
+                <Animation Duration="0:0:0.2" FillMode="Forward">
+                    <KeyFrame KeyTime="0:0:0">
+                        <Setter Property="Opacity" Value="1"/>
+                        <Setter Property="RenderTransform" Value="scale(1)"/>
+                    </KeyFrame>
+                    <KeyFrame KeyTime="0:0:0.2">
+                        <Setter Property="Opacity" Value="0"/>
+                        <Setter Property="RenderTransform" Value="scale(0.8)"/>
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
+        <Style Selector="Border.annotation-text-border > TextBox">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.annotation-text-border > TextBox /template/ ScrollViewer#PART_ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Border.annotation-text-border > TextBox /template/ TextPresenter#PART_TextPresenter">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="ScrollViewer.bottom-toolbar-scroller">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid RowDefinitions="60,Auto" ColumnDefinitions="*">
+                        <ScrollContentPresenter Name="PART_ContentPresenter"
+                                                Grid.Row="0"
+                                                MinHeight="60"
+                                                Height="60"
+                                                Background="{TemplateBinding Background}"
+                                                HorizontalSnapPointsType="{TemplateBinding HorizontalSnapPointsType}"
+                                                HorizontalSnapPointsAlignment="{TemplateBinding HorizontalSnapPointsAlignment}"
+                                                VerticalSnapPointsType="{TemplateBinding VerticalSnapPointsType}"
+                                                VerticalSnapPointsAlignment="{TemplateBinding VerticalSnapPointsAlignment}"
+                                                ScrollViewer.IsScrollInertiaEnabled="{TemplateBinding IsScrollInertiaEnabled}">
+                            <ScrollContentPresenter.GestureRecognizers>
+                                <ScrollGestureRecognizer
+                                    CanHorizontallyScroll="{Binding CanHorizontallyScroll, ElementName=PART_ContentPresenter}"
+                                    CanVerticallyScroll="{Binding CanVerticallyScroll, ElementName=PART_ContentPresenter}"
+                                    IsScrollInertiaEnabled="{Binding (ScrollViewer.IsScrollInertiaEnabled), ElementName=PART_ContentPresenter}" />
+                            </ScrollContentPresenter.GestureRecognizers>
+                        </ScrollContentPresenter>
+                        <ScrollBar Name="PART_HorizontalScrollBar"
+                                   Theme="{StaticResource BottomToolbarScrollBarTheme}"
+                                   Orientation="Horizontal"
+                                   Grid.Row="1"
+                                   Margin="8,0,8,2" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+
+        <Style Selector="ScrollViewer.bottom-toolbar-scroller ScrollBar">
+            <Setter Property="Theme" Value="{StaticResource BottomToolbarScrollBarTheme}" />
+        </Style>
+    </Window.Styles>
+
+    <Panel>
+    <Grid Name="EditorContentRoot" RowDefinitions="Auto,Auto,*,Auto">
+        <Grid Grid.Row="0" Name="TitleBar" FlowDirection="LeftToRight" Height="32" ColumnDefinitions="Auto,*,Auto" Background="{DynamicResource FreeSnipPanelDarkBrush}" Cursor="Arrow" PointerPressed="OnTitleBarPointerPressed">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0">
+                <Image Source="avares://freesnip.editor/FreeSnip.ico" Width="16" Height="16" Margin="0,0,8,0" AutomationProperties.AccessibilityView="Raw"/>
+                <TextBlock Text="FreeSnip Editor" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="{DynamicResource FreeSnipTitleFontSize}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Name="TitleDimensionText" Grid.Column="1" Text="0 x 0" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" FontSize="{DynamicResource FreeSnipTitleFontSize}" FontWeight="SemiBold"/>
+            <Border Grid.Column="2" Width="140" Background="Transparent" IsHitTestVisible="False"/>
+        </Grid>
+
+        <Border Grid.Row="1" Background="{DynamicResource FreeSnipToolbarBrush}" Height="60" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="0,0,0,1" Cursor="Arrow">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Name="TopToolbarStackPanel" Grid.Column="0" Orientation="Horizontal" Margin="10,0" Spacing="7" VerticalAlignment="Center">
+                    <Button Classes="toolbar" Name="DownloadButton" AutomationProperties.Name="Save" ToolTip.Tip="Save (Ctrl+S)" Click="OnDownloadClick" IsDefault="False">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/download.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="CopyButton" AutomationProperties.Name="Copy image to clipboard" ToolTip.Tip="Copy image to clipboard (Ctrl+C)" Click="OnCopyClick" IsDefault="False">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/copy.svg" />
+                    </Button>
+                    
+                    <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="3,0" />
+                    
+                    <Button Classes="toolbar" Name="UndoButton" AutomationProperties.Name="Undo" ToolTip.Tip="Undo (Ctrl+Z)" Click="OnUndoClick" IsEnabled="False">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/undo.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="RedoButton" AutomationProperties.Name="Redo" ToolTip.Tip="Redo (Ctrl+Y)" Click="OnRedoClick" IsEnabled="False">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/redo.svg" />
+                    </Button>
+                    
+                    <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="3,0" />
+
+                    <Button Classes="toolbar" Name="RotateCwButton" AutomationProperties.Name="Rotate clockwise" ToolTip.Tip="Rotate Selected Object (or Canvas) Clockwise (90°)" Click="OnRotateCwClick">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/rotate_clock-wise.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="RotateCcwButton" AutomationProperties.Name="Rotate counter-clockwise" ToolTip.Tip="Rotate Selected Object (or Canvas) Counter-Clockwise (90°)" Click="OnRotateCcwClick">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/rotate_counter_clock-wise.svg" />
+                    </Button>
+
+                    <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="3,0" />
+                    <Button Classes="toolbar" Name="DeleteButton" AutomationProperties.Name="Delete selected object" ToolTip.Tip="Delete Selected Object (Del)" Click="OnDeleteClick" IsEnabled="False">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/delete.svg" />
+                    </Button>
+
+                    <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="3,0" />
+                    <Button Classes="toolbar" Name="CropTool" AutomationProperties.Name="Crop tool" ToolTip.Tip="Crop region. Opens a menu of crop shapes. Esc exits this tool." Click="OnToolClick" Tag="Crop">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/crop.svg" />
+                    </Button>
+                    <Popup Name="CropModePopup" FlowDirection="LeftToRight" Placement="BottomEdgeAlignedLeft" VerticalOffset="8" HorizontalOffset="-6" IsLightDismissEnabled="False">
+                        <Border FlowDirection="LeftToRight" Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Padding="12,10" Width="732" BoxShadow="0 6 20 0 #AA000000">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="CROP SHAPE" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" />
+                                <StackPanel Name="CropModeButtons" Orientation="Horizontal" Spacing="5">
+                                <Button Classes="cropmode" Name="CropModeRegular" Tag="Regular" Click="OnCropModeClick" PointerEntered="OnCropModeHover" PointerExited="OnCropModeHoverEnd"
+                                        AutomationProperties.Name="Free crop"
+                                        AutomationProperties.HelpText="Free crop. Drag any box you like - the picture keeps exactly what is inside it, in whatever shape you drew."
+                                        ToolTip.Tip="Free crop. Drag any box you like - the picture keeps exactly what is inside it, in whatever shape you drew.">
+                                    <Grid RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <svg:Svg Grid.Row="0" Width="28" Height="28" HorizontalAlignment="Center" Path="avares://freesnip.editor/Icons/crop-mode-free.svg" />
+                                        <TextBlock Grid.Row="1" Margin="0,4,0,0" Text="Free Crop" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                    </Grid>
+                                </Button>
+                                <Button Classes="cropmode" Name="CropModeKeepRatio" Tag="KeepRatio" Click="OnCropModeClick" PointerEntered="OnCropModeHover" PointerExited="OnCropModeHoverEnd"
+                                        AutomationProperties.Name="Keep the current shape"
+                                        AutomationProperties.HelpText="Same shape as now. The box is locked to this picture's current shape, so the result looks like the original - just a smaller piece of it."
+                                        ToolTip.Tip="Same shape as now. The box is locked to this picture's current shape, so the result looks like the original - just a smaller piece of it.">
+                                    <Grid RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <svg:Svg Grid.Row="0" Width="28" Height="28" HorizontalAlignment="Center" Path="avares://freesnip.editor/Icons/crop-mode-keep-ratio.svg" />
+                                        <TextBlock Grid.Row="1" Margin="0,4,0,0" Text="Keep Ratio" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                    </Grid>
+                                </Button>
+                                <Button Classes="cropmode" Name="CropModeSquare" Tag="Square" Click="OnCropModeClick" PointerEntered="OnCropModeHover" PointerExited="OnCropModeHoverEnd"
+                                        AutomationProperties.Name="Square crop"
+                                        AutomationProperties.HelpText="Perfect square. Width and height come out equal - the shape profile pictures and app icons use."
+                                        ToolTip.Tip="Perfect square. Width and height come out equal - the shape profile pictures and app icons use.">
+                                    <Grid RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <svg:Svg Grid.Row="0" Width="28" Height="28" HorizontalAlignment="Center" Path="avares://freesnip.editor/Icons/crop-mode-square.svg" />
+                                        <TextBlock Grid.Row="1" Margin="0,4,0,0" Text="1:1 Square" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                    </Grid>
+                                </Button>
+                                <Button Classes="cropmode" Name="CropModeWide" Tag="Wide" Click="OnCropModeClick" PointerEntered="OnCropModeHover" PointerExited="OnCropModeHoverEnd"
+                                        AutomationProperties.Name="Wide screen crop"
+                                        AutomationProperties.HelpText="Wide screen. The long, letterbox shape of a TV or a YouTube video."
+                                        ToolTip.Tip="Wide screen. The long, letterbox shape of a TV or a YouTube video.">
+                                    <Grid RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <svg:Svg Grid.Row="0" Width="28" Height="28" HorizontalAlignment="Center" Path="avares://freesnip.editor/Icons/crop-mode-wide.svg" />
+                                        <TextBlock Grid.Row="1" Margin="0,4,0,0" Text="16:9 Wide" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                    </Grid>
+                                </Button>
+                                <Button Classes="cropmode" Name="CropModeTall" Tag="Tall" Click="OnCropModeClick" PointerEntered="OnCropModeHover" PointerExited="OnCropModeHoverEnd"
+                                        AutomationProperties.Name="Tall phone crop"
+                                        AutomationProperties.HelpText="Tall phone screen. The upright shape of a Story, a Reel or a TikTok."
+                                        ToolTip.Tip="Tall phone screen. The upright shape of a Story, a Reel or a TikTok.">
+                                    <Grid RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <svg:Svg Grid.Row="0" Width="28" Height="28" HorizontalAlignment="Center" Path="avares://freesnip.editor/Icons/crop-mode-tall.svg" />
+                                        <TextBlock Grid.Row="1" Margin="0,4,0,0" Text="9:16 Tall" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                    </Grid>
+                                </Button>
+                                <Button Classes="cropmode" Name="CropModeVerticalStrip" Tag="VerticalStrip" Click="OnCropModeClick" PointerEntered="OnCropModeHover" PointerExited="OnCropModeHoverEnd"
+                                        AutomationProperties.Name="Cut out vertical slice, stitching sides together"
+                                        AutomationProperties.HelpText="Cut out a vertical slice. The selected middle column is deleted, and the left and right pieces weld together seamlessly."
+                                        ToolTip.Tip="Cut Out Vertical: select a middle slice to delete; the left and right sides weld together seamlessly.">
+                                    <Grid RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <svg:Svg Grid.Row="0" Width="28" Height="28" HorizontalAlignment="Center" Path="avares://freesnip.editor/Icons/crop-mode-column.svg" />
+                                        <TextBlock Grid.Row="1" Margin="0,4,0,0" Text="Cut Vertical" FontSize="10.5" FontWeight="SemiBold" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                    </Grid>
+                                </Button>
+                                <Button Classes="cropmode" Name="CropModeHorizontalStrip" Tag="HorizontalStrip" Click="OnCropModeClick" PointerEntered="OnCropModeHover" PointerExited="OnCropModeHoverEnd"
+                                        AutomationProperties.Name="Cut out horizontal slice, stitching sides together"
+                                        AutomationProperties.HelpText="Cut out a horizontal slice. The selected middle band is deleted, and the top and bottom pieces weld together seamlessly."
+                                        ToolTip.Tip="Cut Out Horizontal: select a middle slice to delete; the top and bottom sides weld together seamlessly.">
+                                    <Grid RowDefinitions="Auto,Auto" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                                        <svg:Svg Grid.Row="0" Width="28" Height="28" HorizontalAlignment="Center" Path="avares://freesnip.editor/Icons/crop-mode-band.svg" />
+                                        <TextBlock Grid.Row="1" Margin="0,4,0,0" Text="Cut Horiz." FontSize="10.5" FontWeight="SemiBold" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                    </Grid>
+                                </Button>
+                                </StackPanel>
+                                <Border Background="{DynamicResource FreeSnipCanvasBrush}" CornerRadius="4" Padding="12,8" Margin="0,6,0,0" HorizontalAlignment="Stretch">
+                                    <TextBlock Name="CropModeDescription" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" FontSize="11.5" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" LineHeight="16" />
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                    <Button Classes="toolbar" Name="ResizeButton" AutomationProperties.Name="Resize image" ToolTip.Tip="Resize image (changes the picture's real pixel size)" Click="OnResizeClick">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/resize.svg" />
+                    </Button>
+
+                    <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="3,0" />
+                    <Button Classes="toolbar" Name="OcrButton" AutomationProperties.Name="OCR text extraction" ToolTip.Tip="Copy text, save text file, and open Notepad" Click="OnOcrClick" Width="NaN" MinWidth="40" Padding="5,0">
+                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                            <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/ocr.svg" />
+                            <TextBlock Name="OcrButtonText" Text="OCR Text Extraction" VerticalAlignment="Center" FontSize="{DynamicResource FreeSnipToolbarFontSize}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0" VerticalAlignment="Center">
+                    <Button Classes="toolbar destructive" Name="ClearAllButton" AutomationProperties.Name="Clear all objects" ToolTip.Tip="Removes every object you added to this image. Asks first." Click="OnClearAllClick" Width="NaN" MinWidth="40" Height="40" Padding="8,4">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <svg:Svg Width="20" Height="20" VerticalAlignment="Center" Path="avares://freesnip.editor/Icons/nuclear-sharp.svg" />
+                            <TextBlock Text="Clear All" VerticalAlignment="Center" FontSize="{DynamicResource FreeSnipToolbarFontSize}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Row 2: Work area containing Left Toolbar and EditorScrollViewer -->
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
+            <Border Grid.Column="0" Background="{DynamicResource FreeSnipToolbarBrush}" Width="60" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="0,0,1,0" Cursor="Arrow">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Name="LeftToolBar" Orientation="Vertical" Margin="0,10" HorizontalAlignment="Center" Spacing="5">
+                    <Button Classes="toolbar" Name="ArrowTool" AutomationProperties.Name="Arrow tool" ToolTip.Tip="Arrow (A). Esc exits this tool." Click="OnToolClick" Tag="Arrow">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/arrow.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="LineTool" AutomationProperties.Name="Line tool" ToolTip.Tip="Line (L). Esc exits this tool." Click="OnToolClick" Tag="Line">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/line.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="RectTool" AutomationProperties.Name="Rectangle tool" ToolTip.Tip="Rectangle. Esc exits this tool." Click="OnToolClick" Tag="Rectangle">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/square.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="EllipseTool" AutomationProperties.Name="Ellipse tool" ToolTip.Tip="Circle/Ellipse. Esc exits this tool." Click="OnToolClick" Tag="Ellipse">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/circle.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="FreeDrawTool" AutomationProperties.Name="Free draw tool" ToolTip.Tip="Free Draw (D). Esc exits this tool." Click="OnToolClick" Tag="FreeDraw">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/pencil.svg" />
+                    </Button>
+                    
+                    <Rectangle Width="30" Height="1" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="0,3" />
+                    
+                    <Button Classes="toolbar" Name="HighlightTool" AutomationProperties.Name="Highlight tool" ToolTip.Tip="Highlight (H). Esc exits this tool." Click="OnToolClick" Tag="Highlight">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/highlight.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="BlurTool" AutomationProperties.Name="Pixelate tool" ToolTip.Tip="Pixelate (O/P). Esc exits this tool." Click="OnToolClick" Tag="Blur">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/pixelite.svg" />
+                    </Button>
+
+                    <Rectangle Width="30" Height="1" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="0,3" />
+                    
+                    <Button Classes="toolbar" Name="TextTool" AutomationProperties.Name="Text tool" ToolTip.Tip="Text (T). Esc exits this tool." Click="OnToolClick" Tag="Text">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/text.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="CounterTool" AutomationProperties.Name="Counter tool" Click="OnToolClick" DoubleTapped="OnCounterDoubleTapped" Tag="Counter" ToolTip.Tip="Counter (I). Double-click to reset to 1. Esc exits this tool.">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/counter.svg" />
+                    </Button>
+                    <Button Classes="toolbar" Name="EmojiTool" AutomationProperties.Name="Emoji tool" ToolTip.Tip="Emoji (E). Esc exits this tool." Click="OnToolClick" Tag="Emoji">
+                        <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/emoji.svg" />
+                        <Button.Flyout>
+                            <Flyout Placement="Right">
+                                <ScrollViewer Name="EmojiScrollViewer" MaxHeight="320" Width="298" AllowAutoHide="False" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled">
+                                    <ScrollViewer.Styles>
+                                        <Style Selector="ScrollBar">
+                                            <Setter Property="AllowAutoHide" Value="False" />
+                                        </Style>
+                                        <Style Selector="ScrollBar[Orientation=Vertical]">
+                                            <Setter Property="Theme" Value="{StaticResource FreeSnipScrollBarVertical}" />
+                                        </Style>
+                                    </ScrollViewer.Styles>
+                                    <ItemsControl Name="EmojiGrid" Margin="0,0,4,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel ItemWidth="54" ItemHeight="54" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Classes="emoji-btn"
+                                                        Content="{Binding}"
+                                                        Tag="{Binding}"
+                                                        AutomationProperties.Name="{Binding}"
+                                                        ToolTip.Tip="{Binding}"
+                                                        Click="OnEmojiSelectClick" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <ScrollViewer Grid.Column="1" Name="EditorScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <Panel Name="ScrollContentPanel" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{DynamicResource FreeSnipCanvasBrush}">
+                <Grid Name="MainGrid" HorizontalAlignment="Left" VerticalAlignment="Top">
+                    <Panel Name="ZoomContainer" HorizontalAlignment="Left" VerticalAlignment="Top">
+                        <Border Name="SnipBorder" BorderBrush="{DynamicResource FreeSnipFrameBorderBrush}" BorderThickness="3" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{StaticResource CheckerboardBrush}">
+                            <Image Name="EditorImage" AutomationProperties.Name="Captured image" Margin="0" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                        </Border>
+                        <Canvas Name="AnnotationCanvas" Background="Transparent" 
+                                Focusable="True"
+                                HorizontalAlignment="Left" VerticalAlignment="Top"
+                                PointerPressed="OnCanvasPointerPressed" 
+                                PointerMoved="OnCanvasPointerMoved" 
+                                PointerReleased="OnCanvasPointerReleased"
+                                ClipToBounds="True">
+                        </Canvas>
+
+                        <Canvas Name="OverlayCanvas" ClipToBounds="False" ZIndex="10000" HorizontalAlignment="Left" VerticalAlignment="Top">
+                            <Border Name="ContextToolbar" IsVisible="False" ZIndex="10001" Background="{DynamicResource FreeSnipPanelDarkBrush}" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1.5" CornerRadius="6" Padding="4" BoxShadow="0 4 12 0 #99000000" KeyboardNavigation.TabNavigation="Continue">
+                                <Border.Transitions>
+                                    <Transitions>
+                                        <BrushTransition Property="Background" Duration="0:0:0.4" />
+                                        <BrushTransition Property="BorderBrush" Duration="0:0:0.4" />
+                                    </Transitions>
+                                </Border.Transitions>
+                                <StackPanel Orientation="Horizontal" Spacing="8" KeyboardNavigation.TabNavigation="Continue">
+                                    <Button Classes="action context-apply" Name="ContextApplyButton" Click="OnContextApplyClick" AutomationProperties.Name="Apply" ToolTip.Tip="Apply (Enter)" Focusable="True">
+                                        <Path Name="ContextApplyIcon" Width="18" Height="18" Stretch="Uniform"
+                                              Data="M9,16.17L4.83,12l-1.42,1.41L9,19L21,7l-1.41,-1.41z"
+                                              Fill="#FFFFFF">
+                                            <Path.Transitions>
+                                                <Transitions>
+                                                    <BrushTransition Property="Fill" Duration="0:0:0.4" />
+                                                </Transitions>
+                                            </Path.Transitions>
+                                        </Path>
+                                    </Button>
+                                    <Rectangle Name="ContextApplySeparator" Width="1" Height="28" Fill="{DynamicResource FreeSnipSeparatorBrush}" VerticalAlignment="Center">
+                                        <Rectangle.Transitions>
+                                            <Transitions>
+                                                <BrushTransition Property="Fill" Duration="0:0:0.4" />
+                                            </Transitions>
+                                        </Rectangle.Transitions>
+                                    </Rectangle>
+                                    <Button Classes="action context-duplicate" Name="ContextDuplicateButton" Click="OnDuplicateClick" AutomationProperties.Name="Duplicate object" ToolTip.Tip="Duplicate (Ctrl+D)" Focusable="True">
+                                        <Path Name="ContextDuplicateIcon" Width="18" Height="18" Stretch="Uniform"
+                                              Data="M16,1H4C2.9,1 2,1.9 2,3v14h2V3h12V1zm3,4H8C6.9,5 6,5.9 6,7v14c0,1.1 0.9,2 2,2h11c1.1,0 2,-0.9 2,-2V7c0,-1.1 -0.9,-2 -2,-2zm0,16H8V7h11v14z"
+                                              Fill="#FFFFFF">
+                                            <Path.Transitions>
+                                                <Transitions>
+                                                    <BrushTransition Property="Fill" Duration="0:0:0.4" />
+                                                </Transitions>
+                                            </Path.Transitions>
+                                        </Path>
+                                    </Button>
+                                    <Rectangle Name="ContextDuplicateSeparator" Width="1" Height="28" Fill="{DynamicResource FreeSnipSeparatorBrush}" VerticalAlignment="Center">
+                                        <Rectangle.Transitions>
+                                            <Transitions>
+                                                <BrushTransition Property="Fill" Duration="0:0:0.4" />
+                                            </Transitions>
+                                        </Rectangle.Transitions>
+                                    </Rectangle>
+                                    <Button Classes="action context-delete" Name="ContextDeleteButton" Click="OnDeleteClick" AutomationProperties.Name="Delete object" ToolTip.Tip="Delete (Del) / Cancel (Esc)" Focusable="True">
+                                        <Path Name="ContextDeleteIcon" Width="18" Height="18" Stretch="Uniform"
+                                              Data="M11.5,-0.031c-1.958,0 -3.531,1.627 -3.531,3.594V4H4c-0.551,0 -1,0.449 -1,1v1H2v2h2v15c0,1.645 1.355,3 3,3h12c1.645,0 3,-1.355 3,-3V8h2V6h-1V5c0,-0.551 -0.449,-1 -1,-1h-3.969v-0.438c0,-1.966 -1.573,-3.593 -3.531,-3.593zm0,2.062h3c0.804,0 1.469,0.656 1.469,1.531V4H10.03v-0.438c0,-0.875 0.665,-1.53 1.469,-1.53zM6,8h5.125c0.124,0.013 0.247,0.031 0.375,0.031h3c0.128,0 0.25,-0.018 0.375,-0.031H20v15c0,0.563 -0.437,1 -1,1H7c-0.563,0 -1,-0.437 -1,-1zm2,2v12h2V10zm4,0v12h2V10zm4,0v12h2V10z"
+                                              Fill="#FFFFFF">
+                                            <Path.Transitions>
+                                                <Transitions>
+                                                    <BrushTransition Property="Fill" Duration="0:0:0.4" />
+                                                </Transitions>
+                                            </Path.Transitions>
+                                        </Path>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Name="OcrContextToolbar" IsVisible="False" ZIndex="10002" Background="{DynamicResource FreeSnipPanelDarkBrush}" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1.5" CornerRadius="6" Padding="4" BoxShadow="0 4 12 0 #99000000" KeyboardNavigation.TabNavigation="Continue">
+                                <Border.Transitions>
+                                    <Transitions>
+                                        <BrushTransition Property="Background" Duration="0:0:0.4" />
+                                        <BrushTransition Property="BorderBrush" Duration="0:0:0.4" />
+                                    </Transitions>
+                                </Border.Transitions>
+                                <StackPanel Orientation="Horizontal" Spacing="8" KeyboardNavigation.TabNavigation="Continue">
+                                    <Button Classes="action context-duplicate" Name="OcrContextCopyButton" Click="OnOcrContextCopyClick" AutomationProperties.Name="Copy recognised text" ToolTip.Tip="Copy Text (Ctrl+C)" Width="NaN" MinWidth="100" Height="36" Padding="10,0" Focusable="True">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <svg:Svg Width="18" Height="18" Path="avares://freesnip.editor/Icons/copy.svg" />
+                                            <TextBlock Text="Copy Text" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="action context-duplicate" Name="OcrContextOpenLinkButton" Click="OnOcrContextOpenLinkClick" AutomationProperties.Name="Open link" ToolTip.Tip="Open URL" Width="NaN" MinWidth="100" Height="36" Padding="10,0" IsVisible="False" Focusable="True">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <svg:Svg Width="18" Height="18" Path="avares://freesnip.editor/Icons/link.svg" />
+                                            <TextBlock Text="Open Link" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="action context-duplicate" Name="OcrContextEmailButton" Click="OnOcrContextEmailClick" AutomationProperties.Name="Compose email" ToolTip.Tip="Compose Email" Width="NaN" MinWidth="100" Height="36" Padding="10,0" IsVisible="False" Focusable="True">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <svg:Svg Width="18" Height="18" Path="avares://freesnip.editor/Icons/email.svg" />
+                                            <TextBlock Text="Email" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+
+                            <Canvas Name="StartPointHandle" Width="24" Height="24" IsVisible="False" ZIndex="10002" Cursor="Hand" AutomationProperties.Name="Line start handle">
+                                <Ellipse Width="24" Height="24" Fill="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                <Ellipse Width="21" Height="21" Margin="1.5" Stroke="{DynamicResource FreeSnipSuccessBrush}" StrokeThickness="2.5" />
+                                <Ellipse Width="10" Height="10" Margin="7" Fill="{DynamicResource FreeSnipSuccessBrush}" />
+                            </Canvas>
+                            <Canvas Name="EndPointHandle" Width="24" Height="24" IsVisible="False" ZIndex="10002" Cursor="Hand" AutomationProperties.Name="Line end handle">
+                                <Ellipse Width="24" Height="24" Fill="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                <Ellipse Width="21" Height="21" Margin="1.5" Stroke="{DynamicResource FreeSnipAccentBrush}" StrokeThickness="2.5" />
+                                <Ellipse Width="10" Height="10" Margin="7" Fill="{DynamicResource FreeSnipAccentBrush}" />
+                            </Canvas>
+                        </Canvas>
+                    </Panel>
+                </Grid>
+            </Panel>
+        </ScrollViewer>
+        </Grid>
+
+        <!-- Row 3: Bottom Toolbar -->
+        <Border Grid.Row="3" Name="BottomToolbarBorder" Background="{DynamicResource FreeSnipToolbarBrush}" MinHeight="60" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="0,1,0,0" Cursor="Arrow">
+            <Grid ColumnDefinitions="*,Auto">
+                <ScrollViewer Grid.Column="0" Classes="bottom-toolbar-scroller" Name="BottomToolbarScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,8,0" PointerWheelChanged="OnBottomToolbarPointerWheelChanged">
+                    <StackPanel Orientation="Horizontal" Margin="10,0" Spacing="0" VerticalAlignment="Center" MinHeight="60" HorizontalAlignment="Left">
+                        <StackPanel Name="ColorPresetsPanel" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                            <Button Classes="color-preset" Background="#000000" Click="OnColorSelectClick" Tag="#000000" AutomationProperties.Name="Black" ToolTip.Tip="Black" />
+                            <Button Classes="color-preset" Background="#00FF00" Click="OnColorSelectClick" Tag="#00FF00" AutomationProperties.Name="Green" ToolTip.Tip="Green" />
+                            <Button Classes="color-preset" Background="#FF0000" Click="OnColorSelectClick" Tag="#FF0000" AutomationProperties.Name="Red" ToolTip.Tip="Red" />
+                            <Button Classes="color-preset" Background="#FFFF00" Click="OnColorSelectClick" Tag="#FFFF00" AutomationProperties.Name="Yellow" ToolTip.Tip="Yellow" />
+                            <Button Classes="color-preset" Background="#0000FF" Click="OnColorSelectClick" Tag="#0000FF" AutomationProperties.Name="Blue" ToolTip.Tip="Blue" />
+                            <Button Classes="color-preset" Background="#FFFFFF" Click="OnColorSelectClick" Tag="#FFFFFF" AutomationProperties.Name="White" ToolTip.Tip="White" />
+                        </StackPanel>
+
+                        <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="5,0" />
+                        
+                        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <Button Name="CustomColorBtn" MinWidth="64" MinHeight="40" VerticalAlignment="Center" Cursor="Hand" Padding="6,0,6,0" AutomationProperties.Name="Current colour, opens colour picker" ToolTip.Tip="Current color (click to open picker)">
+                                <Button.Flyout>
+                                    <Flyout Placement="Top">
+                                        <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Padding="14" MinWidth="316" MaxWidth="420">
+                                            <StackPanel Spacing="10">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <TextBlock Text="CUSTOM COLOR" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" VerticalAlignment="Center" />
+                                                    <Border Grid.Column="1" Name="HexPreviewChip" Width="26" Height="26" CornerRadius="4" Background="{DynamicResource FreeSnipAccentBrush}" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" ToolTip.Tip="Current picker color" />
+                                                </Grid>
+                                                <ColorView Name="ColorPickerView" />
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <TextBlock Text="HEX" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                    <TextBox Grid.Column="1" Name="HexInput" AutomationProperties.Name="Hex colour code" Watermark="#RRGGBB" MaxLength="9" FontFamily="Consolas, Courier New" FontSize="13" Padding="6,4" Background="{DynamicResource FreeSnipCanvasBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" KeyDown="OnHexInputKeyDown" ToolTip.Tip="Type a hex color; Enter applies it to the tool" />
+                                                    <Button Grid.Column="2" Name="CopyHexButton" Classes="toolbar" Width="34" Height="34" Margin="6,0,0,0" Click="OnCopyHexClick" AutomationProperties.Name="Copy hex code" ToolTip.Tip="Copy hex code to clipboard">
+                                                        <svg:Svg Width="18" Height="18" Path="avares://freesnip.editor/Icons/copy.svg" />
+                                                    </Button>
+                                                </Grid>
+                                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,2,0,0">
+                                                    <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6" Click="OnSamplerClick" AutomationProperties.Name="Sample a colour from the screen" Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" ToolTip.Tip="Pick any color from the screen (Esc cancels)">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <svg:Svg Width="20" Height="20" Path="avares://freesnip.editor/Icons/custom-color.svg" />
+                                                            <TextBlock Text="Sample From Screen" VerticalAlignment="Center" FontSize="12" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Grid.Column="1" Content="Cancel" IsCancel="True" AutomationProperties.Name="Cancel colour change" Click="OnColorCancelClick" Margin="6,0,0,0" MinWidth="72" Padding="8,6" HorizontalContentAlignment="Center" Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" />
+                                                    <Button Grid.Column="2" Content="OK" IsDefault="True" AutomationProperties.Name="Apply colour" Click="OnColorConfirmClick" Margin="6,0,0,0" MinWidth="72" Padding="8,6" HorizontalContentAlignment="Center" Background="{DynamicResource FreeSnipAccentBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" FontWeight="SemiBold" />
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </Flyout>
+                                </Button.Flyout>
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <svg:Svg Width="18" Height="18" Path="avares://freesnip.editor/Icons/custom-color.svg" />
+                                    <Border Name="CurrentColorPreview" Width="24" Height="24" CornerRadius="4" Background="{DynamicResource FreeSnipAccentBrush}" BorderBrush="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="1"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Name="CopyCurrentColorBtn" Classes="toolbar" Width="NaN" MinWidth="82" Height="36" Padding="6,0" Click="OnCopyCurrentColorClick" AutomationProperties.Name="Copy current hex color code" ToolTip.Tip="Copy color hex code to clipboard" Cursor="Hand">
+                                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                    <TextBlock Name="CurrentColorHex" Text="#007ACC" VerticalAlignment="Center" FontSize="{DynamicResource FreeSnipToolbarFontSize}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                                    <svg:Svg Width="14" Height="14" Path="avares://freesnip.editor/Icons/copy.svg" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <Button Classes="toolbar" Name="FillToggleBtn" AutomationProperties.Name="Toggle shape fill" ToolTip.Tip="Toggle Shape Fill" Click="OnFillToggleClick" VerticalAlignment="Center" Width="NaN" MinWidth="40" Padding="10,0" Margin="25,0,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/fill.svg" />
+                                <TextBlock Name="FillToggleText" Text="Fill: Off" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource FreeSnipToolbarTextBrush}" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Classes="toolbar" Name="ResetCounterBtn" AutomationProperties.Name="Reset counter to 1" ToolTip.Tip="Reset Counter to 1" Click="OnCounterResetClick" VerticalAlignment="Center" Width="NaN" MinWidth="40" Padding="10,0" IsVisible="False">
+                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/counter.svg" />
+                                <TextBlock Text="Reset Counter" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource FreeSnipToolbarTextBrush}" />
+                            </StackPanel>
+                        </Button>
+                        <StackPanel Name="CounterAdjustPanel" Orientation="Vertical" Spacing="2" VerticalAlignment="Center" IsVisible="False" Margin="5,0,0,0">
+                            <Button Classes="toolbar" Name="CounterUpBtn" AutomationProperties.Name="Increase counter" ToolTip.Tip="Increment Selected Counter" Click="OnCounterUpClick" Width="26" Height="24" Padding="0" Margin="0">
+                                <TextBlock Text="▲" FontSize="11" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button Classes="toolbar" Name="CounterDownBtn" AutomationProperties.Name="Decrease counter" ToolTip.Tip="Decrement Selected Counter" Click="OnCounterDownClick" Width="26" Height="24" Padding="0" Margin="0">
+                                <TextBlock Text="▼" FontSize="11" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                        </StackPanel>
+
+                        <StackPanel Name="ThicknessPanel" Orientation="Horizontal" Spacing="2" Margin="25,0,0,0" VerticalAlignment="Center">
+                            <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="0,0,5,0" />
+                            <StackPanel Name="ThicknessChoicesPanel" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center" FlowDirection="LeftToRight">
+                                <Button Name="LineSizeBtn" Classes="line-size-btn" Click="OnLineSizeBtnClick" AutomationProperties.Name="Line size variety selection" ToolTip.Tip="Line size menu (click for more thickness options)">
+                                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                        <TextBlock Name="ThicknessLabel" Text="Line size" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipToolbarTextBrush}" FontSize="{DynamicResource FreeSnipToolbarFontSize}" FontWeight="SemiBold" />
+                                        <TextBlock Text="▾" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" />
+                                    </StackPanel>
+                                </Button>
+                                <Popup Name="LineSizePopup" FlowDirection="LeftToRight" PlacementTarget="{Binding ElementName=LineSizeBtn}" Placement="Top" VerticalOffset="-6" IsLightDismissEnabled="True">
+                                    <Border FlowDirection="LeftToRight" Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Padding="14,12,14,14" Width="276" BoxShadow="0 6 20 0 #AA000000" ClipToBounds="False">
+                                        <Border.Resources>
+                                            <GridLength x:Key="SliderPreContentMargin">0</GridLength>
+                                            <GridLength x:Key="SliderPostContentMargin">0</GridLength>
+                                        </Border.Resources>
+                                        <StackPanel Spacing="8" ClipToBounds="False">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="LINE SIZE SELECTION" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1" Name="ThicknessFlyoutValueText" Text="3 px" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource FreeSnipAccentBrush}" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <Border Height="1" Background="{DynamicResource FreeSnipSeparatorBrush}" Margin="0,2,0,4" />
+                                            <WrapPanel Name="ThicknessFlyoutPanel" Width="244" HorizontalAlignment="Center">
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="1" ToolTip.Tip="1px"><TextBlock Text="1" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="2" ToolTip.Tip="2px"><TextBlock Text="2" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="3" ToolTip.Tip="3px"><TextBlock Text="3" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="4" ToolTip.Tip="4px"><TextBlock Text="4" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="5" ToolTip.Tip="5px"><TextBlock Text="5" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="6" ToolTip.Tip="6px"><TextBlock Text="6" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="7" ToolTip.Tip="7px"><TextBlock Text="7" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="8" ToolTip.Tip="8px"><TextBlock Text="8" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="9" ToolTip.Tip="9px"><TextBlock Text="9" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="10" ToolTip.Tip="10px"><TextBlock Text="10" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="12" ToolTip.Tip="12px"><TextBlock Text="12" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="14" ToolTip.Tip="14px"><TextBlock Text="14" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="16" ToolTip.Tip="16px"><TextBlock Text="16" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="18" ToolTip.Tip="18px"><TextBlock Text="18" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="20" ToolTip.Tip="20px"><TextBlock Text="20" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="24" ToolTip.Tip="24px"><TextBlock Text="24" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="28" ToolTip.Tip="28px"><TextBlock Text="28" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="32" ToolTip.Tip="32px"><TextBlock Text="32" FontSize="11" FontWeight="SemiBold"/></Button>
+                                            </WrapPanel>
+                                            <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,2" VerticalAlignment="Center" ClipToBounds="False">
+                                                <TextBlock Text="Custom:" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" Margin="0,0,8,0"/>
+                                                <Slider Grid.Column="1" Name="ThicknessFlyoutSlider" Classes="thickness-slider" Minimum="1" Maximum="40" ValueChanged="OnThicknessSliderChanged" ToolTip.Tip="Fine-tune thickness" ClipToBounds="False">
+                                                    <Slider.Resources>
+                                                        <GridLength x:Key="SliderPreContentMargin">0</GridLength>
+                                                        <GridLength x:Key="SliderPostContentMargin">0</GridLength>
+                                                    </Slider.Resources>
+                                                </Slider>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
+                                <Button Classes="thickness" Click="OnThicknessClick" Tag="1" Width="10" Margin="0" AutomationProperties.Name="1 pixel thickness" ToolTip.Tip="1px">
+                                    <Rectangle Width="1" Height="20" Fill="{DynamicResource FreeSnipToolbarTextBrush}"/>
+                                </Button>
+                                <Button Classes="thickness" Click="OnThicknessClick" Tag="2" Width="11" Margin="0" AutomationProperties.Name="2 pixel thickness" ToolTip.Tip="2px">
+                                    <Rectangle Width="2" Height="20" Fill="{DynamicResource FreeSnipToolbarTextBrush}"/>
+                                </Button>
+                                <Button Classes="thickness" Click="OnThicknessClick" Tag="3" Width="12" Margin="0" AutomationProperties.Name="3 pixel thickness" ToolTip.Tip="3px">
+                                    <Rectangle Width="3" Height="20" Fill="{DynamicResource FreeSnipToolbarTextBrush}"/>
+                                </Button>
+                                <Button Classes="thickness" Click="OnThicknessClick" Tag="5" Width="15" Margin="0" AutomationProperties.Name="5 pixel thickness" ToolTip.Tip="5px">
+                                    <Rectangle Width="5" Height="20" Fill="{DynamicResource FreeSnipToolbarTextBrush}"/>
+                                </Button>
+                                <Button Classes="thickness" Click="OnThicknessClick" Tag="8" Width="18" Margin="0" AutomationProperties.Name="8 pixel thickness" ToolTip.Tip="8px">
+                                    <Rectangle Width="8" Height="20" Fill="{DynamicResource FreeSnipToolbarTextBrush}"/>
+                                </Button>
+                                <Button Classes="thickness" Click="OnThicknessClick" Tag="12" Width="22" Margin="0" AutomationProperties.Name="12 pixel thickness" ToolTip.Tip="12px">
+                                    <Rectangle Width="12" Height="20" Fill="{DynamicResource FreeSnipToolbarTextBrush}"/>
+                                </Button>
+                                <Button Classes="thickness" Click="OnThicknessClick" Tag="16" Width="26" Margin="0" AutomationProperties.Name="16 pixel thickness" ToolTip.Tip="16px">
+                                    <Rectangle Width="16" Height="20" Fill="{DynamicResource FreeSnipToolbarTextBrush}"/>
+                                </Button>
+                            </StackPanel>
+                            <StackPanel Name="PixelateToolbarSection" Orientation="Horizontal" Spacing="8" IsVisible="False" VerticalAlignment="Center">
+                                <TextBlock Text="Pixelate" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipToolbarTextBrush}" FontSize="{DynamicResource FreeSnipToolbarFontSize}" FontWeight="SemiBold" Margin="0,0,2,0" />
+                                <Slider Name="InlinePixelateSlider"
+                                         Classes="pixelate-strength"
+                                         Orientation="Horizontal"
+                                         Minimum="2"
+                                         Maximum="29"
+                                         Width="140"
+                                         ClipToBounds="False"
+                                         AutomationProperties.Name="Pixelation strength"
+                                         ToolTip.Tip="Pixelization strength">
+                                    <Slider.Resources>
+                                        <GridLength x:Key="SliderPreContentMargin">0</GridLength>
+                                        <GridLength x:Key="SliderPostContentMargin">0</GridLength>
+                                    </Slider.Resources>
+                                </Slider>
+                                <TextBlock Name="PixelatePercentText" Text="0%" MinWidth="38" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipToolbarTextBrush}" FontSize="{DynamicResource FreeSnipToolbarFontSize}" FontWeight="SemiBold" TextAlignment="Right" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Height="60" HorizontalAlignment="Right" Margin="10,0" Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <Button Classes="toolbar" Name="SnapToggleBtn" AutomationProperties.Name="Toggle magnetic snapping" ToolTip.Tip="Toggle Magnetic Snapping" Click="OnSnapToggleClick">
+                            <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/magnet.svg" />
+                        </Button>
+
+                        <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="3,0" />
+
+                        <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource FreeSnipToolbarTextBrush}" FontSize="{DynamicResource FreeSnipToolbarFontSize}" FontWeight="SemiBold" />
+                        <Button Classes="toolbar" Name="ZoomOutButton" AutomationProperties.Name="Zoom out" Click="OnZoomOutClick" ToolTip.Tip="Zoom Out">
+                            <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/zoom-out.svg" />
+                        </Button>
+                        <Button Classes="zoom-text" Name="ZoomText" Content="100%" AutomationProperties.Name="Current zoom level, click to reset to 100 percent" ToolTip.Tip="Reset zoom to 100%" Click="OnZoomResetButtonClick" />
+                        <Button Classes="toolbar" Name="ZoomInButton" AutomationProperties.Name="Zoom in" Click="OnZoomInClick" ToolTip.Tip="Zoom In">
+                            <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/zoom-in.svg" />
+                        </Button>
+                        <Button Classes="toolbar" Name="ResetZoomButton" AutomationProperties.Name="Reset zoom to 100 percent" ToolTip.Tip="Reset Zoom to 100% (view only, does not change the image)" Click="OnZoomResetButtonClick">
+                            <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/zoom-reset.svg" />
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+
+    <Grid Name="ClosePromptOverlay" IsVisible="False" ZIndex="100000" Background="{DynamicResource FreeSnipScrimBrush}"
+          Focusable="True" KeyDown="OnClosePromptKeyDown"
+          KeyboardNavigation.TabNavigation="Cycle"
+          AutomationProperties.Name="Unsaved changes confirmation">
+        <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20" MaxWidth="460">
+            <StackPanel Spacing="20">
+                <TextBlock Text="Unsaved Changes" FontWeight="Bold" FontSize="{DynamicResource FreeSnipDialogTitleFontSize}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
+                <TextBlock Name="ClosePromptMessage" Text="You have unsaved changes. Discard permanently deletes everything you added to this image." TextWrapping="Wrap" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" />
+                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                    <Button Name="ClosePromptSaveButton" Content="Save and Close" Click="OnPromptSaveClose" AutomationProperties.Name="Save and close" Background="{DynamicResource FreeSnipAccentBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" MinWidth="110" MinHeight="32" HorizontalContentAlignment="Center" Padding="12,6" Cursor="Hand" IsDefault="True" />
+                    <Button Name="ClosePromptDiscardButton" Content="Discard" Click="OnPromptDiscard" AutomationProperties.Name="Discard changes and close" Background="{DynamicResource FreeSnipDestructiveBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" MinWidth="90" MinHeight="32" HorizontalContentAlignment="Center" Padding="12,6" Cursor="Hand" />
+                    <Button Name="ClosePromptCancelButton" Content="Cancel" Click="OnPromptCancel" AutomationProperties.Name="Keep editing" Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" MinWidth="90" MinHeight="32" HorizontalContentAlignment="Center" Padding="12,6" Cursor="Hand" IsCancel="True" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+    </Panel>
+</Window>

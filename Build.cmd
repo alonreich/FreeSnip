@@ -69,9 +69,7 @@ setlocal enabledelayedexpansion
 
 cd /d "."
 
-
-
-set "PROJECT_FILE=src\SnapVox\SnapVox.csproj"
+set "PROJECT_FILE=src\freesnip\freesnip.csproj"
 
 set "PUBLISH_BASE_ARGS=-p:TreatWarningsAsErrors=true"
 
@@ -100,15 +98,13 @@ set "TAG=v!BUILD_VERSION!"
 set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!BUILD_VERSION! -p:InformationalVersion=!BUILD_VERSION!"
 echo Build version: !BUILD_VERSION!  ^(tag !TAG!^)
 
-
-
 echo ###########################################################
 
 echo PURGING PREVIOUS BUILD ARTIFACTS...
 
 echo ###########################################################
 
-rem A running SnapVox/SnapVox_tesseract instance keeps .\compiled locked and the
+rem A running FreeSnip/FreeSnip_tesseract instance keeps .\compiled locked and the
 rem wipe below silently half-fails. Kill both flavors first.
 call :TERMINATE_PROCESSES
 
@@ -123,7 +119,7 @@ echo ###########################################################
 echo RUNNING HEADLESS TEST SUITE...
 echo ###########################################################
 
-dotnet test "src\snapvox.tests\snapvox.tests.csproj" -c Release --nologo %DOTNET_LOG_ARGS%
+dotnet test "src\freesnip.tests\freesnip.tests.csproj" -c Release --nologo %DOTNET_LOG_ARGS%
 if errorlevel 1 (
   echo ERROR: Headless test suite failed.
   exit /b 1
@@ -147,11 +143,9 @@ if not errorlevel 1 (
   echo NOTE: link.exe not on PATH - the .NET SDK will locate the MSVC toolchain itself.
 )
 
-call :BUILD_STANDALONE "Branch1" "SnapVox" "USE_TESSERACT=false" "-p:PublishAot=true" "1"
+call :BUILD_STANDALONE "Branch1" "FreeSnip" "USE_TESSERACT=false" "-p:PublishAot=true" "1"
 
 if errorlevel 1 exit /b 1
-
-
 
 echo.
 
@@ -161,18 +155,14 @@ echo BUILDING BRANCH 2: Tesseract (Standard Deployment)
 
 echo ###########################################################
 
-call :BUILD_STANDALONE "Branch2" "SnapVox_tesseract" "USE_TESSERACT=true" "-p:PublishAot=false -p:SelfContained=true" "0"
+call :BUILD_STANDALONE "Branch2" "FreeSnip_tesseract" "USE_TESSERACT=true" "-p:PublishAot=false -p:SelfContained=true" "0"
 
 if errorlevel 1 exit /b 1
-
-
 
 copy /y "LICENSE.txt" ".\compiled\LICENSE.txt" >nul
 call :VALIDATE_COMPILED_OUTPUT
 
 if errorlevel 1 exit /b 1
-
-
 
 echo.
 
@@ -182,9 +172,9 @@ echo SUCCESS: Build completed successfully.
 
 echo.
 
-echo Branch 1 (Native): .\compiled\SnapVox.exe
+echo Branch 1 (Native): .\compiled\FreeSnip.exe
 
-echo Branch 2 (Tesseract):   .\compiled\SnapVox_tesseract.exe
+echo Branch 2 (Tesseract):   .\compiled\FreeSnip_tesseract.exe
 
 echo Log file:               .\build.log  (first line: OK / WARN / FAIL)
 
@@ -252,34 +242,25 @@ call :STRIP_STAGING_BLOAT "%STAGING_DIR%" "%DROP_STAGED_EXE%"
 
 echo [%BRANCH_NAME%] 3. Zipping payload...
 
-powershell -NoProfile -Command "Compress-Archive -Path '%STAGING_DIR%\*' -DestinationPath 'src\SnapVox\payload.zip' -Force" <nul
-
-
+powershell -NoProfile -Command "Compress-Archive -Path '%STAGING_DIR%\*' -DestinationPath 'src\freesnip\payload.zip' -Force" <nul
 
 echo [%BRANCH_NAME%] 4. Publishing standalone installer...
 dotnet publish "%PROJECT_FILE%" -c Release -r win-x64 %PUBLISH_BASE_ARGS% -p:PublishAot=true -p:EmbedOcrPayload=false -p:USE_TESSERACT=false !VERSION_ARGS! -o "%FINAL_DIR%" %DOTNET_LOG_ARGS%
 
 if errorlevel 1 exit /b 1
 
-
-
 echo [%BRANCH_NAME%] 5. Moving final EXE to compiled folder...
 
-if not exist "%FINAL_DIR%\SnapVox.exe" (
-
+if not exist "%FINAL_DIR%\FreeSnip.exe" (
   echo ERROR: Expected standalone EXE was not produced in %FINAL_DIR%
-
   exit /b 1
-
 )
 
-move /y "%FINAL_DIR%\SnapVox.exe" ".\compiled\%OUTPUT_NAME%.exe"
+move /y "%FINAL_DIR%\FreeSnip.exe" ".\compiled\%OUTPUT_NAME%.exe"
 
 if errorlevel 1 exit /b 1
 
 call :PURGE_COMPILED_EXTRAS
-
-
 
 echo [%BRANCH_NAME%] 6. Cleaning up temporary artifacts...
 
@@ -287,13 +268,9 @@ if exist "%STAGING_DIR%" rd /s /q "%STAGING_DIR%"
 
 if exist "%FINAL_DIR%" rd /s /q "%FINAL_DIR%"
 
-if exist "src\SnapVox\payload.zip" del /f /q "src\SnapVox\payload.zip"
-
-
+if exist "src\freesnip\payload.zip" del /f /q "src\freesnip\payload.zip"
 
 exit /b 0
-
-
 
 :STRIP_STAGING_BLOAT
 set "STRIP_DIR=%~1"
@@ -316,9 +293,9 @@ for %%D in ("%STRIP_DIR%\mscordaccore_*.dll") do (
   del /f /q "%%~fD" >nul 2>&1
 )
 if "%STRIP_EXE%"=="1" (
-  if exist "%STRIP_DIR%\SnapVox.exe" (
-    echo   [strip] SnapVox.exe ^(the installer already carries this build^)
-    del /f /q "%STRIP_DIR%\SnapVox.exe" >nul 2>&1
+  if exist "%STRIP_DIR%\FreeSnip.exe" (
+    echo   [strip] FreeSnip.exe ^(the installer already carries this build^)
+    del /f /q "%STRIP_DIR%\FreeSnip.exe" >nul 2>&1
   )
 )
 exit /b 0
@@ -334,13 +311,11 @@ for %%F in (".\compiled\*") do (
 )
 exit /b 0
 
-
-
 :VALIDATE_COMPILED_OUTPUT
 set "FILE_COUNT=0"
 set "INVALID=0"
-if not exist ".\compiled\SnapVox.exe" set "INVALID=1"
-if not exist ".\compiled\SnapVox_tesseract.exe" set "INVALID=1"
+if not exist ".\compiled\FreeSnip.exe" set "INVALID=1"
+if not exist ".\compiled\FreeSnip_tesseract.exe" set "INVALID=1"
 if not exist ".\compiled\LICENSE.txt" set "INVALID=1"
 for %%F in (".\compiled\*") do (
   set /a FILE_COUNT+=1
@@ -349,16 +324,14 @@ for %%F in (".\compiled\*") do (
 if not "!FILE_COUNT!"=="3" set "INVALID=1"
 if "!INVALID!"=="1" (
   echo ERROR: .\compiled must contain exactly these files and nothing else:
-  echo   SnapVox.exe
-  echo   SnapVox_tesseract.exe
+  echo   FreeSnip.exe
+  echo   FreeSnip_tesseract.exe
   echo   LICENSE.txt
   dir /b ".\compiled" 2>nul
   exit /b 1
 )
 echo Verified .\compiled contains exactly 2 EXE files and LICENSE.txt.
 exit /b 0
-
-
 
 :DETECT_NATIVE_AOT
 
@@ -369,55 +342,37 @@ if not errorlevel 1 goto DETECT_NATIVE_AOT_OK
 where vswhere.exe >nul 2>&1
 
 if errorlevel 1 (
-
   echo ERROR: Native AOT platform linker ^(link.exe^) not found in PATH.
-
   echo ERROR: Open a Developer Command Prompt or add Visual Studio tools to PATH.
-
   exit /b 1
-
 )
 
 for /f "usebackq delims=" %%I in (`vswhere.exe -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul`) do (
-
   if exist "%%I\Common7\Tools\VsDevCmd.bat" (
-
     call "%%I\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul
-
     where link.exe >nul 2>&1
-
     if not errorlevel 1 goto DETECT_NATIVE_AOT_OK
-
   )
-
 )
 
 echo ERROR: Native AOT platform linker ^(link.exe^) not found.
-
 echo ERROR: Open a Developer Command Prompt or add Visual Studio tools to PATH.
-
 exit /b 1
-
-
 
 :DETECT_NATIVE_AOT_OK
 
 echo Native AOT toolchain detected.
-
 exit /b 0
-
-
 
 :TERMINATE_PROCESSES
 
+taskkill /F /IM FreeSnip.exe /T 2>nul
+taskkill /F /IM FreeSnip_tesseract.exe /T 2>nul
+taskkill /F /IM FreeSnip_Cleanup.exe /T 2>nul
 taskkill /F /IM SnapVox.exe /T 2>nul
-
 taskkill /F /IM SnapVox_tesseract.exe /T 2>nul
-
 taskkill /F /IM SnapVox_Cleanup.exe /T 2>nul
-
 dotnet build-server shutdown 2>nul
-
 exit /b 0
 
 
@@ -487,16 +442,16 @@ if not defined REPO (
 )
 echo [PUBLISH] 2/7 Target repository: !REPO!                         [OK]
 
-call :GET_SHA256 ".\compiled\SnapVox.exe"
+call :GET_SHA256 ".\compiled\FreeSnip.exe"
 if not defined SHA256_OUT (
-  echo [PUBLISH] STOPPED: could not fingerprint .\compiled\SnapVox.exe
+  echo [PUBLISH] STOPPED: could not fingerprint .\compiled\FreeSnip.exe
   exit /b 1
 )
 set "HASH_NATIVE=!SHA256_OUT!"
 
-call :GET_SHA256 ".\compiled\SnapVox_tesseract.exe"
+call :GET_SHA256 ".\compiled\FreeSnip_tesseract.exe"
 if not defined SHA256_OUT (
-  echo [PUBLISH] STOPPED: could not fingerprint .\compiled\SnapVox_tesseract.exe
+  echo [PUBLISH] STOPPED: could not fingerprint .\compiled\FreeSnip_tesseract.exe
   exit /b 1
 )
 set "HASH_TESS=!SHA256_OUT!"
@@ -538,7 +493,7 @@ if defined SURVIVORS (
 )
 echo [PUBLISH] 4/7 Removed !REMOVED! previous release^(s^) and all tags.    [OK]
 
-gh release create !TAG! ".\compiled\SnapVox.exe#SnapVox.exe - Native AOT" ".\compiled\SnapVox_tesseract.exe#SnapVox_tesseract.exe - with OCR" ".\compiled\LICENSE.txt#LICENSE.txt" --repo !REPO! --title "SnapVox !TAG!" --notes "Automated release published by Build.cmd on !TAG!. This is the only release: every previous release and tag is deleted on each publish. SnapVox.exe SHA256 !HASH_NATIVE! / SnapVox_tesseract.exe SHA256 !HASH_TESS!." --latest >nul 2>&1
+gh release create !TAG! ".\compiled\FreeSnip.exe#FreeSnip.exe - Native AOT" ".\compiled\FreeSnip_tesseract.exe#FreeSnip_tesseract.exe - with OCR" ".\compiled\LICENSE.txt#LICENSE.txt" --repo !REPO! --title "FreeSnip !TAG!" --notes "Automated release published by Build.cmd on !TAG!. This is the only release: every previous release and tag is deleted on each publish. FreeSnip.exe SHA256 !HASH_NATIVE! / FreeSnip_tesseract.exe SHA256 !HASH_TESS!." --latest >nul 2>&1
 if errorlevel 1 (
   echo [PUBLISH] STOPPED: creating release !TAG! failed.
   echo [PUBLISH] Your build is fine - only the upload failed. Retry, or publish by hand.
@@ -551,11 +506,11 @@ rem  when the asset that ends up attached is not the file you meant to send.
 rem  The check below compares the SHA256 digests GitHub reports for BOTH exes
 rem  against the freshly built files. The whole pipeline lives inside one
 rem  quoted powershell -Command string, so no cmd for /f escaping games.
-powershell -NoProfile -Command "$assets = (gh release view !TAG! --repo !REPO! --json assets | ConvertFrom-Json).assets; $assets | ForEach-Object { Write-Host ('[PUBLISH]     remote: ' + $_.name + ' ' + $_.digest) }; $n = $assets | Where-Object name -eq 'SnapVox.exe'; $t = $assets | Where-Object name -eq 'SnapVox_tesseract.exe'; if (-not $n -or -not $t -or $n.digest.ToLower() -ne ('sha256:!HASH_NATIVE!').ToLower() -or $t.digest.ToLower() -ne ('sha256:!HASH_TESS!').ToLower()) { exit 1 }; exit 0" <nul
+powershell -NoProfile -Command "$assets = (gh release view !TAG! --repo !REPO! --json assets | ConvertFrom-Json).assets; $assets | ForEach-Object { Write-Host ('[PUBLISH]     remote: ' + $_.name + ' ' + $_.digest) }; $n = $assets | Where-Object name -eq 'FreeSnip.exe'; $t = $assets | Where-Object name -eq 'FreeSnip_tesseract.exe'; if (-not $n -or -not $t -or $n.digest.ToLower() -ne ('sha256:!HASH_NATIVE!').ToLower() -or $t.digest.ToLower() -ne ('sha256:!HASH_TESS!').ToLower()) { exit 1 }; exit 0" <nul
 if errorlevel 1 (
   echo [PUBLISH] STOPPED: an uploaded asset does NOT match the file that was just built.
-  echo [PUBLISH]     SnapVox.exe built        sha256:!HASH_NATIVE!
-  echo [PUBLISH]     SnapVox_tesseract built  sha256:!HASH_TESS!
+  echo [PUBLISH]     FreeSnip.exe built            sha256:!HASH_NATIVE!
+  echo [PUBLISH]     FreeSnip_tesseract built      sha256:!HASH_TESS!
   echo [PUBLISH] The release would be serving the WRONG binary - fix before telling anyone.
   exit /b 1
 )
@@ -566,7 +521,7 @@ echo [PUBLISH] 7/7 Done. https://github.com/!REPO!/releases now holds exactly on
 echo.
 echo ###########################################################
 echo SUCCESS: release !TAG! is live and is the only release.
-echo Download: https://github.com/!REPO!/releases/latest/download/SnapVox.exe
+echo Download: https://github.com/!REPO!/releases/latest/download/FreeSnip.exe
 echo ###########################################################
 exit /b 0
 

@@ -39,7 +39,7 @@ setlocal enabledelayedexpansion
 
 cd /d "."
 
-set "PROJECT_FILE=src\SnapVox\SnapVox.csproj"
+set "PROJECT_FILE=src\freesnip\freesnip.csproj"
 set "PUBLISH_BASE_ARGS=-p:TreatWarningsAsErrors=true"
 set "DOTNET_LOG_ARGS=-consoleLoggerParameters:Summary;NoItemAndPropertyList"
 set "DO_PUBLISH=0"
@@ -63,7 +63,8 @@ echo ###########################################################
 
 call :TERMINATE_PROCESSES
 
-if not exist ".\compiled" mkdir ".\compiled"
+if exist ".\compiled" rd /s /q ".\compiled"
+mkdir ".\compiled"
 
 call :CLEAN_ALL
 
@@ -72,7 +73,7 @@ echo ###########################################################
 echo RUNNING HEADLESS TEST SUITE...
 echo ###########################################################
 
-dotnet test "src\snapvox.tests\snapvox.tests.csproj" -c Release --nologo %DOTNET_LOG_ARGS%
+dotnet test "src\freesnip.tests\freesnip.tests.csproj" -c Release --nologo %DOTNET_LOG_ARGS%
 if errorlevel 1 (
   echo ERROR: Headless test suite failed.
   exit /b 1
@@ -90,7 +91,7 @@ if not errorlevel 1 (
   echo NOTE: link.exe not on PATH - the .NET SDK will locate the MSVC toolchain itself.
 )
 
-call :BUILD_STANDALONE "Branch1" "SnapVox" "USE_TESSERACT=false" "-p:PublishAot=true" "1"
+call :BUILD_STANDALONE "Branch1" "FreeSnip" "USE_TESSERACT=false" "-p:PublishAot=true" "1"
 if errorlevel 1 exit /b 1
 
 echo.
@@ -98,7 +99,7 @@ echo ###########################################################
 echo BUILDING BRANCH 2: Tesseract (Standard Deployment)
 echo ###########################################################
 
-call :BUILD_STANDALONE "Branch2" "SnapVox_tesseract" "USE_TESSERACT=true" "-p:PublishAot=false -p:SelfContained=true" "0"
+call :BUILD_STANDALONE "Branch2" "FreeSnip_tesseract" "USE_TESSERACT=true" "-p:PublishAot=false -p:SelfContained=true" "0"
 if errorlevel 1 exit /b 1
 
 copy /y "LICENSE.txt" ".\compiled\LICENSE.txt" >nul
@@ -109,8 +110,8 @@ echo.
 echo ###########################################################
 echo SUCCESS: Local dev build completed successfully.
 echo.
-echo Branch 1 (Native):    .\compiled\SnapVox.exe
-echo Branch 2 (Tesseract): .\compiled\SnapVox_tesseract.exe
+echo Branch 1 (Native):    .\compiled\FreeSnip.exe
+echo Branch 2 (Tesseract): .\compiled\FreeSnip_tesseract.exe
 echo Log file:             .\build.log  (first line: OK / WARN / FAIL)
 echo [PUBLISH] Skipped. Git and GitHub were not touched.
 echo ###########################################################
@@ -130,7 +131,7 @@ set "FINAL_DIR=.\obj\StandaloneTemp\%BRANCH_NAME%_final"
 echo [%BRANCH_NAME%] 1. Purging old temp folders...
 if exist "%STAGING_DIR%" rd /s /q "%STAGING_DIR%"
 if exist "%FINAL_DIR%" rd /s /q "%FINAL_DIR%"
-if exist "src\SnapVox\payload.zip" del /f /q "src\SnapVox\payload.zip"
+if exist "src\freesnip\payload.zip" del /f /q "src\freesnip\payload.zip"
 
 echo [%BRANCH_NAME%] 2. Publishing raw payload to staging...
 dotnet publish "%PROJECT_FILE%" -c Release -r win-x64 %PUBLISH_BASE_ARGS% %AOT_ARGS% -p:%EXTRA_ARGS% !VERSION_ARGS! -o "%STAGING_DIR%" %DOTNET_LOG_ARGS%
@@ -140,19 +141,19 @@ echo [%BRANCH_NAME%] 2b. Stripping non-shipping runtime artifacts from payload..
 call :STRIP_STAGING_BLOAT "%STAGING_DIR%" "%DROP_STAGED_EXE%"
 
 echo [%BRANCH_NAME%] 3. Zipping payload...
-powershell -NoProfile -Command "Compress-Archive -Path '%STAGING_DIR%\*' -DestinationPath 'src\SnapVox\payload.zip' -Force" <nul
+powershell -NoProfile -Command "Compress-Archive -Path '%STAGING_DIR%\*' -DestinationPath 'src\freesnip\payload.zip' -Force" <nul
 
 echo [%BRANCH_NAME%] 4. Publishing standalone installer...
 dotnet publish "%PROJECT_FILE%" -c Release -r win-x64 %PUBLISH_BASE_ARGS% -p:PublishAot=true -p:EmbedOcrPayload=false -p:USE_TESSERACT=false !VERSION_ARGS! -o "%FINAL_DIR%" %DOTNET_LOG_ARGS%
 if errorlevel 1 exit /b 1
 
 echo [%BRANCH_NAME%] 5. Moving final EXE to compiled folder...
-if not exist "%FINAL_DIR%\SnapVox.exe" (
+if not exist "%FINAL_DIR%\FreeSnip.exe" (
   echo ERROR: Expected standalone EXE was not produced in %FINAL_DIR%
   exit /b 1
 )
 
-move /y "%FINAL_DIR%\SnapVox.exe" ".\compiled\%OUTPUT_NAME%.exe"
+move /y "%FINAL_DIR%\FreeSnip.exe" ".\compiled\%OUTPUT_NAME%.exe"
 if errorlevel 1 exit /b 1
 
 call :PURGE_COMPILED_EXTRAS
@@ -160,7 +161,7 @@ call :PURGE_COMPILED_EXTRAS
 echo [%BRANCH_NAME%] 6. Cleaning up temporary artifacts...
 if exist "%STAGING_DIR%" rd /s /q "%STAGING_DIR%"
 if exist "%FINAL_DIR%" rd /s /q "%FINAL_DIR%"
-if exist "src\SnapVox\payload.zip" del /f /q "src\SnapVox\payload.zip"
+if exist "src\freesnip\payload.zip" del /f /q "src\freesnip\payload.zip"
 
 exit /b 0
 
@@ -185,9 +186,9 @@ for %%D in ("%STRIP_DIR%\mscordaccore_*.dll") do (
   del /f /q "%%~fD" >nul 2>&1
 )
 if "%STRIP_EXE%"=="1" (
-  if exist "%STRIP_DIR%\SnapVox.exe" (
-    echo   [strip] SnapVox.exe ^(the installer already carries this build^)
-    del /f /q "%STRIP_DIR%\SnapVox.exe" >nul 2>&1
+  if exist "%STRIP_DIR%\FreeSnip.exe" (
+    echo   [strip] FreeSnip.exe ^(the installer already carries this build^)
+    del /f /q "%STRIP_DIR%\FreeSnip.exe" >nul 2>&1
   )
 )
 exit /b 0
@@ -206,8 +207,8 @@ exit /b 0
 :VALIDATE_COMPILED_OUTPUT
 set "FILE_COUNT=0"
 set "INVALID=0"
-if not exist ".\compiled\SnapVox.exe" set "INVALID=1"
-if not exist ".\compiled\SnapVox_tesseract.exe" set "INVALID=1"
+if not exist ".\compiled\FreeSnip.exe" set "INVALID=1"
+if not exist ".\compiled\FreeSnip_tesseract.exe" set "INVALID=1"
 if not exist ".\compiled\LICENSE.txt" set "INVALID=1"
 for %%F in (".\compiled\*") do (
   set /a FILE_COUNT+=1
@@ -216,8 +217,8 @@ for %%F in (".\compiled\*") do (
 if not "!FILE_COUNT!"=="3" set "INVALID=1"
 if "!INVALID!"=="1" (
   echo ERROR: .\compiled must contain exactly these files and nothing else:
-  echo   SnapVox.exe
-  echo   SnapVox_tesseract.exe
+  echo   FreeSnip.exe
+  echo   FreeSnip_tesseract.exe
   echo   LICENSE.txt
   dir /b ".\compiled" 2>nul
   exit /b 1
@@ -226,6 +227,9 @@ echo Verified .\compiled contains exactly 2 EXE files and LICENSE.txt.
 exit /b 0
 
 :TERMINATE_PROCESSES
+taskkill /F /IM FreeSnip.exe /T 2>nul
+taskkill /F /IM FreeSnip_tesseract.exe /T 2>nul
+taskkill /F /IM FreeSnip_Cleanup.exe /T 2>nul
 taskkill /F /IM SnapVox.exe /T 2>nul
 taskkill /F /IM SnapVox_tesseract.exe /T 2>nul
 taskkill /F /IM SnapVox_Cleanup.exe /T 2>nul

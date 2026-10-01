@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="freesnip.editor.forms.NotificationOverlayWindow"
+        Title="Notification"
+        Background="Transparent"
+        SystemDecorations="None"
+        Topmost="True"
+        WindowState="Normal"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="False"
+        IsHitTestVisible="False"
+        SizeToContent="WidthAndHeight">
+    <Panel Margin="30">
+        <Border Name="NotificationChrome"
+                Background="{DynamicResource FreeSnipPanelDarkBrush}"
+                CornerRadius="12"
+                Padding="32,16"
+                BorderBrush="{DynamicResource FreeSnipAccentBrush}"
+                BorderThickness="2"
+                BoxShadow="0 8 28 0 #B3000000">
+            <StackPanel Name="NotificationPanel" Orientation="Horizontal" Spacing="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Name="NotificationIcon"
+                           Text="&#xE73E;"
+                           FontFamily="Segoe MDL2 Assets, Segoe Fluent Icons, Segoe UI Symbol, $Default"
+                           Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                           VerticalAlignment="Center"
+                           FontSize="26"/>
+                <TextBlock Name="NotificationText"
+                           Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                           FontSize="20"
+                           FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </Panel>
+</Window>

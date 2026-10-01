@@ -1,0 +1,112 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="freesnip.forms.DeploymentProgressWindow"
+        Title="FreeSnip Setup"
+        AutomationProperties.Name="FreeSnip setup progress"
+        Width="720" Height="480"
+        MinWidth="640" MinHeight="420"
+        WindowStartupLocation="CenterScreen"
+        SystemDecorations="Full"
+        Background="{DynamicResource FreeSnipCanvasBrush}"
+        Topmost="False"
+        ShowInTaskbar="True"
+        CanResize="True">
+    <!-- ISSUE_012: theme is set once at the Application level (App.axaml). -->
+    <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8" BorderBrush="{DynamicResource FreeSnipAccentBrush}" BorderThickness="2" Margin="8">
+        <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+            <TextBlock Name="TitleText"
+                       Grid.Row="0"
+                       Text="Installing FreeSnip"
+                       Foreground="{DynamicResource FreeSnipAccentBrush}"
+                       FontSize="{DynamicResource FreeSnipDeploymentTitleFontSize}"
+                       FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,8"/>
+            <TextBlock Name="LogPathText"
+                       Grid.Row="1"
+                       Text=""
+                       Foreground="{DynamicResource FreeSnipDimTextBrush}"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,8"/>
+            <!-- ISSUE_015: dedicated error banner shown when deployment fails. -->
+            <Border Name="ErrorBanner"
+                    Grid.Row="2"
+                    Background="{DynamicResource FreeSnipDestructiveSurfaceBrush}"
+                    BorderBrush="{DynamicResource FreeSnipDestructiveBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="10,6"
+                    Margin="0,0,0,8"
+                    IsVisible="False">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="&#9888;" Foreground="{DynamicResource FreeSnipWarningBrush}" FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Name="ErrorText" Text="Deployment failed." Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+            <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                <TextBlock Name="PhaseText"
+                           Text="Initializing..."
+                           Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Name="PercentageText"
+                           Grid.Column="1"
+                           Text="0%"
+                           Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                           FontWeight="Bold"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0"/>
+            </Grid>
+            <ListBox Name="LogList"
+                     Grid.Row="4"
+                     AutomationProperties.Name="Installation log"
+                     Background="{DynamicResource FreeSnipCanvasBrush}"
+                     BorderThickness="0"
+                     Foreground="{DynamicResource FreeSnipLogTextBrush}"
+                     FontFamily="Consolas,Courier New,monospace"
+                     FontSize="12"
+                     Padding="8"/>
+            <ProgressBar Name="ProgressBar"
+                         Grid.Row="5"
+                         AutomationProperties.Name="Installation progress"
+                         Height="16"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="0"
+                         Foreground="{DynamicResource FreeSnipAccentBrush}"
+                         Background="{DynamicResource FreeSnipActionButtonBrush}"
+                         Margin="0,12,0,12"/>
+            <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                <!-- Cancel button lets users abort a stalled install. -->
+                <Button Name="CancelButton"
+                        Content="Cancel"
+                        AutomationProperties.Name="Cancel installation"
+                        MinWidth="120"
+                        MinHeight="32"
+                        Cursor="Hand"
+                        IsCancel="True"
+                        HorizontalContentAlignment="Center"
+                        Background="{DynamicResource FreeSnipSecondaryButtonBrush}"
+                        Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                        Click="OnCancelClick"/>
+                <Button Name="FinishButton"
+                        Content="Finish"
+                        AutomationProperties.Name="Finish and close setup"
+                        HorizontalAlignment="Right"
+                        HorizontalContentAlignment="Center"
+                        MinWidth="120"
+                        MinHeight="32"
+                        Cursor="Hand"
+                        IsVisible="False"
+                        IsDefault="True"
+                        Background="{DynamicResource FreeSnipAccentBrush}"
+                        Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                        FontSize="14"
+                        FontWeight="Bold"
+                        Click="OnFinishClick"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
-    <Copyright>Copyright © SnapVox 2004-2026</Copyright>
-    <Authors>SnapVox</Authors>
+    <Copyright>Copyright © FreeSnip 2004-2026</Copyright>
+    <Authors>FreeSnip</Authors>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <LangVersion>latest</LangVersion>
     <UseWPF>false</UseWPF>

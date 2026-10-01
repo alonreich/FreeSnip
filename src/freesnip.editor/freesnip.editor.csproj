@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>freesnip.editor</RootNamespace>
+    <AssemblyName>freesnip.editor</AssemblyName>
+    <Nullable>disable</Nullable>
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CustomResourceTypesSupport>true</CustomResourceTypesSupport>
+    <EmbeddedResourceUseDependentUponConvention>false</EmbeddedResourceUseDependentUponConvention>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Svg.Skia" Version="11.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\..\icons\*.svg" Link="Icons\%(Filename)%(Extension)" />
+    <AvaloniaResource Include="Drawing\Emoji\*.ttf" />
+    <AvaloniaResource Include="Themes\DesignSystem.axaml" />
+    <AvaloniaResource Include="FreeSnip.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\freesnip.foundation\freesnip.foundation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="freesnip.tests" />
+  </ItemGroup>
+</Project>

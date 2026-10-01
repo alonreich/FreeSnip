@@ -1,0 +1,396 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="freesnip.forms.SettingsWindow"
+        Title="FreeSnip Settings"
+        SizeToContent="WidthAndHeight"
+        MinWidth="720" MinHeight="520"
+        AutomationProperties.Name="FreeSnip settings"
+        Background="{DynamicResource FreeSnipCanvasBrush}"
+        Closing="OnSettingsClosing"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <x:Double x:Key="ButtonSpinnerRepeatButtonMinWidth">18</x:Double>
+    </Window.Resources>
+    <!-- ISSUE_012: RequestedThemeVariant is set once at the Application level (App.axaml). -->
+    <Window.Styles>
+        <Style Selector="TextBlock.header">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="{DynamicResource FreeSnipHeaderFontSize}"/>
+            <Setter Property="Margin" Value="0,10,0,5"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="Margin" Value="0,5"/>
+            <Setter Property="MinHeight" Value="{DynamicResource FreeSnipMinTouchTarget}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="Margin" Value="0,5"/>
+            <Setter Property="MinHeight" Value="{DynamicResource FreeSnipMinTouchTarget}"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="TabItem">
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="TextBlock.field-label">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+        </Style>
+        <Style Selector="TextBox.hotkey">
+            <Setter Property="MinWidth" Value="110"/>
+            <Setter Property="MinHeight" Value="{DynamicResource FreeSnipMinTouchTarget}"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="TextBox.hotkey-conflict">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipDestructiveSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipDestructiveHoverBrush}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+        </Style>
+        <Style Selector="NumericUpDown">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource FreeSnipPanelDarkBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+            <Setter Property="ClipToBounds" Value="True"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ ButtonSpinner">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ ButtonSpinner /template/ StackPanel#PART_SpinnerPanel">
+            <Setter Property="Margin" Value="0,0,2,0"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ ButtonSpinner /template/ StackPanel#PART_SpinnerPanel > RepeatButton">
+            <Setter Property="MinWidth" Value="18"/>
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ ButtonSpinner:right /template/ StackPanel#PART_SpinnerPanel > RepeatButton">
+            <Setter Property="MinWidth" Value="18"/>
+            <Setter Property="Width" Value="18"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ ButtonSpinner /template/ RepeatButton:pointerover">
+            <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ ButtonSpinner /template/ RepeatButton Path">
+            <Setter Property="Width" Value="8"/>
+            <Setter Property="Height" Value="5"/>
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="Fill" Value="{DynamicResource FreeSnipSecondaryTextBrush}"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ ButtonSpinner /template/ RepeatButton:pointerover Path">
+            <Setter Property="Fill" Value="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox">
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="6,2,2,2"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        </Style>
+        <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox /template/ ScrollViewer#PART_ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+        </Style>
+        <Style Selector="Button.color-preset">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.color-preset:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" Margin="10">
+        <TextBlock Text="FreeSnip Configuration" FontSize="{DynamicResource FreeSnipDialogTitleFontSize}" FontWeight="Bold" Margin="0,0,0,10" Grid.Row="0" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+        
+        <TabControl Grid.Row="1">
+            <TabItem Header="General Settings" AutomationProperties.Name="General settings tab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <TextBlock Text="Application Behavior" Classes="header"/>
+                        <CheckBox Name="ChkKeepBackup" Content="Keep a 24-hour backup of captures and extracted text" AutomationProperties.Name="Keep a 24 hour backup of captures and extracted text" />
+                        <CheckBox Name="ChkCloseEditor" Content="Close the image editor after Save, Copy or OCR" AutomationProperties.Name="Close the image editor after Save, Copy or OCR" IsChecked="False" />
+                        <CheckBox Name="ChkWarnClose" Content="Warn before closing the image editor with unsaved changes" AutomationProperties.Name="Warn before closing the image editor with unsaved changes" />
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2">
+                            <CheckBox Name="ChkAddBorder" Content="Add a frame border to captures" AutomationProperties.Name="Add a frame border to captures" VerticalAlignment="Center" />
+                            <StackPanel Name="FrameBorderOptionsPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Rectangle Width="1" Height="18" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="4,0" VerticalAlignment="Center" />
+                                <TextBlock Text="Color:" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="12" />
+                                <Button Name="FrameBorderColorBtn" AutomationProperties.Name="Frame border color" Padding="3" Width="38" Height="28" VerticalAlignment="Center" Cursor="Hand" ToolTip.Tip="Frame border color" CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" Background="{DynamicResource FreeSnipPanelDarkBrush}">
+                                    <Button.Flyout>
+                                        <Flyout Placement="Bottom">
+                                            <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="6" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Padding="8">
+                                                <StackPanel Spacing="6">
+                                                    <TextBlock Text="PRESET COLORS" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" />
+                                                    <WrapPanel Name="FrameBorderColorPresets" MaxWidth="150">
+                                                        <Button Classes="color-preset" Background="#434343" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#434343" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="#434343 (Default)" AutomationProperties.Name="Default dark gray" />
+                                                        <Button Classes="color-preset" Background="#000000" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#000000" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="Black" AutomationProperties.Name="Black" />
+                                                        <Button Classes="color-preset" Background="#000080" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#000080" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="Navy Blue" AutomationProperties.Name="Navy blue" />
+                                                        <Button Classes="color-preset" Background="#007ACC" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#007ACC" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="FreeSnip Blue" AutomationProperties.Name="FreeSnip blue" />
+                                                        <Button Classes="color-preset" Background="#FF0000" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#FF0000" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="Red" AutomationProperties.Name="Red" />
+                                                        <Button Classes="color-preset" Background="#00FF00" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#00FF00" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="Green" AutomationProperties.Name="Green" />
+                                                        <Button Classes="color-preset" Background="#FFFF00" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#FFFF00" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="Yellow" AutomationProperties.Name="Yellow" />
+                                                        <Button Classes="color-preset" Background="#FFFFFF" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#FFFFFF" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="White" AutomationProperties.Name="White" />
+                                                    </WrapPanel>
+                                                    <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,0">
+                                                        <TextBlock Text="Hex: " VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11" />
+                                                        <TextBox Grid.Column="1" Name="TxtFrameBorderColorHex" Watermark="#434343" MaxLength="9" FontSize="11" Padding="4,2" AutomationProperties.Name="Frame border color hex code" />
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </Flyout>
+                                    </Button.Flyout>
+                                    <Border Name="FrameBorderColorPreview" Width="28" Height="18" CornerRadius="2" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Background="#434343" />
+                                </Button>
+                                <TextBlock Text="Thickness:" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="12" Margin="4,0,0,0" />
+                                <NumericUpDown Name="NumFrameBorderThickness" Minimum="1" Maximum="50" Value="4" Increment="1" FormatString="0" Width="84" Height="28" VerticalAlignment="Center" ToolTip.Tip="Border thickness in pixels" AutomationProperties.Name="Border thickness in pixels" />
+                                <TextBlock Text="px" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="12" Margin="2,0,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                        <CheckBox Name="ChkLeavePictureAsIs" Content="Leave the picture as-is while extracting text (OCR)" AutomationProperties.Name="Leave the picture as-is while extracting text" />
+
+                        <TextBlock Text="Output Image Format" Classes="header"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0"
+                                    ToolTip.Tip="PNG preserves full alpha transparency and is lossless. JPEG always encodes at 100% quality.">
+                            <ComboBox Name="CboOutputFormat" MinWidth="320" HorizontalAlignment="Left"
+                                      AutomationProperties.Name="Output image format"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Notification Overlay" Classes="header"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,5,0,0"
+                                    ToolTip.Tip="How long the notification overlay keeps blinking when an action completes (copy, download, OCR...).">
+                            <TextBlock Text="Blink cycle duration:" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"/>
+                            <ComboBox Name="CboOverlayDuration" MinWidth="170" HorizontalAlignment="Left" AutomationProperties.Name="Notification blink duration"/>
+                        </StackPanel>
+                        
+                        <StackPanel Name="OcrEnginePanel">
+                            <TextBlock Text="Text Recognition (OCR) Engine" Classes="header"/>
+                            <ComboBox Name="CboOcrEngine" AutomationProperties.Name="Text recognition engine"/>
+                            <CheckBox Name="ChkOcrAdaptiveThreshold" IsVisible="False"
+                                      Content="Adaptive black-and-white conversion (better on gradient or dark backgrounds)"
+                                      AutomationProperties.Name="Adaptive black and white conversion for text recognition"
+                                      ToolTip.Tip="Helps when text sits on a gradient, a translucent panel or a dark-mode window. Can be slightly worse on plain flat backgrounds - test it on your own captures."/>
+                            <Border Name="OcrEngineEmptyState" IsVisible="False"
+                                    Background="{DynamicResource FreeSnipDestructiveSurfaceBrush}"
+                                    BorderBrush="{DynamicResource FreeSnipDestructiveHoverBrush}"
+                                    BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,6,0,0">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="&#9888;" Foreground="{DynamicResource FreeSnipWarningBrush}" FontSize="14" VerticalAlignment="Top"/>
+                                    <TextBlock Name="OcrEngineEmptyText"
+                                               Text="No text-recognition engine is available. Install the English and Hebrew language packs in Windows Settings, then restart FreeSnip."
+                                               Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                               TextWrapping="Wrap" MaxWidth="620"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                        
+                        <TextBlock Text="System Integration" Classes="header"/>
+                        <!-- ISSUE_017: warning icon + tooltip explaining the security risk -->
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0"
+                                    ToolTip.Tip="⚠ Running as Administrator grants elevated privileges to every capture and OCR action. Enable only if you fully trust the environment.">
+                            <TextBlock Text="&#9888;" Foreground="{DynamicResource FreeSnipWarningBrush}" FontSize="16" VerticalAlignment="Center"/>
+                            <TextBlock Text="Requires elevated privileges — use with care." Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" VerticalAlignment="Center" FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Button Name="BtnToggleAdmin"
+                                Content="Run This App As an Administrator (Highest Privileges)"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Click="OnToggleAdminClick" Margin="0,5,0,0" Padding="10" Cursor="Hand"
+                                AutomationProperties.Name="Toggle running FreeSnip as administrator"/>
+                        <!-- ISSUE_017: explicit current on/off state -->
+                        <TextBlock Name="AdminStateLabel" Text="Status: Not configured" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11" Margin="0,5,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            
+            <TabItem Header="Hotkeys" AutomationProperties.Name="Hotkeys tab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15" Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+                            <TextBlock Text="Click a text box and press a key combination to rebind." Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="Reset All Hotkeys to Default" Click="OnResetHotkeysClick"
+                                    AutomationProperties.Name="Reset all hotkeys to default"
+                                    ToolTip.Tip="Replaces every custom shortcut below with the factory default. Asks first."
+                                    Background="{DynamicResource FreeSnipDestructiveBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                    FontWeight="Bold" Padding="15,10" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Cursor="Hand" />
+                        </Grid>
+                        <!-- ISSUE_007: a general banner is still kept, but precise per-box highlighting drives the user to the exact clash. -->
+                        <TextBlock Name="TxtHotkeyWarning" Foreground="{DynamicResource FreeSnipDestructiveHoverBrush}" FontWeight="Bold" IsVisible="False" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <!-- PrintScreen conflict: bright red and impossible to miss when Windows or another app steals the Print Screen key. -->
+                        <Border Name="PrintScreenConflictPanel" IsVisible="False"
+                                Background="{DynamicResource FreeSnipDestructiveSurfaceBrush}" BorderBrush="{DynamicResource FreeSnipDestructiveHoverBrush}" BorderThickness="2"
+                                CornerRadius="6" Padding="12,10" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="&#9888; PROBLEM: WINDOWS IS TAKING THE PRINT SCREEN KEY"
+                                           Foreground="{DynamicResource FreeSnipDestructiveHoverBrush}" FontWeight="Bold" FontSize="14" TextWrapping="Wrap"/>
+                                <TextBlock Name="TxtPrintScreenConflictDetail"
+                                           Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto">
+                            <StackPanel Grid.Column="0" Spacing="15">
+                                <TextBlock Text="Capture Hotkeys" Classes="header" Margin="0,0,0,5"/>
+                                
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Region:" Classes="field-label"/>
+                                    <TextBox Name="TxtRegionKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Region capture hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                </StackPanel>
+                                
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Window:" Classes="field-label"/>
+                                    <TextBox Name="TxtWindowKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Active window capture hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Fullscreen:" Classes="field-label"/>
+                                    <TextBox Name="TxtFullscreenKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Fullscreen capture hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Last Region:" Classes="field-label"/>
+                                    <TextBox Name="TxtLastRegionKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Repeat last region hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Clipboard:" Classes="field-label"/>
+                                    <TextBox Name="TxtClipboardKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Open from clipboard hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Scroll:" Classes="field-label"/>
+                                    <TextBox Name="TxtScrollCaptureDelimiterKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Scroll capture hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                </StackPanel>
+
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Spacing="20" Margin="20,0,0,0">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Drawing Tools" Classes="header" Margin="0,0,0,5"/>
+                                    <WrapPanel Orientation="Horizontal">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Arrow:" Classes="field-label"/>
+                                            <TextBox Name="TxtArrowKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Arrow tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Line:" Classes="field-label"/>
+                                            <TextBox Name="TxtLineKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Line tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Freehand:" Classes="field-label"/>
+                                            <TextBox Name="TxtFreehandKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Freehand tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Highlight:" Classes="field-label"/>
+                                            <TextBox Name="TxtHighlightKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Highlight tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Pixelate 1:" Classes="field-label"/>
+                                            <TextBox Name="TxtPixelate1Key" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="First pixelate tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Pixelate 2:" Classes="field-label"/>
+                                            <TextBox Name="TxtPixelate2Key" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Second pixelate tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                    </WrapPanel>
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Insert Tools" Classes="header" Margin="0,0,0,5"/>
+                                    <WrapPanel Orientation="Horizontal">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Text Box:" Classes="field-label"/>
+                                            <TextBox Name="TxtTextKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Text tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Emoji:" Classes="field-label"/>
+                                            <TextBox Name="TxtEmojiKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Emoji tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Counter:" Classes="field-label"/>
+                                            <TextBox Name="TxtCounterKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Counter tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                    </WrapPanel>
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Image Actions" Classes="header" Margin="0,0,0,5"/>
+                                    <WrapPanel Orientation="Horizontal">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Resize:" Classes="field-label"/>
+                                            <TextBox Name="TxtResizeKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Resize image hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Crop:" Classes="field-label"/>
+                                            <TextBox Name="TxtCropKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Crop image hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Rotate CW:" Classes="field-label"/>
+                                            <TextBox Name="TxtRotateCwKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Rotate clockwise hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Rotate CCW:" Classes="field-label"/>
+                                            <TextBox Name="TxtRotateCcwKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Rotate counter-clockwise hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                    </WrapPanel>
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Object Actions" Classes="header" Margin="0,0,0,5"/>
+                                    <WrapPanel Orientation="Horizontal">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Duplicate:" Classes="field-label"/>
+                                            <TextBox Name="TxtDuplicateObjectKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Duplicate object hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
+                                            <TextBlock Text="Delete:" Classes="field-label"/>
+                                            <TextBox Name="TxtDeleteObjectKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Delete object hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                        </StackPanel>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+        
+        <!-- ISSUE_006: Cancel button sits next to Save so users can discard changes confidently. -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" Spacing="10">
+            <Button Content="Cancel" Click="OnCancelClick" IsCancel="True" AutomationProperties.Name="Cancel and close without saving" Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" MinWidth="110" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" HorizontalContentAlignment="Center" Padding="15,7" Cursor="Hand" />
+            <Button Content="Save and Close" Click="OnSaveClick" IsDefault="True" AutomationProperties.Name="Save settings and close" Background="{DynamicResource FreeSnipAccentBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" MinWidth="130" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" HorizontalContentAlignment="Center" Padding="15,7" Cursor="Hand" />
+        </StackPanel>
+    </Grid>
+</Window>

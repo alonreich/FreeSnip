@@ -1,0 +1,379 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- ═════════════════════════════════════════════════════════════════
+         FreeSnip Shared Design System (with SnapVox legacy aliases)
+         Single source of truth for colors, brushes, and sizing tokens.
+         Merge this dictionary at the Application level (App.axaml) so every
+         window inherits the same values automatically.
+         ═════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Accent (brand) ── -->
+    <Color x:Key="FreeSnipAccentColor">#007ACC</Color>
+    <SolidColorBrush x:Key="FreeSnipAccentBrush" Color="{StaticResource FreeSnipAccentColor}" />
+    <Color x:Key="SnapVoxAccentColor">#007ACC</Color>
+    <SolidColorBrush x:Key="SnapVoxAccentBrush" Color="{StaticResource FreeSnipAccentColor}" />
+
+    <Color x:Key="FreeSnipAccentDarkColor">#005A9E</Color>
+    <SolidColorBrush x:Key="FreeSnipAccentDarkBrush" Color="{StaticResource FreeSnipAccentDarkColor}" />
+    <Color x:Key="SnapVoxAccentDarkColor">#005A9E</Color>
+    <SolidColorBrush x:Key="SnapVoxAccentDarkBrush" Color="{StaticResource FreeSnipAccentDarkColor}" />
+
+    <!-- ── Backgrounds ── -->
+    <Color x:Key="FreeSnipCanvasColor">#1E1E1E</Color>
+    <SolidColorBrush x:Key="FreeSnipCanvasBrush" Color="{StaticResource FreeSnipCanvasColor}" />
+    <Color x:Key="SnapVoxCanvasColor">#1E1E1E</Color>
+    <SolidColorBrush x:Key="SnapVoxCanvasBrush" Color="{StaticResource FreeSnipCanvasColor}" />
+
+    <Color x:Key="FreeSnipPanelDarkColor">#2D2D30</Color>
+    <SolidColorBrush x:Key="FreeSnipPanelDarkBrush" Color="{StaticResource FreeSnipPanelDarkColor}" />
+    <Color x:Key="SnapVoxPanelDarkColor">#2D2D30</Color>
+    <SolidColorBrush x:Key="SnapVoxPanelDarkBrush" Color="{StaticResource FreeSnipPanelDarkColor}" />
+
+    <Color x:Key="FreeSnipToolbarColor">#808080</Color>
+    <SolidColorBrush x:Key="FreeSnipToolbarBrush" Color="{StaticResource FreeSnipToolbarColor}" />
+    <Color x:Key="SnapVoxToolbarColor">#808080</Color>
+    <SolidColorBrush x:Key="SnapVoxToolbarBrush" Color="{StaticResource FreeSnipToolbarColor}" />
+
+    <Color x:Key="FreeSnipActionButtonColor">#3E3E42</Color>
+    <SolidColorBrush x:Key="FreeSnipActionButtonBrush" Color="{StaticResource FreeSnipActionButtonColor}" />
+    <Color x:Key="SnapVoxActionButtonColor">#3E3E42</Color>
+    <SolidColorBrush x:Key="SnapVoxActionButtonBrush" Color="{StaticResource FreeSnipActionButtonColor}" />
+
+    <Color x:Key="FreeSnipSecondaryButtonColor">#444444</Color>
+    <SolidColorBrush x:Key="FreeSnipSecondaryButtonBrush" Color="{StaticResource FreeSnipSecondaryButtonColor}" />
+    <Color x:Key="SnapVoxSecondaryButtonColor">#444444</Color>
+    <SolidColorBrush x:Key="SnapVoxSecondaryButtonBrush" Color="{StaticResource FreeSnipSecondaryButtonColor}" />
+
+    <!-- ── Borders & separators ── -->
+    <Color x:Key="FreeSnipSelectedSurfaceColor">#402D2D30</Color>
+    <SolidColorBrush x:Key="FreeSnipSelectedSurfaceBrush" Color="{StaticResource FreeSnipSelectedSurfaceColor}" />
+    <Color x:Key="SnapVoxSelectedSurfaceColor">#402D2D30</Color>
+    <SolidColorBrush x:Key="SnapVoxSelectedSurfaceBrush" Color="{StaticResource FreeSnipSelectedSurfaceColor}" />
+
+    <Color x:Key="FreeSnipSliderTrackColor">#4A4A4A</Color>
+    <SolidColorBrush x:Key="FreeSnipSliderTrackBrush" Color="{StaticResource FreeSnipSliderTrackColor}" />
+    <Color x:Key="SnapVoxSliderTrackColor">#4A4A4A</Color>
+    <SolidColorBrush x:Key="SnapVoxSliderTrackBrush" Color="{StaticResource FreeSnipSliderTrackColor}" />
+    <GridLength x:Key="SliderPreContentMargin">0</GridLength>
+    <GridLength x:Key="SliderPostContentMargin">0</GridLength>
+
+    <Color x:Key="FreeSnipScrimColor">#99000000</Color>
+    <SolidColorBrush x:Key="FreeSnipScrimBrush" Color="{StaticResource FreeSnipScrimColor}" />
+    <Color x:Key="SnapVoxScrimColor">#99000000</Color>
+    <SolidColorBrush x:Key="SnapVoxScrimBrush" Color="{StaticResource FreeSnipScrimColor}" />
+
+    <Color x:Key="FreeSnipSeparatorColor">#555555</Color>
+    <SolidColorBrush x:Key="FreeSnipSeparatorBrush" Color="{StaticResource FreeSnipSeparatorColor}" />
+    <Color x:Key="SnapVoxSeparatorColor">#555555</Color>
+    <SolidColorBrush x:Key="SnapVoxSeparatorBrush" Color="{StaticResource FreeSnipSeparatorColor}" />
+
+    <!-- ── Text ── -->
+    <Color x:Key="FreeSnipPrimaryTextColor">#FFFFFF</Color>
+    <SolidColorBrush x:Key="FreeSnipPrimaryTextBrush" Color="{StaticResource FreeSnipPrimaryTextColor}" />
+    <Color x:Key="SnapVoxPrimaryTextColor">#FFFFFF</Color>
+    <SolidColorBrush x:Key="SnapVoxPrimaryTextBrush" Color="{StaticResource FreeSnipPrimaryTextColor}" />
+
+    <Color x:Key="FreeSnipSecondaryTextColor">#AAAAAA</Color>
+    <SolidColorBrush x:Key="FreeSnipSecondaryTextBrush" Color="{StaticResource FreeSnipSecondaryTextColor}" />
+    <Color x:Key="SnapVoxSecondaryTextColor">#AAAAAA</Color>
+    <SolidColorBrush x:Key="SnapVoxSecondaryTextBrush" Color="{StaticResource FreeSnipSecondaryTextColor}" />
+
+    <!-- High-contrast text for use on #808080 toolbars (ISSUE_005) -->
+    <Color x:Key="FreeSnipToolbarTextColor">#FFFFFF</Color>
+    <SolidColorBrush x:Key="FreeSnipToolbarTextBrush" Color="{StaticResource FreeSnipToolbarTextColor}" />
+    <Color x:Key="SnapVoxToolbarTextColor">#FFFFFF</Color>
+    <SolidColorBrush x:Key="SnapVoxToolbarTextBrush" Color="{StaticResource FreeSnipToolbarTextColor}" />
+
+    <Color x:Key="FreeSnipDimTextColor">#888888</Color>
+    <SolidColorBrush x:Key="FreeSnipDimTextBrush" Color="{StaticResource FreeSnipDimTextColor}" />
+    <Color x:Key="SnapVoxDimTextColor">#888888</Color>
+    <SolidColorBrush x:Key="SnapVoxDimTextBrush" Color="{StaticResource FreeSnipDimTextColor}" />
+
+    <Color x:Key="FreeSnipLogTextColor">#C0CAF5</Color>
+    <SolidColorBrush x:Key="FreeSnipLogTextBrush" Color="{StaticResource FreeSnipLogTextColor}" />
+    <Color x:Key="SnapVoxLogTextColor">#C0CAF5</Color>
+    <SolidColorBrush x:Key="SnapVoxLogTextBrush" Color="{StaticResource FreeSnipLogTextColor}" />
+
+    <!-- ── Interactive states ── -->
+    <Color x:Key="FreeSnipHoverColor">#757575</Color>
+    <SolidColorBrush x:Key="FreeSnipHoverBrush" Color="{StaticResource FreeSnipHoverColor}" />
+    <Color x:Key="SnapVoxHoverColor">#757575</Color>
+    <SolidColorBrush x:Key="SnapVoxHoverBrush" Color="{StaticResource FreeSnipHoverColor}" />
+
+    <Color x:Key="FreeSnipPressedColor">#5A5A5A</Color>
+    <SolidColorBrush x:Key="FreeSnipPressedBrush" Color="{StaticResource FreeSnipPressedColor}" />
+    <Color x:Key="SnapVoxPressedColor">#5A5A5A</Color>
+    <SolidColorBrush x:Key="SnapVoxPressedBrush" Color="{StaticResource FreeSnipPressedColor}" />
+
+    <!-- ── Status colors ── -->
+    <Color x:Key="FreeSnipDestructiveColor">#A51D2D</Color>
+    <SolidColorBrush x:Key="FreeSnipDestructiveBrush" Color="{StaticResource FreeSnipDestructiveColor}" />
+    <Color x:Key="SnapVoxDestructiveColor">#A51D2D</Color>
+    <SolidColorBrush x:Key="SnapVoxDestructiveBrush" Color="{StaticResource FreeSnipDestructiveColor}" />
+
+    <Color x:Key="FreeSnipDestructiveHoverColor">#C42B3D</Color>
+    <SolidColorBrush x:Key="FreeSnipDestructiveHoverBrush" Color="{StaticResource FreeSnipDestructiveHoverColor}" />
+    <Color x:Key="SnapVoxDestructiveHoverColor">#C42B3D</Color>
+    <SolidColorBrush x:Key="SnapVoxDestructiveHoverBrush" Color="{StaticResource FreeSnipDestructiveHoverColor}" />
+
+    <Color x:Key="FreeSnipDestructiveSurfaceColor">#3A1218</Color>
+    <SolidColorBrush x:Key="FreeSnipDestructiveSurfaceBrush" Color="{StaticResource FreeSnipDestructiveSurfaceColor}" />
+    <Color x:Key="SnapVoxDestructiveSurfaceColor">#3A1218</Color>
+    <SolidColorBrush x:Key="SnapVoxDestructiveSurfaceBrush" Color="{StaticResource FreeSnipDestructiveSurfaceColor}" />
+
+    <Color x:Key="FreeSnipWarningColor">#FFB400</Color>
+    <SolidColorBrush x:Key="FreeSnipWarningBrush" Color="{StaticResource FreeSnipWarningColor}" />
+    <Color x:Key="SnapVoxWarningColor">#FFB400</Color>
+    <SolidColorBrush x:Key="SnapVoxWarningBrush" Color="{StaticResource FreeSnipWarningColor}" />
+
+    <Color x:Key="FreeSnipSuccessColor">#107C10</Color>
+    <SolidColorBrush x:Key="FreeSnipSuccessBrush" Color="{StaticResource FreeSnipSuccessColor}" />
+    <Color x:Key="SnapVoxSuccessColor">#107C10</Color>
+    <SolidColorBrush x:Key="SnapVoxSuccessBrush" Color="{StaticResource FreeSnipSuccessColor}" />
+
+    <Color x:Key="FreeSnipSuccessHoverColor">#1F8B24</Color>
+    <SolidColorBrush x:Key="FreeSnipSuccessHoverBrush" Color="{StaticResource FreeSnipSuccessHoverColor}" />
+    <Color x:Key="SnapVoxSuccessHoverColor">#1F8B24</Color>
+    <SolidColorBrush x:Key="SnapVoxSuccessHoverBrush" Color="{StaticResource FreeSnipSuccessHoverColor}" />
+
+    <!-- ── Snip frame (default #434343) ── -->
+    <Color x:Key="FreeSnipFrameBorderColor">#434343</Color>
+    <SolidColorBrush x:Key="FreeSnipFrameBorderBrush" Color="{StaticResource FreeSnipFrameBorderColor}" />
+    <Color x:Key="SnapVoxFrameBorderColor">#434343</Color>
+    <SolidColorBrush x:Key="SnapVoxFrameBorderBrush" Color="{StaticResource FreeSnipFrameBorderColor}" />
+
+    <!-- ── Checkerboard tile colors ── -->
+    <Color x:Key="FreeSnipCheckerDarkColor">#333333</Color>
+    <SolidColorBrush x:Key="FreeSnipCheckerDarkBrush" Color="{StaticResource FreeSnipCheckerDarkColor}" />
+    <Color x:Key="SnapVoxCheckerDarkColor">#333333</Color>
+    <SolidColorBrush x:Key="SnapVoxCheckerDarkBrush" Color="{StaticResource FreeSnipCheckerDarkColor}" />
+
+    <Color x:Key="FreeSnipCheckerLightColor">#3A3A3A</Color>
+    <SolidColorBrush x:Key="FreeSnipCheckerLightBrush" Color="{StaticResource FreeSnipCheckerLightColor}" />
+    <Color x:Key="SnapVoxCheckerLightColor">#3A3A3A</Color>
+    <SolidColorBrush x:Key="SnapVoxCheckerLightBrush" Color="{StaticResource FreeSnipCheckerLightColor}" />
+
+    <!-- ── Capture overlay accent ── -->
+    <Color x:Key="FreeSnipScrollAccentColor">#00AEEF</Color>
+    <SolidColorBrush x:Key="FreeSnipScrollAccentBrush" Color="{StaticResource FreeSnipScrollAccentColor}" />
+    <Color x:Key="SnapVoxScrollAccentColor">#00AEEF</Color>
+    <SolidColorBrush x:Key="SnapVoxScrollAccentBrush" Color="{StaticResource FreeSnipScrollAccentColor}" />
+
+    <!-- ── Drawing Palette & Structural Colors ── -->
+    <Color x:Key="FreeSnipPaletteBlackColor">#000000</Color>
+    <SolidColorBrush x:Key="FreeSnipPaletteBlackBrush" Color="{StaticResource FreeSnipPaletteBlackColor}" />
+    <Color x:Key="SnapVoxPaletteBlackColor">#000000</Color>
+    <SolidColorBrush x:Key="SnapVoxPaletteBlackBrush" Color="{StaticResource FreeSnipPaletteBlackColor}" />
+
+    <Color x:Key="FreeSnipPaletteGreenColor">#00FF00</Color>
+    <SolidColorBrush x:Key="FreeSnipPaletteGreenBrush" Color="{StaticResource FreeSnipPaletteGreenColor}" />
+    <Color x:Key="SnapVoxPaletteGreenColor">#00FF00</Color>
+    <SolidColorBrush x:Key="SnapVoxPaletteGreenBrush" Color="{StaticResource FreeSnipPaletteGreenColor}" />
+
+    <Color x:Key="FreeSnipPaletteRedColor">#FF0000</Color>
+    <SolidColorBrush x:Key="FreeSnipPaletteRedBrush" Color="{StaticResource FreeSnipPaletteRedColor}" />
+    <Color x:Key="SnapVoxPaletteRedColor">#FF0000</Color>
+    <SolidColorBrush x:Key="SnapVoxPaletteRedBrush" Color="{StaticResource FreeSnipPaletteRedColor}" />
+
+    <Color x:Key="FreeSnipPaletteYellowColor">#FFFF00</Color>
+    <SolidColorBrush x:Key="FreeSnipPaletteYellowBrush" Color="{StaticResource FreeSnipPaletteYellowColor}" />
+    <Color x:Key="SnapVoxPaletteYellowColor">#FFFF00</Color>
+    <SolidColorBrush x:Key="SnapVoxPaletteYellowBrush" Color="{StaticResource FreeSnipPaletteYellowColor}" />
+
+    <Color x:Key="FreeSnipPaletteBlueColor">#0000FF</Color>
+    <SolidColorBrush x:Key="FreeSnipPaletteBlueBrush" Color="{StaticResource FreeSnipPaletteBlueColor}" />
+    <Color x:Key="SnapVoxPaletteBlueColor">#0000FF</Color>
+    <SolidColorBrush x:Key="SnapVoxPaletteBlueBrush" Color="{StaticResource FreeSnipPaletteBlueColor}" />
+
+    <Color x:Key="FreeSnipPaletteWhiteColor">#FFFFFF</Color>
+    <SolidColorBrush x:Key="FreeSnipPaletteWhiteBrush" Color="{StaticResource FreeSnipPaletteWhiteColor}" />
+    <Color x:Key="SnapVoxPaletteWhiteColor">#FFFFFF</Color>
+    <SolidColorBrush x:Key="SnapVoxPaletteWhiteBrush" Color="{StaticResource FreeSnipPaletteWhiteColor}" />
+
+    <Color x:Key="FreeSnipHitTestScrimColor">#01000000</Color>
+    <SolidColorBrush x:Key="FreeSnipHitTestScrimBrush" Color="{StaticResource FreeSnipHitTestScrimColor}" />
+    <Color x:Key="SnapVoxHitTestScrimColor">#01000000</Color>
+    <SolidColorBrush x:Key="SnapVoxHitTestScrimBrush" Color="{StaticResource FreeSnipHitTestScrimColor}" />
+    
+    <Color x:Key="FreeSnipMagnifierBackgroundColor">#000000</Color>
+    <SolidColorBrush x:Key="FreeSnipMagnifierBackgroundBrush" Color="{StaticResource FreeSnipMagnifierBackgroundColor}" />
+    <Color x:Key="SnapVoxMagnifierBackgroundColor">#000000</Color>
+    <SolidColorBrush x:Key="SnapVoxMagnifierBackgroundBrush" Color="{StaticResource FreeSnipMagnifierBackgroundColor}" />
+
+    <!-- ── Scrollbar themes ── -->
+    <ControlTheme x:Key="FreeSnipScrollBarThumb" TargetType="Thumb">
+        <Setter Property="Background" Value="#FF707074" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border x:Name="ThumbBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="#FF48484C"
+                            BorderThickness="1"
+                            CornerRadius="{TemplateBinding CornerRadius}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#ThumbBorder">
+            <Setter Property="Background" Value="#FF9E9EA4" />
+            <Setter Property="BorderBrush" Value="#FF606066" />
+        </Style>
+        <Style Selector="^:pressed /template/ Border#ThumbBorder">
+            <Setter Property="Background" Value="#FFFFFFFF" />
+            <Setter Property="BorderBrush" Value="#FFAAAAAF" />
+        </Style>
+    </ControlTheme>
+    <ControlTheme x:Key="SnapVoxScrollBarThumb" TargetType="Thumb" BasedOn="{StaticResource FreeSnipScrollBarThumb}" />
+
+    <!-- Minimal arrow button: transparent chrome, hover/press tinted pill, centered glyph. -->
+    <ControlTheme x:Key="FreeSnipScrollBarArrow" TargetType="RepeatButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border x:Name="ArrowBorder"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#ArrowBorder">
+            <Setter Property="Background" Value="#FF3A3A3E" />
+        </Style>
+        <Style Selector="^:pressed /template/ Border#ArrowBorder">
+            <Setter Property="Background" Value="#FF505056" />
+        </Style>
+    </ControlTheme>
+    <ControlTheme x:Key="SnapVoxScrollBarArrow" TargetType="RepeatButton" BasedOn="{StaticResource FreeSnipScrollBarArrow}" />
+
+    <!-- Invisible page-up/page-down click target filling the track gutters. -->
+    <ControlTheme x:Key="FreeSnipScrollBarPage" TargetType="RepeatButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="SnapVoxScrollBarPage" TargetType="RepeatButton" BasedOn="{StaticResource FreeSnipScrollBarPage}" />
+
+    <!-- ScrollBar wires its scrolling behaviour to the PART_* named buttons/track below -->
+    <ControlTheme x:Key="FreeSnipScrollBarVertical" TargetType="ScrollBar">
+        <Setter Property="Width" Value="24" />
+        <Setter Property="MinWidth" Value="24" />
+        <Setter Property="Background" Value="#FF1E1E22" />
+        <Setter Property="Foreground" Value="#FFE0E0E0" />
+        <Setter Property="Opacity" Value="1.0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="AllowAutoHide" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Grid Background="{TemplateBinding Background}" MinWidth="24" Cursor="Hand">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="24" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="24" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.RowSpan="3" BorderBrush="#FF2E2E32" BorderThickness="1,0,0,0" IsHitTestVisible="False" />
+                        <RepeatButton Grid.Row="0" Name="PART_LineUpButton" Theme="{StaticResource FreeSnipScrollBarArrow}" Interval="60" Delay="250" CornerRadius="3,3,0,0" Cursor="Hand">
+                            <Path Data="M 5 11 L 9 7 L 13 11" Stroke="{TemplateBinding Foreground}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" />
+                        </RepeatButton>
+                        <Track Grid.Row="1" Name="PART_Track" IsDirectionReversed="True" Orientation="Vertical"
+                               Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}" Cursor="Hand">
+                            <Track.DecreaseButton>
+                                <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource FreeSnipScrollBarPage}" Interval="60" Delay="250" Cursor="Hand" />
+                            </Track.DecreaseButton>
+                            <Track.Thumb>
+                                <Thumb Theme="{StaticResource FreeSnipScrollBarThumb}" MinHeight="24" Margin="1,0" Cursor="Hand" />
+                            </Track.Thumb>
+                            <Track.IncreaseButton>
+                                <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource FreeSnipScrollBarPage}" Interval="60" Delay="250" Cursor="Hand" />
+                            </Track.IncreaseButton>
+                        </Track>
+                        <RepeatButton Grid.Row="2" Name="PART_LineDownButton" Theme="{StaticResource FreeSnipScrollBarArrow}" Interval="60" Delay="250" CornerRadius="0,0,3,3" Cursor="Hand">
+                            <Path Data="M 5 7 L 9 11 L 13 7" Stroke="{TemplateBinding Foreground}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" />
+                        </RepeatButton>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="SnapVoxScrollBarVertical" TargetType="ScrollBar" BasedOn="{StaticResource FreeSnipScrollBarVertical}" />
+
+    <!-- ── Font sizes ── -->
+    <x:Double x:Key="FreeSnipMinTouchTarget">24</x:Double>
+    <x:Double x:Key="SnapVoxMinTouchTarget">24</x:Double>
+    <x:Double x:Key="FreeSnipToolbarFontSize">11</x:Double>
+    <x:Double x:Key="SnapVoxToolbarFontSize">11</x:Double>
+    <x:Double x:Key="FreeSnipTitleFontSize">12</x:Double>
+    <x:Double x:Key="SnapVoxTitleFontSize">12</x:Double>
+    <x:Double x:Key="FreeSnipHeaderFontSize">14</x:Double>
+    <x:Double x:Key="SnapVoxHeaderFontSize">14</x:Double>
+    <x:Double x:Key="FreeSnipDialogTitleFontSize">18</x:Double>
+    <x:Double x:Key="SnapVoxDialogTitleFontSize">18</x:Double>
+    <x:Double x:Key="FreeSnipDeploymentTitleFontSize">20</x:Double>
+    <x:Double x:Key="SnapVoxDeploymentTitleFontSize">20</x:Double>
+
+    <ControlTheme x:Key="FreeSnipScrollBarHorizontal" TargetType="ScrollBar">
+        <Setter Property="Height" Value="24" />
+        <Setter Property="MinHeight" Value="24" />
+        <Setter Property="Background" Value="#FF1E1E22" />
+        <Setter Property="Foreground" Value="#FFE0E0E0" />
+        <Setter Property="Opacity" Value="1.0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="AllowAutoHide" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Grid Background="{TemplateBinding Background}" MinHeight="24" Cursor="Hand">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="24" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="24" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.ColumnSpan="3" BorderBrush="#FF2E2E32" BorderThickness="0,1,0,0" IsHitTestVisible="False" />
+                        <RepeatButton Grid.Column="0" Name="PART_LineLeftButton" Theme="{StaticResource FreeSnipScrollBarArrow}" Interval="60" Delay="250" CornerRadius="3,0,0,3" Cursor="Hand">
+                            <Path Data="M 11 5 L 7 9 L 11 13" Stroke="{TemplateBinding Foreground}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" />
+                        </RepeatButton>
+                        <Track Grid.Column="1" Name="PART_Track" Orientation="Horizontal"
+                               Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                               Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}" Cursor="Hand">
+                            <Track.DecreaseButton>
+                                <RepeatButton Name="PART_PageLeftButton" Theme="{StaticResource FreeSnipScrollBarPage}" Interval="60" Delay="250" Cursor="Hand" />
+                            </Track.DecreaseButton>
+                            <Track.Thumb>
+                                <Thumb Theme="{StaticResource FreeSnipScrollBarThumb}" MinWidth="24" Margin="0,1" Cursor="Hand" />
+                            </Track.Thumb>
+                            <Track.IncreaseButton>
+                                <RepeatButton Name="PART_PageRightButton" Theme="{StaticResource FreeSnipScrollBarPage}" Interval="60" Delay="250" Cursor="Hand" />
+                            </Track.IncreaseButton>
+                        </Track>
+                        <RepeatButton Grid.Column="2" Name="PART_LineRightButton" Theme="{StaticResource FreeSnipScrollBarArrow}" Interval="60" Delay="250" CornerRadius="0,3,3,0" Cursor="Hand">
+                            <Path Data="M 7 5 L 11 9 L 7 13" Stroke="{TemplateBinding Foreground}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" />
+                        </RepeatButton>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="SnapVoxScrollBarHorizontal" TargetType="ScrollBar" BasedOn="{StaticResource FreeSnipScrollBarHorizontal}" />
+</ResourceDictionary>

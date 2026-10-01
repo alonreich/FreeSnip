@@ -1,0 +1,71 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>FreeSnip</RootNamespace>
+    <AssemblyName>FreeSnip</AssemblyName>
+    <Product>FreeSnip</Product>
+    <OutputType>WinExe</OutputType>
+    <ApplicationIcon>FreeSnip.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <ApplicationManifest>FreeSnip.manifest</ApplicationManifest>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateApplicationConfigurationFile>false</GenerateApplicationConfigurationFile>
+    <PublishAot>true</PublishAot>
+    <BuiltInComSupport>true</BuiltInComSupport>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>link</TrimMode>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <DebuggerSupport>false</DebuggerSupport>
+    <EventSourceSupport>false</EventSourceSupport>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <StackTraceSupport>false</StackTraceSupport>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <CustomResourceTypesSupport>true</CustomResourceTypesSupport>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <EmojiDataTaskOutputDir>..\FreeSnip.BuildTasks\bin\$(Configuration)\$(TargetFramework)\</EmojiDataTaskOutputDir>
+    <EmojiDataTaskHostDir>$(BaseIntermediateOutputPath)EmojiDataTaskHost\$(Configuration)\$(TargetFramework)\</EmojiDataTaskHostDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="icons\**\*" Exclude="icons\applicationIcon\**\*" />
+    <AvaloniaResource Remove="icons\svgs\**\*" />
+    <AvaloniaResource Include="FreeSnip.ico" />
+    <EmbeddedResource Include="payload.zip" Condition="Exists('payload.zip')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
+    <PackageReference Condition="'$(USE_TESSERACT)' == 'true'" Include="Tesseract" Version="5.2.0" ExcludeAssets="build;buildTransitive" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\freesnip.foundation\freesnip.foundation.csproj" />
+    <ProjectReference Include="..\freesnip.editor\freesnip.editor.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootAssembly Include="log4net" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(USE_TESSERACT)' == 'true' And '$(EmbedOcrPayload)' != 'false'">
+    <EmbeddedResource Include="tessdata\**\*.*" />
+    <EmbeddedResource Include="Native\x64\*.dll" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(USE_TESSERACT)' != 'true'">
+    <Compile Remove="Native\TesseractOcrProvider.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="freesnip.tests" />
+  </ItemGroup>
+
+</Project>
