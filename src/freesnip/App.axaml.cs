@@ -167,6 +167,7 @@ namespace freesnip
                         {
                             _ = PrintScreenConflictHelper.NotifyOnBootAsync();
                         }
+                        _ = Task.Run(() => services.UpdateService.RunStartupCheckAsync());
                     }
                     foreach (var file in options.Files)
                     {
@@ -214,6 +215,7 @@ namespace freesnip
                 if (!StartupTaskHelper.IsRunningFromInstallPath()) { configurationFolder = Path.Combine(DeploymentFootprint.TempAppFolder, "Config"); }
                 Directory.CreateDirectory(configurationFolder);
                 IniConfigurationDeployer.EnsureDefaultsFile(configurationFolder);
+                IniConfigurationDeployer.EnsureUserConfiguration(configurationFolder);
                 IniConfig.IniDirectory = configurationFolder;
                 IniConfig.Init("FreeSnip", IniConfigurationDeployer.ConfigBaseName);
                 var core = IniConfig.GetIniSection<CoreConfiguration>();
@@ -247,18 +249,26 @@ namespace freesnip
                     redBytes = await Task.Run(() =>
                     {
                         using var image = SixLabors.ImageSharp.Image.Load<Bgra32>(pngBytes);
-                        image.Mutate(x => x.ProcessPixelRowsAsVector4(row =>
+                        image.Mutate(x =>
                         {
-                            for (int i = 0; i < row.Length; i++)
+                            x.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
                             {
-                                float r = row[i].X;
-                                float g = row[i].Y;
-                                float b = row[i].Z;
-                                row[i].X = Math.Max(r, Math.Max(g, b));
-                                row[i].Y = g * 0.2f;
-                                row[i].Z = b * 0.2f;
-                            }
-                        }));
+                                Size = new SixLabors.ImageSharp.Size(32, 32),
+                                Sampler = SixLabors.ImageSharp.Processing.KnownResamplers.Lanczos3
+                            });
+                            x.ProcessPixelRowsAsVector4(row =>
+                            {
+                                for (int i = 0; i < row.Length; i++)
+                                {
+                                    float r = row[i].X;
+                                    float g = row[i].Y;
+                                    float b = row[i].Z;
+                                    row[i].X = Math.Max(r, Math.Max(g, b));
+                                    row[i].Y = g * 0.15f;
+                                    row[i].Z = b * 0.15f;
+                                }
+                            });
+                        });
 
                         using var ms = new MemoryStream();
                         image.Save(ms, new PngEncoder());
@@ -298,6 +308,7 @@ namespace freesnip
                     if (icons != null && icons.Count > 0)
                     {
                         _trayIcon = icons[0];
+                        _trayIcon.ToolTipText = $"FreeSnip v{RuntimePathHelper.ProductVersion}";
                         _blueIcon = blueIcon;
                         _redIcon = redIcon;
                         var initialIcon = _currentIconIsRed && _redIcon != null ? _redIcon : _blueIcon;
@@ -555,6 +566,7 @@ namespace freesnip
                 var targetIcon = currentActive && _redIcon != null ? _redIcon : _blueIcon;
                 if (targetIcon == null) return;
                 if (ReferenceEquals(_trayIcon.Icon, targetIcon)) return;
+                _trayIcon.Icon = null;
                 _trayIcon.Icon = targetIcon;
             }
 
@@ -755,6 +767,31 @@ namespace freesnip
         private void OnSettingsClick(object sender, EventArgs e)
         {
             OpenOrFocusSettings();
+        }
+
+        private void OnCheckForUpdatesClick(object sender, EventArgs e)
+        {
+            _ = Task.Run(async () =>
+            {
+                await services.UpdateService.CheckManualAsync().ConfigureAwait(false);
+            });
+        }
+
+        private void OnAboutClick(object sender, EventArgs e)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    var aboutWin = new forms.AboutWindow();
+                    aboutWin.Show();
+                    aboutWin.Activate();
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.GetLogger(typeof(App)).Error("Failed to open About window", ex);
+                }
+            });
         }
 
         private void StartIpcServer(CancellationToken cancellationToken)

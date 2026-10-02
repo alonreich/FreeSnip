@@ -1,0 +1,101 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="freesnip.forms.UpdateAvailableWindow"
+        Title="FreeSnip Update Available"
+        Width="580" SizeToContent="Height"
+        MinHeight="280"
+        Background="{DynamicResource FreeSnipCanvasBrush}"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid Margin="16">
+        <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8"
+                BorderBrush="{DynamicResource FreeSnipAccentBrush}" BorderThickness="2" Padding="20">
+            <Grid RowDefinitions="Auto, *, Auto">
+                <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,15" Spacing="6">
+                    <TextBlock Text="FreeSnip Update Available"
+                               Foreground="{DynamicResource FreeSnipAccentBrush}"
+                               FontSize="18" FontWeight="Bold"
+                               HorizontalAlignment="Center" TextAlignment="Center"/>
+                    <TextBlock Text="A new version of FreeSnip has been released!"
+                               Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                               FontSize="14" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" TextAlignment="Center"/>
+                    <TextBlock Text="Would you like to download and install it now?"
+                               Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                               FontSize="12"
+                               HorizontalAlignment="Center" TextAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Spacing="10" Margin="0,0,0,15">
+                    <Border Background="{DynamicResource FreeSnipCanvasBrush}" CornerRadius="6"
+                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1"
+                            Padding="12,8" HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="24">
+                            <TextBlock Name="YourVersionText" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                                       FontSize="12" VerticalAlignment="Center"/>
+                            <TextBlock Text="➔" Foreground="{DynamicResource FreeSnipAccentBrush}"
+                                       FontSize="12" VerticalAlignment="Center"/>
+                            <TextBlock Name="NewVersionText" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                       FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Scrollable release notes fetched from GitHub release -->
+                    <Expander Name="ReleaseNotesExpander" Header="What's New in this Release"
+                              IsExpanded="False" MaxHeight="220"
+                              Background="{DynamicResource FreeSnipCanvasBrush}"
+                              Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                              BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                              BorderThickness="1" CornerRadius="6">
+                        <Border Background="{DynamicResource FreeSnipCanvasBrush}"
+                                Padding="10" Margin="2">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="150">
+                                <TextBlock Name="ReleaseNotesText"
+                                           TextWrapping="Wrap"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                           LineHeight="18"/>
+                            </ScrollViewer>
+                        </Border>
+                    </Expander>
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Spacing="10">
+                    <Button Name="UpdateNowBtn" Cursor="Hand" IsDefault="True"
+                            Background="{DynamicResource FreeSnipAccentBrush}"
+                            Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="12,8" CornerRadius="4">
+                        <TextBlock Text="Yes. Please download and upgrade to the latest released version now."
+                                   FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+
+                    <Separator Background="{DynamicResource FreeSnipSeparatorBrush}" Height="1" Margin="0,4"/>
+
+                    <Button Name="SkipBtn" Cursor="Hand"
+                            Background="{DynamicResource FreeSnipCanvasBrush}"
+                            Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                            BorderThickness="1"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="10,6" CornerRadius="4">
+                        <TextBlock Text="Skip this version — only tell me when an even newer one comes out."
+                                   TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+
+                    <Button Name="NeverBtn" Cursor="Hand"
+                            Background="{DynamicResource FreeSnipCanvasBrush}"
+                            Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                            BorderThickness="1"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="10,6" CornerRadius="4">
+                        <TextBlock Text="Never tell me about updates again."
+                                   TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

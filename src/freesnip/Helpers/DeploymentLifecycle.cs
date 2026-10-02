@@ -85,7 +85,26 @@ internal static class DeploymentLifecycle
 
     public static async Task<int> RunInstallAsync(CancellationToken ct = default, bool? isWorkerOverride = null)
     {
-        bool isWorker = isWorkerOverride ?? Environment.GetCommandLineArgs().Any(a => a.Equals("--install-worker", StringComparison.OrdinalIgnoreCase));
+        string[] cmdArgs = Environment.GetCommandLineArgs();
+        bool isAutoUpdate = cmdArgs.Any(a => a.Equals("--auto-update", StringComparison.OrdinalIgnoreCase));
+
+        for (int i = 0; i < cmdArgs.Length; i++)
+        {
+            if (cmdArgs[i].Equals("--wait-pid", StringComparison.OrdinalIgnoreCase) && i + 1 < cmdArgs.Length)
+            {
+                if (int.TryParse(cmdArgs[i + 1], out int waitPid) && waitPid > 0)
+                {
+                    try
+                    {
+                        using var p = Process.GetProcessById(waitPid);
+                        p.WaitForExit(15000);
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        bool isWorker = isWorkerOverride ?? cmdArgs.Any(a => a.Equals("--install-worker", StringComparison.OrdinalIgnoreCase));
         if (!isWorker)
         {
             await RelaunchInstallFromTempAsync(ct).ConfigureAwait(false);
@@ -94,7 +113,16 @@ internal static class DeploymentLifecycle
 
         if (!StartupTaskHelper.IsElevated())
         {
-            StartElevated(RuntimePathHelper.ExecutablePath, "--install --install-worker");
+            string elevArgs = "--install --install-worker";
+            if (isAutoUpdate) elevArgs += " --auto-update";
+            for (int i = 0; i < cmdArgs.Length; i++)
+            {
+                if (cmdArgs[i].Equals("--wait-pid", StringComparison.OrdinalIgnoreCase) && i + 1 < cmdArgs.Length)
+                {
+                    elevArgs += $" --wait-pid {cmdArgs[i + 1]}";
+                }
+            }
+            StartElevated(RuntimePathHelper.ExecutablePath, elevArgs);
             return 0;
         }
 
@@ -127,27 +155,36 @@ internal static class DeploymentLifecycle
             {
                 await logger.LogAsync("INSTALL", "CONFLICT_WARN",
                     $"Possible conflicting software detected: {conflict}", ct).ConfigureAwait(false);
-                var conflictChoice = await ShowBlockingPromptAsync(progress,
-                    $"FreeSnip detected {conflict} running or installed on this system.\r\n\r\n" +
-                    "These tools may fight over the same global hotkeys (e.g. Print Screen).\r\n\r\n" +
-                    "Yes    - Continue installing FreeSnip anyway\r\n" +
-                    "No     - Abort the installation",
-                    "Possible Software Conflict",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning).ConfigureAwait(false);
-                if (conflictChoice == DialogResult.No)
+                if (!isAutoUpdate)
                 {
-                    await ReportAsync(progress, logger, 100, "ABORT", "CONFLICT", $"Cancelled by user due to {conflict}.", ct).ConfigureAwait(false);
-                    return 0;
+                    var conflictChoice = await ShowBlockingPromptAsync(progress,
+                        $"FreeSnip detected {conflict} running or installed on this system.\r\n\r\n" +
+                        "These tools may fight over the same global hotkeys (e.g. Print Screen).\r\n\r\n" +
+                        "Yes    - Continue installing FreeSnip anyway\r\n" +
+                        "No     - Abort the installation",
+                        "Possible Software Conflict",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning).ConfigureAwait(false);
+                    if (conflictChoice == DialogResult.No)
+                    {
+                        await ReportAsync(progress, logger, 100, "ABORT", "CONFLICT", $"Cancelled by user due to {conflict}.", ct).ConfigureAwait(false);
+                        return 0;
+                    }
                 }
-                await logger.LogAsync("INSTALL", "CONFLICT_OVERRIDE", $"User chose to continue despite {conflict}", ct).ConfigureAwait(false);
+                await logger.LogAsync("INSTALL", "CONFLICT_OVERRIDE", $"Continuing despite {conflict}", ct).ConfigureAwait(false);
             }
 
             bool existingFreeSnip = DetectExistingInstallation();
             bool keepUserSettings = false;
             bool cleanWipeRequested = false;
 
-            if (existingFreeSnip)
+            if (isAutoUpdate)
+            {
+                keepUserSettings = true;
+                cleanWipeRequested = false;
+                await logger.LogAsync("UPGRADE", "AUTO_UPDATE", "Auto-update in progress: preserving all user settings automatically.", ct).ConfigureAwait(false);
+            }
+            else if (existingFreeSnip)
             {
                 var upgradeChoice = await ShowBlockingPromptAsync(progress,
                     "An existing FreeSnip installation was detected on this system.\r\n\r\n" +
@@ -185,7 +222,14 @@ internal static class DeploymentLifecycle
                 await LaunchInstalledApplicationAsync().ConfigureAwait(false);
                 CleanupSettingsBackup(settingsBackupFolder);
                 await ReportAsync(progress, logger, 100, "SUCCESS", "COMPLETE", "Deployment finalized.", ct).ConfigureAwait(false);
-                await AwaitUserAcknowledgementAsync(progress, logger, "Installation complete. Click Finish to close.", ct).ConfigureAwait(false);
+                if (isAutoUpdate)
+                {
+                    await Task.Delay(1000, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    await AwaitUserAcknowledgementAsync(progress, logger, "Installation complete. Click Finish to close.", ct).ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
@@ -536,6 +580,14 @@ internal static class DeploymentLifecycle
         };
         targets.RemoveAll(t => !allowedRoots.Any(root =>
             t.StartsWith(root, StringComparison.OrdinalIgnoreCase) || string.Equals(t, root, StringComparison.OrdinalIgnoreCase)));
+        if (!purgeUserArtifacts)
+        {
+            targets.RemoveAll(t =>
+                string.Equals(t, DeploymentFootprint.RoamingAppDataFolder, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t, DeploymentFootprint.LocalAppDataFolder, StringComparison.OrdinalIgnoreCase) ||
+                t.StartsWith(DeploymentFootprint.RoamingAppDataFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                t.StartsWith(DeploymentFootprint.LocalAppDataFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+        }
         foreach (string skipped in DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: true).Except(targets, StringComparer.OrdinalIgnoreCase))
         {
             await logger.LogAsync("FILESYSTEM", "SKIP_GUARD", $"Refusing to purge outside owned roots: {skipped}", ct).ConfigureAwait(false);
@@ -1425,6 +1477,29 @@ internal static class DeploymentLifecycle
     private static async Task RestoreUserSettingsAsync(string folder, DeploymentLogger logger, CancellationToken ct)
     {
         await UpgradeSettingsBackup.RestoreAsync(folder, GetSettingsCandidates(), ct).ConfigureAwait(false);
+        string primaryIni = Path.Combine(StartupTaskHelper.ConfigurationFolder, "freesnip.ini");
+        if (!File.Exists(primaryIni))
+        {
+            foreach (var cand in GetSettingsCandidates())
+            {
+                if (File.Exists(cand) && !string.Equals(cand, primaryIni, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(StartupTaskHelper.ConfigurationFolder);
+                        string content = await File.ReadAllTextAsync(cand, ct).ConfigureAwait(false);
+                        content = content.Replace("[SnapVox]", "[Core]", StringComparison.OrdinalIgnoreCase);
+                        await File.WriteAllTextAsync(primaryIni, content, Encoding.UTF8, ct).ConfigureAwait(false);
+                        await logger.LogAsync("UPGRADE", "MIGRATE", $"Migrated '{cand}' to '{primaryIni}'", ct).ConfigureAwait(false);
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogSwallowed("RestoreUserSettingsAsync", "migrate", ex);
+                    }
+                }
+            }
+        }
         await logger.LogAsync("UPGRADE", "RESTORED", "Settings verified from " + folder, ct).ConfigureAwait(false);
     }
 
@@ -1521,7 +1596,20 @@ internal static class DeploymentLifecycle
         Directory.CreateDirectory(SessionTempFolder);
         string temp = Path.Combine(SessionTempFolder, "Setup.exe");
         File.Copy(RuntimePathHelper.ExecutablePath, temp, true);
-        Process.Start(new ProcessStartInfo { FileName = temp, Arguments = "--install --install-worker", UseShellExecute = true, Verb = "runas" });
+
+        string extraArgs = "";
+        string[] currentArgs = Environment.GetCommandLineArgs();
+        if (currentArgs.Any(a => a.Equals("--auto-update", StringComparison.OrdinalIgnoreCase)))
+            extraArgs += " --auto-update";
+        for (int i = 0; i < currentArgs.Length; i++)
+        {
+            if (currentArgs[i].Equals("--wait-pid", StringComparison.OrdinalIgnoreCase) && i + 1 < currentArgs.Length)
+            {
+                extraArgs += $" --wait-pid {currentArgs[i + 1]}";
+            }
+        }
+
+        Process.Start(new ProcessStartInfo { FileName = temp, Arguments = "--install --install-worker" + extraArgs, UseShellExecute = true, Verb = "runas" });
         await Task.CompletedTask;
     }
 

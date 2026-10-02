@@ -43,6 +43,8 @@
                         <NativeMenuItem Header="Show Capture History" Click="OnShowHistoryClick" Icon="avares://FreeSnip/icons/folder_explore.png" />
                         <NativeMenuItemSeparator />
                         <NativeMenuItem Header="Settings" Click="OnSettingsClick" Icon="avares://FreeSnip/icons/wrench.png" />
+                        <NativeMenuItem Header="Check for Updates..." Click="OnCheckForUpdatesClick" />
+                        <NativeMenuItem Header="About FreeSnip" Click="OnAboutClick" />
                         <NativeMenuItem Header="View Logs" Click="OnViewLogsClick" Icon="avares://FreeSnip/icons/log.png" />
                         <NativeMenuItem Header="Exit" Click="OnExitClick" Icon="avares://FreeSnip/icons/cross.png" />
                     </NativeMenu>

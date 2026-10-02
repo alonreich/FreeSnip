@@ -135,7 +135,7 @@
     <Grid RowDefinitions="Auto,*,Auto" Margin="10">
         <TextBlock Text="FreeSnip Configuration" FontSize="{DynamicResource FreeSnipDialogTitleFontSize}" FontWeight="Bold" Margin="0,0,0,10" Grid.Row="0" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"/>
         
-        <TabControl Grid.Row="1">
+        <TabControl Name="SettingsTabControl" Grid.Row="1">
             <TabItem Header="General Settings" AutomationProperties.Name="General settings tab">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="10">
@@ -143,6 +143,7 @@
                         <CheckBox Name="ChkKeepBackup" Content="Keep a 24-hour backup of captures and extracted text" AutomationProperties.Name="Keep a 24 hour backup of captures and extracted text" />
                         <CheckBox Name="ChkCloseEditor" Content="Close the image editor after Save, Copy or OCR" AutomationProperties.Name="Close the image editor after Save, Copy or OCR" IsChecked="False" />
                         <CheckBox Name="ChkWarnClose" Content="Warn before closing the image editor with unsaved changes" AutomationProperties.Name="Warn before closing the image editor with unsaved changes" IsChecked="False" />
+                        <CheckBox Name="ChkAutoUpdateChecks" Content="Automatically check for updates on startup" AutomationProperties.Name="Automatically check for updates on startup" IsChecked="True" ToolTip.Tip="Quietly checks GitHub releases on startup and prompts if a newer version is released." />
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2">
                             <CheckBox Name="ChkAddBorder" Content="Add a frame border to captures" AutomationProperties.Name="Add a frame border to captures" VerticalAlignment="Center" />
                             <StackPanel Name="FrameBorderOptionsPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -382,6 +383,51 @@
                                 </StackPanel>
                             </StackPanel>
                         </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Name="TabAbout" Header="About" AutomationProperties.Name="About tab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20" Spacing="16">
+                        <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                            <Image Source="avares://FreeSnip/FreeSnip.ico" Width="48" Height="48" VerticalAlignment="Center"/>
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="FreeSnip" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource FreeSnipAccentBrush}"/>
+                                <TextBlock Name="TxtAboutVersion" Text="Version 1.0.0" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"/>
+                                <TextBlock Name="TxtAboutFlavor" Text="Native AOT (Blazing fast capture)" FontSize="11" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Separator Background="{DynamicResource FreeSnipSeparatorBrush}" Height="1"/>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="System &amp; Platform Status" Classes="header" Margin="0,0,0,4"/>
+                            <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto" Margin="4,0,0,0">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Platform Runtime: " Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontWeight="SemiBold" FontSize="12"/>
+                                <TextBlock Name="TxtAboutPlatform" Grid.Row="0" Grid.Column="1" Text=".NET 9.0 (win-x64, Native AOT)" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" FontSize="12"/>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Configuration Root: " Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontWeight="SemiBold" FontSize="12" Margin="0,4,0,0"/>
+                                <TextBlock Name="TxtAboutStorage" Grid.Row="1" Grid.Column="1" Text="%APPDATA%\FreeSnip" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" FontSize="12" Margin="0,4,0,0"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <Separator Background="{DynamicResource FreeSnipSeparatorBrush}" Height="1"/>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Software Updates" Classes="header" Margin="0,0,0,4"/>
+                            <TextBlock Text="Stay up to date with the newest features, performance optimizations, and bug fixes." Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="12" TextWrapping="Wrap"/>
+
+                            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,6,0,0">
+                                <Button Name="BtnCheckUpdatesNow" Content="Check For Updates Now" MinWidth="180" Cursor="Hand"
+                                        Background="{DynamicResource FreeSnipPanelDarkBrush}"
+                                        Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                        BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                                        BorderThickness="1" Padding="12,6" CornerRadius="4"
+                                        ToolTip.Tip="Immediately checks GitHub for a newer version of FreeSnip."/>
+                                <TextBlock Name="TxtUpdateStatus" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" MaxWidth="350"/>
+                            </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -44,6 +44,21 @@ namespace freesnip.helpers
                 return;
             }
 
+            foreach (var cand in StartupTaskHelper.GetSettingsCandidates())
+            {
+                if (File.Exists(cand) && !string.Equals(cand, userPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        string content = File.ReadAllText(cand);
+                        content = content.Replace("[SnapVox]", "[Core]", StringComparison.OrdinalIgnoreCase);
+                        File.WriteAllText(userPath, content, Encoding.UTF8);
+                        return;
+                    }
+                    catch { }
+                }
+            }
+
             IniConfig.IniDirectory = configurationFolder;
             IniConfig.Init("FreeSnip", ConfigBaseName);
             var coreConfiguration = IniConfig.GetIniSection<CoreConfiguration>(allowSave: false);

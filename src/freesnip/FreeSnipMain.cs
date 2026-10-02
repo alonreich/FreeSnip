@@ -198,6 +198,7 @@ public class FreeSnipMain
 
             Directory.CreateDirectory(StartupTaskHelper.ConfigurationFolder);
             IniConfigurationDeployer.EnsureDefaultsFile(StartupTaskHelper.ConfigurationFolder);
+            IniConfigurationDeployer.EnsureUserConfiguration(StartupTaskHelper.ConfigurationFolder);
             IniConfig.IniDirectory = StartupTaskHelper.ConfigurationFolder;
             IniConfig.Init("FreeSnip", IniConfigurationDeployer.ConfigBaseName);
 

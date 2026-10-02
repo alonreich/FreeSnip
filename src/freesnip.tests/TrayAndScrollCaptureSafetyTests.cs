@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using freesnip;
 using freesnip.forms;
 using freesnip.foundation.core;
+using SixLabors.ImageSharp.Processing;
 using Xunit;
 
 namespace freesnip.tests
@@ -84,6 +85,60 @@ namespace freesnip.tests
             // RestoreTrayIcon must execute without throwing or recreating native shell icon
             App.RestoreTrayIcon();
             App.RestoreTrayIcon();
+        }
+
+        [AvaloniaFact]
+        public void RedTrayIcon_Creation_DoesNotFailAndIsValid()
+        {
+            using var blueAssetLoader = Avalonia.Platform.AssetLoader.Open(new Uri("avares://FreeSnip/FreeSnip.ico"));
+            using var ms = new MemoryStream();
+            blueAssetLoader.CopyTo(ms);
+            byte[] blueBytes = ms.ToArray();
+            
+            var method = typeof(App).GetMethod("TryDecodeIcoToPng", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.NotNull(method);
+            byte[] pngBytes = (byte[])method.Invoke(null, new object[] { blueBytes })!;
+            Assert.NotNull(pngBytes);
+
+            using var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Bgra32>(pngBytes);
+            image.Mutate(x => x.ProcessPixelRowsAsVector4(row =>
+            {
+                for (int i = 0; i < row.Length; i++)
+                {
+                    float r = row[i].X;
+                    float g = row[i].Y;
+                    float b = row[i].Z;
+                    row[i].X = Math.Max(r, Math.Max(g, b));
+                    row[i].Y = g * 0.2f;
+                    row[i].Z = b * 0.2f;
+                }
+            }));
+            using var redMs = new MemoryStream();
+            image.Save(redMs, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
+            byte[] redBytes = redMs.ToArray();
+
+            var redIcon = new WindowIcon(new MemoryStream(redBytes));
+            Assert.NotNull(redIcon);
+
+            var win32Asm = System.Reflection.Assembly.Load("Avalonia.Win32");
+            var trayType = win32Asm.GetType("Avalonia.Win32.TrayIconImpl");
+            Assert.NotNull(trayType);
+            var mSetIcon = trayType.GetMethod("SetIcon");
+            Assert.NotNull(mSetIcon);
+            var mSetVis = trayType.GetMethod("SetIsVisible");
+            Assert.NotNull(mSetVis);
+
+            var trayInstance = Activator.CreateInstance(trayType);
+            var iconImplType = win32Asm.GetType("Avalonia.Win32.IconImpl");
+            Assert.NotNull(iconImplType);
+            var blueInstance = Activator.CreateInstance(iconImplType, new MemoryStream(blueBytes));
+            var redInstance = Activator.CreateInstance(iconImplType, new MemoryStream(redBytes));
+            Assert.NotNull(blueInstance);
+            Assert.NotNull(redInstance);
+
+            mSetVis.Invoke(trayInstance, new object[] { true });
+            mSetIcon.Invoke(trayInstance, new object[] { blueInstance });
+            mSetIcon.Invoke(trayInstance, new object[] { redInstance });
         }
 
         [Fact]
@@ -168,6 +223,22 @@ namespace freesnip.tests
             // Exiting OCR mode
             App.ForceRedTrayIcon(false, "CaptureOcr");
             Assert.Equal(0, App.ActiveRedHoldCount);
+        }
+
+        [Fact]
+        public void TrayIcon_AllCaptureModes_RegisterAndClearHolds()
+        {
+            App.ResetTrayHoldStateForTesting();
+            Assert.Equal(0, App.ActiveRedHoldCount);
+
+            string[] modes = { "CaptureSession", "CaptureActiveWindow", "CaptureFullscreen", "CaptureLastRegion", "ScrollCapture" };
+            foreach (var mode in modes)
+            {
+                App.ForceRedTrayIcon(true, mode);
+                Assert.Equal(1, App.ActiveRedHoldCount);
+                App.ForceRedTrayIcon(false, mode);
+                Assert.Equal(0, App.ActiveRedHoldCount);
+            }
         }
     }
 }

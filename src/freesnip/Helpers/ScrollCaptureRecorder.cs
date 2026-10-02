@@ -336,7 +336,8 @@ namespace freesnip.helpers
 
                     if (!_scrollAxisLocked)
                     {
-                        _isVerticalScroll = Math.Abs(motion.DeltaY) >= Math.Abs(motion.DeltaX);
+                        bool isIntentionalHorizontal = Math.Abs(motion.DeltaX) >= 20 && Math.Abs(motion.DeltaX) > (3 * Math.Abs(motion.DeltaY));
+                        _isVerticalScroll = !isIntentionalHorizontal;
                         _scrollAxisLocked = true;
                     }
 
@@ -364,6 +365,11 @@ namespace freesnip.helpers
                 var vpMotion = EstimateViewportMotion(_previousLuma, currentLuma, _viewport, lockAxis);
                 if (vpMotion.IsReliable)
                 {
+                    if (!_isVerticalScroll && Math.Abs(vpMotion.DeltaY) >= 20 && Math.Abs(vpMotion.DeltaY) > 2 * Math.Abs(vpMotion.DeltaX))
+                    {
+                        _isVerticalScroll = true;
+                    }
+
                     int effDx = _scrollAxisLocked && _isVerticalScroll ? 0 : vpMotion.DeltaX;
                     int effDy = _scrollAxisLocked && !_isVerticalScroll ? 0 : vpMotion.DeltaY;
 
@@ -387,6 +393,11 @@ namespace freesnip.helpers
                 var fallbackGlobal = EstimateGlobalMotion(_previousLuma, currentLuma, lockAxis);
                 if (fallbackGlobal.IsReliable)
                 {
+                    if (!_isVerticalScroll && Math.Abs(fallbackGlobal.DeltaY) >= 20 && Math.Abs(fallbackGlobal.DeltaY) > 2 * Math.Abs(fallbackGlobal.DeltaX))
+                    {
+                        _isVerticalScroll = true;
+                    }
+
                     int effDx = _scrollAxisLocked && _isVerticalScroll ? 0 : fallbackGlobal.DeltaX;
                     int effDy = _scrollAxisLocked && !_isVerticalScroll ? 0 : fallbackGlobal.DeltaY;
 

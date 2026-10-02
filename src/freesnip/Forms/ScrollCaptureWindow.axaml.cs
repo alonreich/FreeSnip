@@ -100,6 +100,10 @@ namespace freesnip.forms
         private static DateTime _lastMovementTime = DateTime.UtcNow;
         private static bool _hasScrolled = false;
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+        private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+
         public void SetClickThrough(bool clickThrough)
         {
             var hwnd = this.TryGetPlatformHandle()?.Handle;
@@ -109,10 +113,12 @@ namespace freesnip.forms
             if (clickThrough)
             {
                 exStyle |= (WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE);
+                try { SetWindowDisplayAffinity(hwnd.Value, WDA_EXCLUDEFROMCAPTURE); } catch { }
             }
             else
             {
                 exStyle &= ~(WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE);
+                try { SetWindowDisplayAffinity(hwnd.Value, 0); } catch { }
             }
 
             SetWindowLongPtr(hwnd.Value, GWL_EXSTYLE, new IntPtr(exStyle));
@@ -293,6 +299,7 @@ namespace freesnip.forms
 
         public static async Task StartAsync(Window ownerWindow = null)
         {
+            App.ForceRedTrayIcon(true, "ScrollCapture");
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (ActiveWindows.Count > 0)
@@ -925,6 +932,8 @@ namespace freesnip.forms
                 BarWindow = null;
             }
 
+            App.ForceRedTrayIcon(false, "ScrollCapture");
+            App.ClearAllTrayHolds();
             IsClosingAll = false;
         }
 

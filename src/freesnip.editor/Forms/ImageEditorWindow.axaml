@@ -549,7 +549,7 @@
         <Grid Grid.Row="0" Name="TitleBar" FlowDirection="LeftToRight" Height="32" ColumnDefinitions="Auto,*,Auto" Background="{DynamicResource FreeSnipPanelDarkBrush}" Cursor="Arrow" PointerPressed="OnTitleBarPointerPressed">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0">
                 <Image Source="avares://freesnip.editor/FreeSnip.ico" Width="16" Height="16" Margin="0,0,8,0" AutomationProperties.AccessibilityView="Raw"/>
-                <TextBlock Text="FreeSnip Editor" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="{DynamicResource FreeSnipTitleFontSize}" VerticalAlignment="Center"/>
+                <TextBlock Name="TitleBarAppNameText" Text="FreeSnip Editor" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="{DynamicResource FreeSnipTitleFontSize}" VerticalAlignment="Center"/>
             </StackPanel>
             <TextBlock Name="TitleDimensionText" Grid.Column="1" Text="0 x 0" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" FontSize="{DynamicResource FreeSnipTitleFontSize}" FontWeight="SemiBold"/>
             <Border Grid.Column="2" Width="140" Background="Transparent" IsHitTestVisible="False"/>

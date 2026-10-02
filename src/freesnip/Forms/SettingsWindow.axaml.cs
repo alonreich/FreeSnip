@@ -14,6 +14,7 @@ using freesnip.editor.helpers;
 using freesnip.Services;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using AvaloniaColor = Avalonia.Media.Color;
 
 namespace freesnip.forms
@@ -48,6 +49,7 @@ namespace freesnip.forms
             var values = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, object>>
             {
                 new("ChkKeepBackup", this.FindControl<CheckBox>("ChkKeepBackup")?.IsChecked),
+                new("ChkAutoUpdateChecks", this.FindControl<CheckBox>("ChkAutoUpdateChecks")?.IsChecked),
                 new("ChkCloseEditor", this.FindControl<CheckBox>("ChkCloseEditor")?.IsChecked),
                 new("ChkWarnClose", this.FindControl<CheckBox>("ChkWarnClose")?.IsChecked),
                 new("ChkAddBorder", this.FindControl<CheckBox>("ChkAddBorder")?.IsChecked),
@@ -82,6 +84,45 @@ namespace freesnip.forms
         {
             var chkKeepBackup = this.FindControl<CheckBox>("ChkKeepBackup");
             if (chkKeepBackup != null) chkKeepBackup.IsChecked = _config.KeepBackup;
+
+            var chkAutoUpdate = this.FindControl<CheckBox>("ChkAutoUpdateChecks");
+            if (chkAutoUpdate != null) chkAutoUpdate.IsChecked = _config.AutoUpdateChecks;
+
+            var txtAboutVersion = this.FindControl<TextBlock>("TxtAboutVersion");
+            if (txtAboutVersion != null) txtAboutVersion.Text = $"Version {RuntimePathHelper.ProductVersion}";
+
+            var txtAboutFlavor = this.FindControl<TextBlock>("TxtAboutFlavor");
+            var txtAboutPlatform = this.FindControl<TextBlock>("TxtAboutPlatform");
+            bool isTess = services.UpdateService.GetExpectedAssetName().Contains("tesseract", StringComparison.OrdinalIgnoreCase);
+            if (txtAboutFlavor != null)
+                txtAboutFlavor.Text = isTess ? "Standard Deployment (Bundled OCR Engine)" : "Native AOT (Blazing fast capture)";
+            if (txtAboutPlatform != null)
+                txtAboutPlatform.Text = isTess ? ".NET 9.0 (win-x64, Self-Contained)" : ".NET 9.0 (win-x64, Native AOT)";
+
+            var btnCheckUpdates = this.FindControl<Button>("BtnCheckUpdatesNow");
+            var txtUpdateStatus = this.FindControl<TextBlock>("TxtUpdateStatus");
+            if (btnCheckUpdates != null)
+            {
+                btnCheckUpdates.Click += async (s, e) =>
+                {
+                    btnCheckUpdates.IsEnabled = false;
+                    if (txtUpdateStatus != null) txtUpdateStatus.Text = "Checking for updates...";
+                    try
+                    {
+                        await services.UpdateService.CheckManualAsync(this, msg =>
+                        {
+                            Dispatcher.UIThread.Post(() =>
+                            {
+                                if (txtUpdateStatus != null) txtUpdateStatus.Text = msg;
+                            });
+                        });
+                    }
+                    finally
+                    {
+                        btnCheckUpdates.IsEnabled = true;
+                    }
+                };
+            }
 
             var chkCloseEditor = this.FindControl<CheckBox>("ChkCloseEditor");
             if (chkCloseEditor != null) chkCloseEditor.IsChecked = _config.CloseEditorOnAction;
@@ -456,6 +497,9 @@ namespace freesnip.forms
                 var chkKeepBackup = this.FindControl<CheckBox>("ChkKeepBackup");
                 if (chkKeepBackup != null) _config.KeepBackup = chkKeepBackup.IsChecked ?? true;
 
+                var chkAutoUpdate = this.FindControl<CheckBox>("ChkAutoUpdateChecks");
+                if (chkAutoUpdate != null) _config.AutoUpdateChecks = chkAutoUpdate.IsChecked ?? true;
+
                 var chkCloseEditor = this.FindControl<CheckBox>("ChkCloseEditor");
                 if (chkCloseEditor != null) _config.CloseEditorOnAction = chkCloseEditor.IsChecked ?? false;
 
@@ -573,6 +617,38 @@ namespace freesnip.forms
                 var btnColor = this.FindControl<Button>("FrameBorderColorBtn");
                 btnColor?.Flyout?.Hide();
             }
+        }
+
+        public void SelectTab(string tabHeader)
+        {
+            var tabControl = this.FindControl<TabControl>("SettingsTabControl");
+            if (tabControl != null)
+            {
+                foreach (var item in tabControl.Items)
+                {
+                    if (item is TabItem tab && string.Equals(tab.Header?.ToString(), tabHeader, StringComparison.OrdinalIgnoreCase))
+                    {
+                        tabControl.SelectedItem = tab;
+                        break;
+                    }
+                }
+            }
+        }
+
+        public static async Task<bool> ShowAboutAsync(Window owner = null)
+        {
+            var settingsWin = new SettingsWindow();
+            settingsWin.SelectTab("About");
+            if (owner != null && owner.IsVisible)
+            {
+                await settingsWin.ShowDialog(owner);
+            }
+            else
+            {
+                settingsWin.Show();
+                settingsWin.Activate();
+            }
+            return true;
         }
     }
 }

@@ -296,6 +296,7 @@ namespace freesnip.helpers
 
         public static void CaptureActiveWindow(bool fromHotkey)
         {
+            App.ForceRedTrayIcon(true, "CaptureActiveWindow");
             ScreenTintBypass.InvalidateCache();
             if (Dispatcher.UIThread.CheckAccess())
             {
@@ -400,6 +401,7 @@ namespace freesnip.helpers
                 {
                     owned?.Dispose();
                     fullSnapshot?.Dispose();
+                    App.ForceRedTrayIcon(false, "CaptureActiveWindow");
                     App.ClearAllTrayHolds();
                 }
             });
@@ -407,6 +409,7 @@ namespace freesnip.helpers
 
         public static void CaptureFullscreen(bool fromHotkey, ScreenCaptureMode mode)
         {
+            App.ForceRedTrayIcon(true, "CaptureFullscreen");
             LastActiveWindowTitle = freesnip.native.Win32WindowHelper.GetActiveWindowTitle();
             ScreenTintBypass.InvalidateCache();
             if (Dispatcher.UIThread.CheckAccess())
@@ -463,6 +466,7 @@ namespace freesnip.helpers
                 finally
                 {
                     owned?.Dispose();
+                    App.ForceRedTrayIcon(false, "CaptureFullscreen");
                     App.ClearAllTrayHolds();
                 }
             });
@@ -512,6 +516,7 @@ namespace freesnip.helpers
 
         public static void CaptureLastRegion(bool fromHotkey)
         {
+            App.ForceRedTrayIcon(true, "CaptureLastRegion");
             try
             {
                 ScreenTintBypass.InvalidateCache();
@@ -523,6 +528,7 @@ namespace freesnip.helpers
                 lock (LastRegionSync) lastRegion = _lastRegion;
                 if (lastRegion.IsEmpty || lastRegion.Width <= 0 || lastRegion.Height <= 0)
                 {
+                    App.ForceRedTrayIcon(false, "CaptureLastRegion");
                     App.ClearAllTrayHolds();
                     return;
                 }
@@ -530,6 +536,7 @@ namespace freesnip.helpers
             }
             catch (Exception ex)
             {
+                App.ForceRedTrayIcon(false, "CaptureLastRegion");
                 App.ClearAllTrayHolds();
                 Log.Fatal("CaptureLastRegion failed.", ex);
             }
@@ -612,6 +619,7 @@ namespace freesnip.helpers
                 finally
                 {
                     owned?.Dispose();
+                    App.ForceRedTrayIcon(false, "CaptureLastRegion");
                     App.ClearAllTrayHolds();
                 }
             });

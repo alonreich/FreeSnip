@@ -1,0 +1,94 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="freesnip.forms.AboutWindow"
+        Title="About FreeSnip"
+        Width="500" SizeToContent="Height"
+        Background="{DynamicResource FreeSnipCanvasBrush}"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid Margin="16">
+        <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8"
+                BorderBrush="{DynamicResource FreeSnipAccentBrush}" BorderThickness="2" Padding="20">
+            <Grid RowDefinitions="Auto, *, Auto">
+                <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,16" Spacing="8">
+                    <Image Source="avares://FreeSnip/FreeSnip.ico" Width="64" Height="64" HorizontalAlignment="Center"/>
+                    <TextBlock Text="FreeSnip"
+                               Foreground="{DynamicResource FreeSnipAccentBrush}"
+                               FontSize="22" FontWeight="Bold"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Name="VersionText" Text="Version 1.0.0"
+                               Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                               FontSize="13" FontWeight="SemiBold"
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Name="FlavorText" Text="Native AOT (Blazing fast capture)"
+                               Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                               FontSize="11"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Spacing="10" Margin="10,0,10,16">
+                    <Border Background="{DynamicResource FreeSnipCanvasBrush}" CornerRadius="6"
+                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1"
+                            Padding="14,10">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="FreeSnip — Blazing-fast Windows screen capture &amp; snipping tool."
+                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                       FontSize="12" TextWrapping="Wrap"/>
+                            <TextBlock Text="Copyright © 2026 Alon Reich. All rights reserved."
+                                       Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                                       FontSize="11"/>
+                            <TextBlock Text="Licensed under GNU General Public License v3.0 (GPLv3)"
+                                       Foreground="{DynamicResource FreeSnipDimTextBrush}"
+                                       FontSize="11"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="{DynamicResource FreeSnipCanvasBrush}" CornerRadius="6"
+                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1"
+                            Padding="14,10">
+                        <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto" Margin="0,2">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Platform: "
+                                       Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                                       FontSize="11" FontWeight="SemiBold"/>
+                            <TextBlock Name="PlatformText" Grid.Row="0" Grid.Column="1" Text=".NET 9.0 (win-x64, Native AOT)"
+                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                       FontSize="11"/>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="GitHub: "
+                                       Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                                       FontSize="11" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                            <Button Name="GitHubLinkBtn" Grid.Row="1" Grid.Column="1"
+                                    Background="Transparent" BorderThickness="0" Padding="0" Margin="0,4,0,0"
+                                    Cursor="Hand" HorizontalAlignment="Left">
+                                <TextBlock Text="https://github.com/alonreich/FreeSnip"
+                                           Foreground="{DynamicResource FreeSnipAccentBrush}"
+                                           TextDecorations="Underline" FontSize="11"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <Grid Grid.Row="2" ColumnDefinitions="Auto, *, Auto" Margin="5,0,5,0">
+                    <Button Name="CheckUpdatesBtn" Grid.Column="0"
+                            Content="Check for Updates..." Cursor="Hand"
+                            Background="{DynamicResource FreeSnipCanvasBrush}"
+                            Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                            BorderThickness="1" Padding="12,6" CornerRadius="4"/>
+
+                    <TextBlock Name="UpdateStatusText" Grid.Column="1"
+                               VerticalAlignment="Center" Margin="10,0"
+                               Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                               FontSize="11" TextTrimming="CharacterEllipsis"/>
+
+                    <Button Name="CloseBtn" Grid.Column="2"
+                            Content="Close" Cursor="Hand" IsCancel="True"
+                            Background="{DynamicResource FreeSnipAccentBrush}"
+                            Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                            Padding="16,6" CornerRadius="4"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -521,8 +521,10 @@ namespace freesnip.editor.forms
             this.AddHandler(InputElement.KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
             KeyUp += OnWindowKeyUp;
             Activated += OnWindowActivated;
-            Deactivated += OnWindowDeactivated;
-            Title = "FreeSnip Editor";
+            string appVersionTitle = $"FreeSnip Editor v{RuntimePathHelper.ProductVersion}";
+            Title = appVersionTitle;
+            var titleBarAppName = this.FindControl<TextBlock>("TitleBarAppNameText");
+            if (titleBarAppName != null) titleBarAppName.Text = appVersionTitle;
 
             _selectionIndicator = new Avalonia.Controls.Shapes.Rectangle { 
                 Classes = { "selection-indicator" },
@@ -1060,9 +1062,12 @@ namespace freesnip.editor.forms
             if (MatchesHotkey(e, config.PixelateHotkey1) || MatchesHotkey(e, config.PixelateHotkey2)) { TriggerToolButton("BlurTool"); e.Handled = true; return; }
             if (MatchesHotkey(e, config.CropHotkey)) 
             { 
-                if (_selectedControl != null && _selectedControl.Tag as string == "CropObject")
+                bool hasCropObject = (_selectedControl != null && _selectedControl.Tag as string == "CropObject")
+                    || (_canvas?.Children.Any(c => c.Tag as string == "CropObject") == true);
+
+                if (_currentTool == EditorTool.Crop || hasCropObject)
                 {
-                    OnContextApplyClick(null, null);
+                    ShowCropModePopup();
                 }
                 else
                 {

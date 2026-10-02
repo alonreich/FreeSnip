@@ -322,8 +322,13 @@ public static class StartupTaskHelper
     {
         try
         {
-            int exitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Query /TN \"{0}\"", ScheduledTaskName), 10000).ConfigureAwait(false);
-            return exitCode == 0;
+            string[] taskNames = { ScheduledTaskName, "freesnip", "snapvox", "SnapVox" };
+            foreach (var tn in taskNames)
+            {
+                int exitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Query /TN \"{0}\"", tn), 10000).ConfigureAwait(false);
+                if (exitCode == 0) return true;
+            }
+            return false;
         }
         catch (Exception ex)
         {
@@ -361,10 +366,18 @@ public static class StartupTaskHelper
                 return false;
             }
 
-            int exitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", ScheduledTaskName), 10000).ConfigureAwait(false);
+            int primaryExitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", ScheduledTaskName), 10000).ConfigureAwait(false);
+            string[] legacyTasks = { "freesnip", "snapvox", "SnapVox" };
+            foreach (var tn in legacyTasks)
+            {
+                if (!string.Equals(tn, ScheduledTaskName, StringComparison.OrdinalIgnoreCase))
+                {
+                    await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", tn), 10000).ConfigureAwait(false);
+                }
+            }
             StartupHelper.SetRunUser(null, GetStartupTaskExecutablePath());
-            ExecutionTrace.LogEvent("StartupTaskHelper.ScheduledTask", "Delete", exitCode.ToString());
-            return exitCode == 0 || !await HasElevatedStartupTaskAsync().ConfigureAwait(false);
+            ExecutionTrace.LogEvent("StartupTaskHelper.ScheduledTask", "Delete", primaryExitCode.ToString());
+            return primaryExitCode == 0 || !await HasElevatedStartupTaskAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -417,12 +430,34 @@ public static class StartupTaskHelper
         }
     }
 
-    public static string[] GetSettingsCandidates() => new[]
+    public static string[] GetSettingsCandidates()
     {
-        Path.Combine(ConfigurationFolder, "freesnip.ini"),
-        Path.Combine(InstallFolder, "freesnip.ini"),
-        Path.Combine(InstallFolder, @"Data\Settings\freesnip.ini")
-    };
+        var list = new List<string>
+        {
+            Path.Combine(ConfigurationFolder, "freesnip.ini"),
+            Path.Combine(ConfigurationFolder, "snapvox.ini"),
+            Path.Combine(InstallFolder, "freesnip.ini"),
+            Path.Combine(InstallFolder, "snapvox.ini"),
+            Path.Combine(InstallFolder, @"Data\Settings\freesnip.ini")
+        };
+        string defaultAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string defaultLocalAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string defaultProgFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+        if (string.Equals(ConfigurationFolder, Path.Combine(defaultAppData, "FreeSnip"), StringComparison.OrdinalIgnoreCase))
+        {
+            list.Add(Path.Combine(defaultAppData, "SnapVox", "snapvox.ini"));
+            list.Add(Path.Combine(defaultLocalAppData, "SnapVox", "snapvox.ini"));
+            list.Add(Path.Combine(defaultLocalAppData, "FreeSnip", "freesnip.ini"));
+            list.Add(Path.Combine(defaultProgFiles, "SnapVox", "snapvox.ini"));
+            string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            if (!string.IsNullOrEmpty(progFilesX86))
+            {
+                list.Add(Path.Combine(progFilesX86, "SnapVox", "snapvox.ini"));
+            }
+        }
+        return list.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
 
     public static bool DetectAdminStartupInSettingsCandidates(IEnumerable<string> candidates = null)
     {
@@ -451,7 +486,7 @@ public static class StartupTaskHelper
             @"Software\Microsoft\Windows\CurrentVersion\Run",
             @"Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"
         };
-        string[] valueNames = { "freesnip", "FreeSnip" };
+        string[] valueNames = { "freesnip", "FreeSnip", "snapvox", "SnapVox" };
 
         foreach (RegistryHive hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
         {
@@ -532,10 +567,35 @@ public static class StartupTaskHelper
     public static async Task RestoreStartupAfterInstallAsync(bool keepUserSettings, bool hadElevatedStartup)
     {
         LogInstallationElevationState($"Beginning startup restoration: keepUserSettings={keepUserSettings}, hadElevatedStartup={hadElevatedStartup}");
+        string primaryIni = Path.Combine(ConfigurationFolder, "freesnip.ini");
+        bool primaryIniExisted = File.Exists(primaryIni);
+        if (keepUserSettings && !primaryIniExisted)
+        {
+            foreach (var cand in GetSettingsCandidates())
+            {
+                if (File.Exists(cand) && !string.Equals(cand, primaryIni, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(ConfigurationFolder);
+                        string content = File.ReadAllText(cand);
+                        content = content.Replace("[SnapVox]", "[Core]", StringComparison.OrdinalIgnoreCase);
+                        File.WriteAllText(primaryIni, content, Encoding.UTF8);
+                        LogInstallationElevationState($"Migrated settings candidate '{cand}' to '{primaryIni}'");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogSuppressedException("RestoreStartupAfterInstallAsync.MigrateCandidate", ex);
+                    }
+                }
+            }
+        }
+
         IniConfig.IniDirectory = ConfigurationFolder;
         IniConfig.Init("FreeSnip", IniConfigurationDeployer.ConfigBaseName);
         var config = IniConfig.GetIniSection<CoreConfiguration>(allowSave: false);
-        bool candidatesHadElevated = DetectAdminStartupInSettingsCandidates();
+        bool candidatesHadElevated = !primaryIniExisted && DetectAdminStartupInSettingsCandidates();
         bool elevated = keepUserSettings && (hadElevatedStartup || config.RunAsAdministratorOnStartup || candidatesHadElevated);
         LogInstallationElevationState($"Evaluated elevation requirement: hadElevatedStartup={hadElevatedStartup}, configFlag={config.RunAsAdministratorOnStartup}, candidatesHadElevated={candidatesHadElevated} -> effectiveElevated={elevated}");
 
@@ -560,8 +620,13 @@ public static class StartupTaskHelper
         }
 
         config.RunAsAdministratorOnStartup = elevated;
-        string primaryIni = Path.Combine(ConfigurationFolder, "freesnip.ini");
+        string primaryDir = Path.GetDirectoryName(primaryIni);
+        if (!string.IsNullOrEmpty(primaryDir) && !Directory.Exists(primaryDir))
+        {
+            Directory.CreateDirectory(primaryDir);
+        }
         IniConfig.SaveTo(primaryIni);
+        IniConfig.Save();
         foreach (string candidate in GetSettingsCandidates())
         {
             if (File.Exists(candidate) && !string.Equals(candidate, primaryIni, StringComparison.OrdinalIgnoreCase))

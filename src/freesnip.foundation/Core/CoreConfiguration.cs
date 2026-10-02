@@ -46,6 +46,9 @@ namespace freesnip.foundation.core
         [IniProperty("TextToolThickness", Description = "Default thickness for Text tool", DefaultValue = "2.0")]
         public double TextToolThickness { get; set; } = 2.0;
 
+        [IniProperty("AutoUpdateChecks", Description = "Check for updates on GitHub periodically", DefaultValue = "true")]
+        public bool AutoUpdateChecks { get; set; } = true;
+
         [IniProperty("IsFirstLaunch", Description = "Is this the first time launch?", DefaultValue = "true")]
         public bool IsFirstLaunch { get; set; } = true;
 

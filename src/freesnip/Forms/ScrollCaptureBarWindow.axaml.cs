@@ -59,6 +59,10 @@ namespace freesnip.forms
             AvaloniaXamlLoader.Load(this);
         }
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+        private const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
+
         protected override void OnOpened(EventArgs e)
         {
             base.OnOpened(e);
@@ -68,6 +72,7 @@ namespace freesnip.forms
                 long exStyle = GetWindowLongPtr(hwnd.Value, GWL_EXSTYLE).ToInt64();
                 exStyle |= WS_EX_NOACTIVATE;
                 SetWindowLongPtr(hwnd.Value, GWL_EXSTYLE, new IntPtr(exStyle));
+                try { SetWindowDisplayAffinity(hwnd.Value, WDA_EXCLUDEFROMCAPTURE); } catch { }
             }
         }
 

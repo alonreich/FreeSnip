@@ -358,6 +358,54 @@ public class UpgradeSafetyTests
         }
     }
 
+    [Fact]
+    public async Task RestoreStartupAfterInstallAsync_WhenUpgradingFromSnapVox_MigratesSettingsAndPreservesElevated()
+    {
+        using var files = new TestFiles();
+        string origConfig = StartupTaskHelper.ConfigurationFolder;
+        string origInstall = StartupTaskHelper.InstallFolder;
+        bool? origElevated = StartupTaskHelper.IsElevatedOverride;
+        var origHook = StartupTaskHelper.RunProcessHook;
+
+        var commands = new List<string>();
+        try
+        {
+            StartupTaskHelper.ConfigurationFolder = files.ConfigFolder;
+            StartupTaskHelper.InstallFolder = files.InstallFolder;
+            StartupTaskHelper.IsElevatedOverride = true;
+            StartupTaskHelper.RunProcessHook = (file, args, timeout) =>
+            {
+                commands.Add(args);
+                return Task.FromResult(0);
+            };
+
+            // Legacy SnapVox ini present in install or config folder
+            string legacyIniPath = Path.Combine(files.InstallFolder, "snapvox.ini");
+            await File.WriteAllTextAsync(legacyIniPath, "[SnapVox]\r\nRunAsAdministratorOnStartup=true\r\nRegionHotkey=Ctrl + Shift + S\r\n");
+
+            // freesnip.ini does not exist yet
+            string newIniPath = Path.Combine(files.ConfigFolder, "freesnip.ini");
+            Assert.False(File.Exists(newIniPath));
+
+            await StartupTaskHelper.RestoreStartupAfterInstallAsync(keepUserSettings: true, hadElevatedStartup: false);
+
+            Assert.Contains(commands, c => c.Contains("/Create /TN \"FreeSnip\""));
+            Assert.True(File.Exists(newIniPath));
+
+            string savedIni = await File.ReadAllTextAsync(newIniPath);
+            Assert.Contains("RunAsAdministratorOnStartup=True", savedIni, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("RegionHotkey=Ctrl + Shift + S", savedIni, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("[Core]", savedIni, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            StartupTaskHelper.ConfigurationFolder = origConfig;
+            StartupTaskHelper.InstallFolder = origInstall;
+            StartupTaskHelper.IsElevatedOverride = origElevated;
+            StartupTaskHelper.RunProcessHook = origHook;
+        }
+    }
+
     private sealed class TestFiles : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "FreeSnipUpgradeTests_" + Guid.NewGuid().ToString("N"));
