@@ -51,16 +51,36 @@ namespace freesnip
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 _desktop = desktop;
+                int uiExceptionCascadeCount = 0;
+                DateTime lastUiExceptionTime = DateTime.MinValue;
                 Dispatcher.UIThread.UnhandledException += (s, e) =>
                 {
-                    try
+                    var now = DateTime.UtcNow;
+                    if ((now - lastUiExceptionTime).TotalSeconds < 1.0)
                     {
-                        LogHelper.LogCrash("Dispatcher.UnhandledException", e.Exception, e.Exception);
-                        LogHelper.GetLogger(typeof(App)).Error("UI thread unhandled exception (handled)", e.Exception);
+                        uiExceptionCascadeCount++;
                     }
-                    catch (Exception logEx)
+                    else
                     {
-                        BootstrapDebug.Log($"Logging failed: {logEx.Message}");
+                        uiExceptionCascadeCount = 1;
+                    }
+                    lastUiExceptionTime = now;
+
+                    if (uiExceptionCascadeCount <= 3)
+                    {
+                        try
+                        {
+                            LogHelper.LogCrash("Dispatcher.UnhandledException", e.Exception, e.Exception);
+                            LogHelper.GetLogger(typeof(App)).Error("UI thread unhandled exception (handled)", e.Exception);
+                        }
+                        catch (Exception logEx)
+                        {
+                            BootstrapDebug.Log($"Logging failed: {logEx.Message}");
+                        }
+                    }
+                    else if (uiExceptionCascadeCount == 4)
+                    {
+                        LogHelper.GetLogger(typeof(App)).Warn("Rapid UI thread exception cascade detected; throttling further crash logs.");
                     }
                     e.Handled = true;
                 };
@@ -316,7 +336,7 @@ namespace freesnip
                         else if (item.Header.StartsWith("Capture Fullscreen"))
                             item.Header = string.IsNullOrWhiteSpace(config.FullscreenHotkey) ? "Capture Fullscreen" : $"Capture Fullscreen ({config.FullscreenHotkey})";
                         else if (item.Header.StartsWith("Scroll Capture"))
-                            item.Header = string.IsNullOrWhiteSpace(config.ScrollCaptureDelimiterHotkey) ? "Scroll Capture" : $"Scroll Capture ({config.ScrollCaptureDelimiterHotkey})";
+                            item.Header = "Scroll Capture";
                         else if (item.Header.StartsWith("Open From Clipboard"))
                             item.Header = string.IsNullOrWhiteSpace(config.ClipboardHotkey) ? "Open From Clipboard" : $"Open From Clipboard ({config.ClipboardHotkey})";
                     }
@@ -328,25 +348,47 @@ namespace freesnip
             });
         }
 
+        private static DateTime _lastTrayRestoreTime = DateTime.MinValue;
+        private static readonly object _restoreTrayLock = new object();
+
         public static void RestoreTrayIcon()
         {
+            lock (_restoreTrayLock)
+            {
+                var now = DateTime.UtcNow;
+                if ((now - _lastTrayRestoreTime).TotalMilliseconds < 500)
+                {
+                    BootstrapDebug.Log("RestoreTrayIcon: Debounced rapid tray restore request.");
+                    LogHelper.GetLogger(typeof(App)).Info("[STEP:INFO] RestoreTrayIcon - Debounced rapid tray restore request (<500ms).");
+                    return;
+                }
+                _lastTrayRestoreTime = now;
+            }
+
             Dispatcher.UIThread.Post(() =>
             {
                 try
                 {
-                    if (Current is App app && _trayIcon != null)
+                    if (Current is App && _trayIcon != null)
                     {
-                        _trayIcon.IsVisible = false;
-                        _trayIcon.IsVisible = true;
-                        var initialIcon = _currentIconIsRed && _redIcon != null ? _redIcon : _blueIcon;
-                        if (initialIcon != null) _trayIcon.Icon = initialIcon;
+                        var targetIcon = _currentIconIsRed && _redIcon != null ? _redIcon : _blueIcon;
+                        if (targetIcon != null && !ReferenceEquals(_trayIcon.Icon, targetIcon))
+                        {
+                            _trayIcon.Icon = targetIcon;
+                        }
+                        if (!_trayIcon.IsVisible)
+                        {
+                            _trayIcon.IsVisible = true;
+                        }
                         UpdateTrayMenuHotkeys();
-                        BootstrapDebug.Log("RestoreTrayIcon: Tray icon restored successfully.");
+                        BootstrapDebug.Log("RestoreTrayIcon: Tray icon visuals synchronized.");
+                        LogHelper.GetLogger(typeof(App)).Info($"[STEP:SUCCESS] RestoreTrayIcon - Tray icon visuals synchronized (IsRed={_currentIconIsRed}, IsVisible={_trayIcon.IsVisible}).");
                     }
                 }
                 catch (Exception ex)
                 {
                     BootstrapDebug.Log($"RestoreTrayIcon error: {ex.Message}");
+                    LogHelper.GetLogger(typeof(App)).Error("[STEP:FAIL] RestoreTrayIcon encountered error", ex);
                 }
             });
         }
@@ -418,27 +460,83 @@ namespace freesnip
             return ms.ToArray();
         }
 
-        private static int _redStateRequestCount = 0;
+        private static readonly HashSet<string> _activeHoldSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static int _anonymousHoldCount = 0;
         private static volatile bool _currentIconIsRed = false;
         private static readonly object _iconLock = new object();
+
+        internal static int ActiveRedHoldCount
+        {
+            get
+            {
+                lock (_iconLock)
+                {
+                    return _activeHoldSources.Count + _anonymousHoldCount;
+                }
+            }
+        }
 
         public static void ForceRedTrayIcon(bool force, string reason = null)
         {
             lock (_iconLock)
             {
-                bool wasRed = _redStateRequestCount > 0;
-                if (force) _redStateRequestCount++;
-                else _redStateRequestCount = Math.Max(0, _redStateRequestCount - 1);
-                bool isRed = _redStateRequestCount > 0;
+                bool wasRed = _activeHoldSources.Count > 0 || _anonymousHoldCount > 0;
+                string source = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+
+                if (force)
+                {
+                    if (source != null)
+                    {
+                        _activeHoldSources.Add(source);
+                    }
+                    else
+                    {
+                        _anonymousHoldCount++;
+                    }
+                }
+                else
+                {
+                    if (source != null)
+                    {
+                        _activeHoldSources.Remove(source);
+                    }
+                    else
+                    {
+                        _anonymousHoldCount = Math.Max(0, _anonymousHoldCount - 1);
+                    }
+                }
+
+                int totalHolds = _activeHoldSources.Count + _anonymousHoldCount;
+                bool isRed = totalHolds > 0;
 
                 if (wasRed != isRed)
                 {
                     LogHelper.GetLogger(typeof(App)).Info(
-                        $"Tray eye -> {(isRed ? "RED (capture active)" : "BLUE (idle)")} [holds={_redStateRequestCount}]{(string.IsNullOrEmpty(reason) ? "" : " " + reason)}");
+                        $"Tray eye -> {(isRed ? "RED (capture active)" : "BLUE (idle)")} [holds={totalHolds}]{(source == null ? "" : " " + source)}");
                 }
 
                 SetTrayIconStateInternal(isRed);
             }
+        }
+
+        public static void ClearAllTrayHolds()
+        {
+            lock (_iconLock)
+            {
+                bool wasRed = _activeHoldSources.Count > 0 || _anonymousHoldCount > 0;
+                _activeHoldSources.Clear();
+                _anonymousHoldCount = 0;
+                if (wasRed)
+                {
+                    LogHelper.GetLogger(typeof(App)).Info("Tray eye -> BLUE (idle) [holds=0 - cleared all]");
+                }
+                SetTrayIconStateInternal(false);
+            }
+        }
+
+        internal static void ResetTrayHoldStateForTesting()
+        {
+            ClearAllTrayHolds();
         }
 
         private static void SetTrayIconStateInternal(bool active)
@@ -525,13 +623,13 @@ namespace freesnip
         {
             try
             {
-                ForceRedTrayIcon(true);
+                LogHelper.GetLogger(typeof(App)).Info("[STEP:START] OnCaptureRegionClick - Triggered region capture from tray.");
                 FlushPendingUiAndMessages();
                 CaptureHelper.CaptureRegion(false);
             }
             catch (Exception ex)
             {
-                LogHelper.GetLogger(typeof(App)).Error("CaptureRegion click failed", ex);
+                LogHelper.GetLogger(typeof(App)).Error("[STEP:FAIL] CaptureRegion click failed", ex);
             }
         }
 
@@ -539,13 +637,13 @@ namespace freesnip
         {
             try
             {
-                ForceRedTrayIcon(true);
+                LogHelper.GetLogger(typeof(App)).Info("[STEP:START] OnCaptureLastRegionClick - Triggered repeat last region capture from tray.");
                 FlushPendingUiAndMessages();
                 CaptureHelper.CaptureLastRegion(false);
             }
             catch (Exception ex)
             {
-                LogHelper.GetLogger(typeof(App)).Error("CaptureLastRegion click failed", ex);
+                LogHelper.GetLogger(typeof(App)).Error("[STEP:FAIL] CaptureLastRegion click failed", ex);
             }
         }
 
@@ -553,13 +651,13 @@ namespace freesnip
         {
             try
             {
-                ForceRedTrayIcon(true);
+                LogHelper.GetLogger(typeof(App)).Info("[STEP:START] OnCaptureWindowClick - Triggered active window capture from tray.");
                 FlushPendingUiAndMessages();
                 CaptureHelper.CaptureActiveWindow(false);
             }
             catch (Exception ex)
             {
-                LogHelper.GetLogger(typeof(App)).Error("CaptureWindow click failed", ex);
+                LogHelper.GetLogger(typeof(App)).Error("[STEP:FAIL] CaptureWindow click failed", ex);
             }
         }
 
@@ -567,25 +665,34 @@ namespace freesnip
         {
             try
             {
-                ForceRedTrayIcon(true);
+                LogHelper.GetLogger(typeof(App)).Info("[STEP:START] OnCaptureFullscreenClick - Triggered fullscreen capture from tray.");
                 FlushPendingUiAndMessages();
                 CaptureHelper.CaptureFullscreen(false, ScreenCaptureMode.FullScreen);
             }
             catch (Exception ex)
             {
-                LogHelper.GetLogger(typeof(App)).Error("CaptureFullscreen click failed", ex);
+                LogHelper.GetLogger(typeof(App)).Error("[STEP:FAIL] CaptureFullscreen click failed", ex);
             }
         }
         private void OnScrollCaptureClick(object sender, EventArgs e)
         {
             try
             {
+                LogHelper.GetLogger(typeof(App)).Info("[STEP:START] OnScrollCaptureClick - Triggered scroll capture from tray.");
                 var launcher = SimpleServiceProvider.Current.GetInstance<IScrollCaptureLauncher>(true);
                 _ = launcher?.StartAsync(null);
             }
-            catch (Exception ex) { LogHelper.GetLogger(typeof(App)).Error("ScrollCapture click failed", ex); }
+            catch (Exception ex) { LogHelper.GetLogger(typeof(App)).Error("[STEP:FAIL] ScrollCapture click failed", ex); }
         }
-        private void OnOpenFromClipboardClick(object sender, EventArgs e) { try { CaptureHelper.CaptureClipboard(); } catch (Exception ex) { LogHelper.GetLogger(typeof(App)).Error("CaptureClipboard click failed", ex); } }
+        private void OnOpenFromClipboardClick(object sender, EventArgs e)
+        {
+            try
+            {
+                LogHelper.GetLogger(typeof(App)).Info("[STEP:START] OnOpenFromClipboardClick - Triggered capture from clipboard from tray.");
+                CaptureHelper.CaptureClipboard();
+            }
+            catch (Exception ex) { LogHelper.GetLogger(typeof(App)).Error("[STEP:FAIL] CaptureClipboard click failed", ex); }
+        }
         public void OnShowHistoryClick(object sender, EventArgs e)
         {
             try 

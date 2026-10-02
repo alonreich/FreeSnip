@@ -76,19 +76,34 @@ namespace freesnip.editor.Services
         {
             return Task.Run(() =>
             {
-                string? dir = Path.GetDirectoryName(path);
-                if (!string.IsNullOrEmpty(dir))
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                Log.Info($"[STEP:START] SaveImageAsync - Destination: '{path}', AllowPng: {allowPng}, Quality: {jpegQuality}, Dimensions: ({img.Width}x{img.Height})");
+                try
                 {
-                    Directory.CreateDirectory(dir);
-                }
+                    string? dir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(dir))
+                    {
+                        Directory.CreateDirectory(dir);
+                    }
 
-                if (allowPng)
-                {
-                    img.Save(path, new PngEncoder());
+                    if (allowPng)
+                    {
+                        img.Save(path, new PngEncoder());
+                    }
+                    else
+                    {
+                        img.Save(path, new JpegEncoder { Quality = Math.Clamp(jpegQuality, 1, 100) });
+                    }
+                    long bytes = 0;
+                    try { bytes = new FileInfo(path).Length; } catch { }
+                    sw.Stop();
+                    Log.Info($"[STEP:SUCCESS] SaveImageAsync ({sw.ElapsedMilliseconds}ms) - Written {bytes} bytes to '{path}'.");
                 }
-                else
+                catch (Exception ex)
                 {
-                    img.Save(path, new JpegEncoder { Quality = Math.Clamp(jpegQuality, 1, 100) });
+                    sw.Stop();
+                    Log.Error($"[STEP:FAIL] SaveImageAsync ({sw.ElapsedMilliseconds}ms) - Failed saving image to '{path}'", ex);
+                    throw;
                 }
             });
         }
@@ -141,17 +156,23 @@ namespace freesnip.editor.Services
             string? customBackupDir = null)
         {
             if (!keepBackup) return false;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log.Info($"[STEP:START] SaveToHistoryBackupAsync - File: '{fileName}'");
 
             try
             {
                 string tempDir = customBackupDir ?? Path.Combine(Path.GetTempPath(), "FreeSnip");
                 Directory.CreateDirectory(tempDir);
-                await SaveImageAsync(img, Path.Combine(tempDir, fileName), allowPng, jpegQuality).ConfigureAwait(false);
+                string backupPath = Path.Combine(tempDir, fileName);
+                await SaveImageAsync(img, backupPath, allowPng, jpegQuality).ConfigureAwait(false);
+                sw.Stop();
+                Log.Info($"[STEP:SUCCESS] SaveToHistoryBackupAsync ({sw.ElapsedMilliseconds}ms) - Backup created at '{backupPath}'.");
                 return true;
             }
             catch (Exception ex)
             {
-                Log.Error("[BACKUP_FAILURE] Could not write to temp folder.", ex);
+                sw.Stop();
+                Log.Error($"[STEP:FAIL] SaveToHistoryBackupAsync ({sw.ElapsedMilliseconds}ms) - [BACKUP_FAILURE] Could not write to temp folder.", ex);
                 return false;
             }
         }
@@ -166,7 +187,6 @@ namespace freesnip.editor.Services
                     return false;
                 }
 
-                // Lightweight probe: create a temporary probe file, write to it, and delete it immediately.
                 string probeFile = Path.Combine(path, $".freesnip_probe_{Guid.NewGuid():N}.tmp");
                 using (var fs = new FileStream(probeFile, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.DeleteOnClose))
                 {
@@ -187,31 +207,39 @@ namespace freesnip.editor.Services
             Action<string>? onUserPathConfigured = null,
             string? customDefaultPath = null)
         {
-            // 1. CoreConfiguration.UserDownloadPath (if configured and writable)
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log.Info($"[STEP:START] ResolveDownloadTargetAsync - UserPath: '{userDownloadPath}', CustomDefault: '{customDefaultPath}'");
+
             if (!string.IsNullOrEmpty(userDownloadPath) && IsDirectoryWritable(userDownloadPath))
             {
+                sw.Stop();
+                Log.Info($"[STEP:SUCCESS] ResolveDownloadTargetAsync ({sw.ElapsedMilliseconds}ms) - Selected user download path: '{userDownloadPath}'.");
                 return new DownloadTarget(userDownloadPath, true);
             }
 
-            // 2. KnownFolders.GetDownloadsPath() (standard Windows shell Downloads location)
             string defaultPath = customDefaultPath ?? KnownFolders.GetDownloadsPath();
             if (!string.IsNullOrEmpty(defaultPath) && IsDirectoryWritable(defaultPath))
             {
+                sw.Stop();
+                Log.Info($"[STEP:SUCCESS] ResolveDownloadTargetAsync ({sw.ElapsedMilliseconds}ms) - Selected system downloads folder: '{defaultPath}'.");
                 return new DownloadTarget(defaultPath, true);
             }
 
-            // 3. Fallback: Prompt user ONCE with native folder picker
             if (folderPicker != null)
             {
+                Log.Info("[STEP:INFO] ResolveDownloadTargetAsync - Prompting user folder picker.");
                 string? selected = await folderPicker().ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(selected) && IsDirectoryWritable(selected))
                 {
                     onUserPathConfigured?.Invoke(selected);
+                    sw.Stop();
+                    Log.Info($"[STEP:SUCCESS] ResolveDownloadTargetAsync ({sw.ElapsedMilliseconds}ms) - Folder picked: '{selected}'.");
                     return new DownloadTarget(selected, true);
                 }
             }
 
-            Log.Warn("[DOWNLOAD_FALLBACK] Downloads folder unavailable and no folder was chosen; saving to the SnapVox temp folder instead.");
+            sw.Stop();
+            Log.Warn($"[STEP:WARN] ResolveDownloadTargetAsync ({sw.ElapsedMilliseconds}ms) - [DOWNLOAD_FALLBACK] Downloads folder unavailable and no folder was chosen; saving to FreeSnip temp folder.");
             string tempDir = Path.Combine(Path.GetTempPath(), "FreeSnip");
             Directory.CreateDirectory(tempDir);
             return new DownloadTarget(tempDir, false);

@@ -48,14 +48,19 @@ namespace freesnip.helpers
         }
         public static void CaptureRegion(bool fromHotkey)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             LastActiveWindowTitle = freesnip.native.Win32WindowHelper.GetActiveWindowTitle();
+            Log.Info($"[STEP:START] CaptureRegion - FromHotkey: {fromHotkey}, ActiveWindow: '{LastActiveWindowTitle}'");
             ScreenTintBypass.InvalidateCache();
-            App.ForceRedTrayIcon(true);
             if (Dispatcher.UIThread.CheckAccess())
             {
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
             }
-            if (!forms.CaptureWindow.BeginCaptureSession()) return;
+            if (!forms.CaptureWindow.BeginCaptureSession())
+            {
+                Log.Warn($"[STEP:WARN] CaptureRegion ({sw.ElapsedMilliseconds}ms) - Capture session already active or could not begin.");
+                return;
+            }
 
             ImageSharpImage instantSnapshot = null;
             RECT instantVirtualBounds = RECT.Empty;
@@ -63,6 +68,7 @@ namespace freesnip.helpers
             {
                 instantVirtualBounds = GetVirtualDesktopBounds();
                 instantSnapshot = NativeCapture.CaptureRegion(instantVirtualBounds, Config.CaptureMousepointer);
+                Log.Info($"[STEP:SUCCESS] CaptureRegion - Instant snapshot captured ({instantVirtualBounds.Width}x{instantVirtualBounds.Height}).");
             }
 
             _ = Task.Run(() => CaptureRegionAsync(fromHotkey, instantSnapshot, instantVirtualBounds));
@@ -120,7 +126,9 @@ namespace freesnip.helpers
 
         private static async Task CaptureRegionAsync(bool fromHotkey, ImageSharpImage preCapturedSnapshot = null, RECT preCapturedBounds = default)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             string sourceTitle = freesnip.native.Win32WindowHelper.GetActiveWindowTitle();
+            Log.Info($"[STEP:START] CaptureRegionAsync - SourceTitle: '{sourceTitle}', FromHotkey: {fromHotkey}, HasPreSnapshot: {preCapturedSnapshot != null}");
             bool overlaysShown = false;
             try
             {
@@ -138,6 +146,8 @@ namespace freesnip.helpers
                 {
                     if (fullSnapshot == null)
                     {
+                        sw.Stop();
+                        Log.Error($"[STEP:FAIL] CaptureRegionAsync ({sw.ElapsedMilliseconds}ms) - Failed to acquire desktop capture.");
                         forms.CaptureWindow.EndCaptureSession();
                         return;
                     }
@@ -149,6 +159,7 @@ namespace freesnip.helpers
                         fullSnapshot = null;
                         _frozenVirtualBounds = virtualBounds;
                     }
+                    Log.Info($"[STEP:SUCCESS] CaptureRegionAsync - Desktop snapshot frozen ({virtualBounds.Width}x{virtualBounds.Height}).");
                 }
                 finally
                 {
@@ -169,13 +180,18 @@ namespace freesnip.helpers
 
                 if (screensInfo == null || !screensInfo.Any()) 
                 {
+                    sw.Stop();
+                    Log.Error($"[STEP:FAIL] CaptureRegionAsync ({sw.ElapsedMilliseconds}ms) - No screens detected.");
                     forms.CaptureWindow.EndCaptureSession();
                     ClearFrozenSnapshot();
                     return;
                 }
+                Log.Info($"[STEP:INFO] CaptureRegionAsync - Detected {screensInfo.Count} active screens.");
 
                 if (!IsFrozenSnapshotReady)
                 {
+                    sw.Stop();
+                    Log.Error($"[STEP:FAIL] CaptureRegionAsync ({sw.ElapsedMilliseconds}ms) - Frozen snapshot not ready.");
                     forms.CaptureWindow.EndCaptureSession();
                     return;
                 }
@@ -238,6 +254,8 @@ namespace freesnip.helpers
                         }
                     });
                     overlaysShown = true;
+                    sw.Stop();
+                    Log.Info($"[STEP:SUCCESS] CaptureRegionAsync ({sw.ElapsedMilliseconds}ms) - Displayed {backdrops.Count} capture overlay windows.");
                 }
                 finally
                 {
@@ -248,8 +266,9 @@ namespace freesnip.helpers
                 }
             }
             catch (Exception ex) 
-            { 
-                Log.Fatal("CaptureRegion failed.", ex);
+            {
+                sw.Stop();
+                Log.Fatal($"[STEP:FAIL] CaptureRegionAsync ({sw.ElapsedMilliseconds}ms) - CaptureRegion failed.", ex);
                 if (!overlaysShown) forms.CaptureWindow.EndCaptureSession();
                 ClearFrozenSnapshot();
             }
@@ -278,7 +297,6 @@ namespace freesnip.helpers
         public static void CaptureActiveWindow(bool fromHotkey)
         {
             ScreenTintBypass.InvalidateCache();
-            App.ForceRedTrayIcon(true);
             if (Dispatcher.UIThread.CheckAccess())
             {
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
@@ -287,7 +305,6 @@ namespace freesnip.helpers
             {
                 ImageSharpImage fullSnapshot = null;
                 ImageSharpImage owned = null;
-                bool editorShown = false;
                 try
                 {
                     int delay = Config.CaptureDelay > 0 ? Config.CaptureDelay : 0;
@@ -348,7 +365,7 @@ namespace freesnip.helpers
                                 {
                                     try
                                     {
-                                        string tempDir = Path.Combine(Path.GetTempPath(), "SnapVox");
+                                        string tempDir = Path.Combine(Path.GetTempPath(), "FreeSnip");
                                         Directory.CreateDirectory(tempDir);
                                         string ext = Config.OutputFileAllowPng ? "png" : "jpg";
                                         string fileName = $"Raw_{DateTime.Now:yyyy-MM-dd_HH-mm-ss_fff}.{ext}";
@@ -360,6 +377,7 @@ namespace freesnip.helpers
                                         {
                                             owned.Save(Path.Combine(tempDir, fileName), new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = Config.OutputFileJpegQuality });
                                         }
+                                        Log.Info($"[STEP:SUCCESS] CaptureActiveWindow - Raw backup saved to '{Path.Combine(tempDir, fileName)}'.");
                                     }
                                     catch (Exception ex)
                                     {
@@ -372,17 +390,17 @@ namespace freesnip.helpers
                                 ImageSharpImage imageForEditor = owned;
                                 await Dispatcher.UIThread.InvokeAsync(() => ShowEditorForOwnedImageAsync(imageForEditor, rawRect, "region"));
                                 owned = null;
-                                editorShown = true;
+                                Log.Info($"[STEP:SUCCESS] CaptureActiveWindow - Window capture completed ({rawRect.Width}x{rawRect.Height}).");
                             }
                         }
                     }
                 }
-                catch (Exception ex) { Log.Fatal("CaptureActiveWindow failed.", ex); }
+                catch (Exception ex) { Log.Fatal("[STEP:FAIL] CaptureActiveWindow failed.", ex); }
                 finally
                 {
                     owned?.Dispose();
                     fullSnapshot?.Dispose();
-                    if (!editorShown) App.ForceRedTrayIcon(false);
+                    App.ClearAllTrayHolds();
                 }
             });
         }
@@ -391,7 +409,6 @@ namespace freesnip.helpers
         {
             LastActiveWindowTitle = freesnip.native.Win32WindowHelper.GetActiveWindowTitle();
             ScreenTintBypass.InvalidateCache();
-            App.ForceRedTrayIcon(true);
             if (Dispatcher.UIThread.CheckAccess())
             {
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
@@ -399,7 +416,6 @@ namespace freesnip.helpers
             _ = Task.Run(async () =>
             {
                 ImageSharpImage owned = null;
-                bool editorShown = false;
                 try
                 {
                     int delay = Config.CaptureDelay > 0 ? Config.CaptureDelay : 0;
@@ -416,7 +432,7 @@ namespace freesnip.helpers
                         {
                             try
                             {
-                                string tempDir = Path.Combine(Path.GetTempPath(), "SnapVox");
+                                string tempDir = Path.Combine(Path.GetTempPath(), "FreeSnip");
                                 Directory.CreateDirectory(tempDir);
                                 string ext = Config.OutputFileAllowPng ? "png" : "jpg";
                                 string fileName = $"Raw_{DateTime.Now:yyyy-MM-dd_HH-mm-ss_fff}.{ext}";
@@ -428,6 +444,7 @@ namespace freesnip.helpers
                                 {
                                     owned.Save(Path.Combine(tempDir, fileName), new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = Config.OutputFileJpegQuality });
                                 }
+                                Log.Info($"[STEP:SUCCESS] CaptureFullscreen - Raw backup saved to '{Path.Combine(tempDir, fileName)}'.");
                             }
                             catch (Exception ex)
                             {
@@ -439,14 +456,14 @@ namespace freesnip.helpers
                         ImageSharpImage imageForEditor = owned;
                         await Dispatcher.UIThread.InvokeAsync(() => ShowEditorForOwnedImageAsync(imageForEditor, targetBounds, "region"));
                         owned = null;
-                        editorShown = true;
+                        Log.Info($"[STEP:SUCCESS] CaptureFullscreen - Fullscreen capture displayed in editor ({targetBounds.Width}x{targetBounds.Height}).");
                     }
                 }
-                catch (Exception ex) { Log.Fatal("CaptureFullscreen failed.", ex); }
+                catch (Exception ex) { Log.Fatal("[STEP:FAIL] CaptureFullscreen failed.", ex); }
                 finally
                 {
                     owned?.Dispose();
-                    if (!editorShown) App.ForceRedTrayIcon(false);
+                    App.ClearAllTrayHolds();
                 }
             });
         }
@@ -463,7 +480,6 @@ namespace freesnip.helpers
         public static void CaptureClipboard()
         {
             LastActiveWindowTitle = freesnip.native.Win32WindowHelper.GetActiveWindowTitle();
-            App.ForceRedTrayIcon(true);
             _ = Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 try
@@ -475,13 +491,13 @@ namespace freesnip.helpers
                     }
                     else
                     {
-                        App.ForceRedTrayIcon(false);
+                        App.ClearAllTrayHolds();
                     }
                 }
                 catch (Exception ex)
                 {
                     Log.Error("CaptureClipboard failed", ex);
-                    App.ForceRedTrayIcon(false);
+                    App.ClearAllTrayHolds();
                 }
             });
         }
@@ -499,7 +515,6 @@ namespace freesnip.helpers
             try
             {
                 ScreenTintBypass.InvalidateCache();
-                App.ForceRedTrayIcon(true);
                 if (Dispatcher.UIThread.CheckAccess())
                 {
                     Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
@@ -508,14 +523,14 @@ namespace freesnip.helpers
                 lock (LastRegionSync) lastRegion = _lastRegion;
                 if (lastRegion.IsEmpty || lastRegion.Width <= 0 || lastRegion.Height <= 0)
                 {
-                    App.ForceRedTrayIcon(false);
+                    App.ClearAllTrayHolds();
                     return;
                 }
                 OpenEditorForRegionAsync(lastRegion);
             }
             catch (Exception ex)
             {
-                App.ForceRedTrayIcon(false);
+                App.ClearAllTrayHolds();
                 Log.Fatal("CaptureLastRegion failed.", ex);
             }
         }
@@ -542,14 +557,13 @@ namespace freesnip.helpers
             ImageSharpImage owned = null;
             _ = Task.Run(async () =>
             {
-                bool editorShown = false;
                 try
                 {
                     using (ImageSharpImage captured = NativeCapture.CaptureRegion(region, Config.CaptureMousepointer))
                     {
                         if (captured == null)
                         {
-                            App.ForceRedTrayIcon(false);
+                            App.ClearAllTrayHolds();
                             return;
                         }
                         owned = captured.Clone(x => { });
@@ -558,7 +572,7 @@ namespace freesnip.helpers
                         {
                             try
                             {
-                                string tempDir = Path.Combine(Path.GetTempPath(), "SnapVox");
+                                string tempDir = Path.Combine(Path.GetTempPath(), "FreeSnip");
                                 Directory.CreateDirectory(tempDir);
                                 string ext = Config.OutputFileAllowPng ? "png" : "jpg";
                                 string fileName = $"Raw_{DateTime.Now:yyyy-MM-dd_HH-mm-ss_fff}.{ext}";
@@ -570,6 +584,7 @@ namespace freesnip.helpers
                                 {
                                     owned.Save(Path.Combine(tempDir, fileName), new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = Config.OutputFileJpegQuality });
                                 }
+                                Log.Info($"[STEP:SUCCESS] OpenEditorForRegionAsync - Raw backup saved to '{Path.Combine(tempDir, fileName)}'.");
                             }
                             catch (Exception ex)
                             {
@@ -580,7 +595,7 @@ namespace freesnip.helpers
 
                     if (owned == null)
                     {
-                        App.ForceRedTrayIcon(false);
+                        App.ClearAllTrayHolds();
                         return;
                     }
                     RememberRegion(region);
@@ -588,23 +603,22 @@ namespace freesnip.helpers
                     ImageSharpImage imageForEditor = owned;
                     await Dispatcher.UIThread.InvokeAsync(() => ShowEditorForOwnedImageAsync(imageForEditor, region, "region"));
                     owned = null;
-                    editorShown = true;
+                    Log.Info($"[STEP:SUCCESS] OpenEditorForRegionAsync - Region capture displayed in editor ({region.Width}x{region.Height}).");
                 }
                 catch (Exception ex)
                 {
-                    Log.Fatal("OpenEditorForRegion failed.", ex);
+                    Log.Fatal("[STEP:FAIL] OpenEditorForRegion failed.", ex);
                 }
                 finally
                 {
                     owned?.Dispose();
-                    if (!editorShown) App.ForceRedTrayIcon(false);
+                    App.ClearAllTrayHolds();
                 }
             });
         }
 
         public static void OpenEditorForOwnedImage(ImageSharpImage image, RECT region)
         {
-            App.ForceRedTrayIcon(true, "scroll capture editor handoff");
             _ = ShowEditorForOwnedImageAsync(image, region, "scroll");
         }
 
@@ -616,11 +630,11 @@ namespace freesnip.helpers
                 editor = new ImageEditorWindow();
                 await editor.SetImageAsync(image, region, LastActiveWindowTitle).ConfigureAwait(true);
                 editor.Show();
-                App.ForceRedTrayIcon(false);
+                App.ClearAllTrayHolds();
             }
             catch (Exception ex)
             {
-                App.ForceRedTrayIcon(false);
+                App.ClearAllTrayHolds();
                 image?.Dispose();
                 editor?.Close();
                 Log.Fatal("ShowEditorForOwnedImage failed.", ex);

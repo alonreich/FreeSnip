@@ -181,13 +181,11 @@ namespace freesnip.helpers
                     BootstrapDebug.Log($"HotkeyManager: Session change event received: {sessionEvent}");
                     if (sessionEvent is WTS_REMOTE_CONNECT or WTS_CONSOLE_CONNECT or WTS_SESSION_UNLOCK or WTS_SESSION_LOGON)
                     {
-                        BootstrapDebug.Log("HotkeyManager: RDP or terminal session connect/unlock detected. Restoring tray icon and refreshing hotkeys.");
-                        App.RestoreTrayIcon();
+                        BootstrapDebug.Log("HotkeyManager: RDP or terminal session connect/unlock detected. Refreshing hotkeys.");
                         RegisterAll();
 
                         Task.Delay(1000).ContinueWith(_ =>
                         {
-                            App.RestoreTrayIcon();
                             RegisterAll();
                         });
                     }
@@ -196,13 +194,11 @@ namespace freesnip.helpers
 
                 if (msg == WM_DISPLAYCHANGE)
                 {
-                    BootstrapDebug.Log("HotkeyManager: Display change notification received. Restoring tray icon and refreshing hotkeys.");
-                    App.RestoreTrayIcon();
+                    BootstrapDebug.Log("HotkeyManager: Display change notification received. Refreshing hotkeys.");
                     RegisterAll();
 
                     Task.Delay(1000).ContinueWith(_ =>
                     {
-                        App.RestoreTrayIcon();
                         RegisterAll();
                     });
                     return IntPtr.Zero;
@@ -435,8 +431,6 @@ namespace freesnip.helpers
 
             return false;
         }
-
-        public static bool IsOwnedBySnapVox(string hotkeyString) => IsOwnedByFreeSnip(hotkeyString);
 
         public static string NormalizeHotkey(string hotkeyString)
         {

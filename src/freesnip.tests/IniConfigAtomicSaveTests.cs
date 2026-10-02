@@ -7,7 +7,7 @@ namespace freesnip.tests
 {
     public class IniConfigAtomicSaveTests
     {
-        private static string TempDir() => Path.Combine(Path.GetTempPath(), "SnapVox_IniAtomicTests_" + Path.GetRandomFileName());
+        private static string TempDir() => Path.Combine(Path.GetTempPath(), "FreeSnip_IniAtomicTests_" + Path.GetRandomFileName());
 
         [Fact]
         public void SaveTo_WritesTargetFile_AndLeavesNoTempFileBehind()

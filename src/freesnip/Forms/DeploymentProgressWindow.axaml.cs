@@ -35,7 +35,7 @@ namespace freesnip.forms
         {
             if (_titleText != null)
             {
-                _titleText.Text = string.IsNullOrWhiteSpace(title) ? "Installing SnapVox" : title;
+                _titleText.Text = string.IsNullOrWhiteSpace(title) ? "Installing FreeSnip" : title;
             }
 
             if (_logPathText != null)

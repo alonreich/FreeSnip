@@ -10,21 +10,21 @@ namespace freesnip.tests;
 public class UpgradeSafetyTests
 {
     [Theory]
-    [InlineData(@"C:\Program Files\SnapVox\SnapVox.exe", true)]
-    [InlineData(@"C:\Program Files\SnapVox\Uninstall.exe", true)]
+    [InlineData(@"C:\Program Files\FreeSnip\FreeSnip.exe", true)]
+    [InlineData(@"C:\Program Files\FreeSnip\Uninstall.exe", true)]
     [InlineData(@"C:\Program Files\OtherApp\Uninstall.exe", false)]
-    [InlineData(@"C:\Program Files\SnapVoxOther\Uninstall.exe", false)]
-    [InlineData(@"C:\Program Files\SnapVox\..\OtherApp\Uninstall.exe", false)]
-    [InlineData(@"C:\Users\User\Downloads\SnapVox.exe", false)]
+    [InlineData(@"C:\Program Files\FreeSnipOther\Uninstall.exe", false)]
+    [InlineData(@"C:\Program Files\FreeSnip\..\OtherApp\Uninstall.exe", false)]
+    [InlineData(@"C:\Users\User\Downloads\FreeSnip.exe", false)]
     public void ProcessOwnership_RequiresActualInstallDirectory(string executable, bool expected)
-        => Assert.Equal(expected, StartupTaskHelper.IsInstalledExecutable(executable, @"C:\Program Files\SnapVox"));
+        => Assert.Equal(expected, StartupTaskHelper.IsInstalledExecutable(executable, @"C:\Program Files\FreeSnip"));
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void Startup_HasNoBatteryIdleNetworkOrTimeLimitRestrictions(bool elevated)
     {
-        string executable = @"C:\Apps & Tools\SnapVox.exe";
+        string executable = @"C:\Apps & Tools\FreeSnip.exe";
         var xml = XDocument.Parse(StartupTaskDefinition.Create(executable, "S-1-5-21-123", elevated));
         XNamespace ns = StartupTaskDefinition.Namespace;
         var settings = xml.Root!.Element(ns + "Settings")!;
@@ -121,22 +121,22 @@ public class UpgradeSafetyTests
         const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         using (var key = Registry.CurrentUser.CreateSubKey(runKeyPath, true))
         {
-            key.SetValue("snapvox", "\"C:\\dummy\\snapvox.exe\" --autorun");
-            key.SetValue("SnapVox", "\"C:\\dummy\\SnapVox.exe\" --autorun");
+            key.SetValue("freesnip", "\"C:\\dummy\\freesnip.exe\" --autorun");
+            key.SetValue("FreeSnip", "\"C:\\dummy\\FreeSnip.exe\" --autorun");
         }
 
         try
         {
             StartupTaskHelper.PurgeAllRunKeys();
             using var key = Registry.CurrentUser.OpenSubKey(runKeyPath, false);
-            Assert.Null(key?.GetValue("snapvox"));
-            Assert.Null(key?.GetValue("SnapVox"));
+            Assert.Null(key?.GetValue("freesnip"));
+            Assert.Null(key?.GetValue("FreeSnip"));
         }
         finally
         {
             using var key = Registry.CurrentUser.OpenSubKey(runKeyPath, true);
-            key?.DeleteValue("snapvox", false);
-            key?.DeleteValue("SnapVox", false);
+            key?.DeleteValue("freesnip", false);
+            key?.DeleteValue("FreeSnip", false);
         }
     }
 
@@ -152,8 +152,8 @@ public class UpgradeSafetyTests
         const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         using (var key = Registry.CurrentUser.CreateSubKey(runKeyPath, true))
         {
-            key.SetValue("snapvox", "\"C:\\dummy\\snapvox.exe\" --autorun");
-            key.SetValue("SnapVox", "\"C:\\dummy\\SnapVox.exe\" --autorun");
+            key.SetValue("freesnip", "\"C:\\dummy\\freesnip.exe\" --autorun");
+            key.SetValue("FreeSnip", "\"C:\\dummy\\FreeSnip.exe\" --autorun");
         }
 
         var commands = new List<string>();
@@ -176,8 +176,6 @@ public class UpgradeSafetyTests
             Assert.Contains(commands, c => c.Contains("/Create /TN \"FreeSnip\""));
             using (var key = Registry.CurrentUser.OpenSubKey(runKeyPath, false))
             {
-                Assert.Null(key?.GetValue("snapvox"));
-                Assert.Null(key?.GetValue("SnapVox"));
                 Assert.Null(key?.GetValue("freesnip"));
                 Assert.Null(key?.GetValue("FreeSnip"));
             }
@@ -198,8 +196,6 @@ public class UpgradeSafetyTests
             StartupTaskHelper.RunProcessHook = origHook;
 
             using var key = Registry.CurrentUser.OpenSubKey(runKeyPath, true);
-            key?.DeleteValue("snapvox", false);
-            key?.DeleteValue("SnapVox", false);
             key?.DeleteValue("freesnip", false);
             key?.DeleteValue("FreeSnip", false);
         }
@@ -211,8 +207,6 @@ public class UpgradeSafetyTests
         using var files = new TestFiles();
         string origConfig = StartupTaskHelper.ConfigurationFolder;
         string origInstall = StartupTaskHelper.InstallFolder;
-        string origLegacyConfig = StartupTaskHelper.LegacyConfigurationFolder;
-        string origLegacyInstall = StartupTaskHelper.LegacyInstallFolder;
         bool? origElevated = StartupTaskHelper.IsElevatedOverride;
         var origHook = StartupTaskHelper.RunProcessHook;
 
@@ -222,13 +216,10 @@ public class UpgradeSafetyTests
         {
             StartupTaskHelper.ConfigurationFolder = files.ConfigFolder;
             StartupTaskHelper.InstallFolder = files.InstallFolder;
-            StartupTaskHelper.LegacyConfigurationFolder = files.ConfigFolder;
-            StartupTaskHelper.LegacyInstallFolder = files.InstallFolder;
             StartupTaskHelper.IsElevatedOverride = true;
             StartupTaskHelper.RunProcessHook = (file, args, timeout) =>
             {
                 commands.Add(args);
-                if (args.Contains("/Query /TN \"snapvox\"")) return Task.FromResult(1);
                 return Task.FromResult(0);
             };
 
@@ -254,14 +245,10 @@ public class UpgradeSafetyTests
         {
             StartupTaskHelper.ConfigurationFolder = origConfig;
             StartupTaskHelper.InstallFolder = origInstall;
-            StartupTaskHelper.LegacyConfigurationFolder = origLegacyConfig;
-            StartupTaskHelper.LegacyInstallFolder = origLegacyInstall;
             StartupTaskHelper.IsElevatedOverride = origElevated;
             StartupTaskHelper.RunProcessHook = origHook;
 
             using var key = Registry.CurrentUser.OpenSubKey(runKeyPath, true);
-            key?.DeleteValue("snapvox", false);
-            key?.DeleteValue("SnapVox", false);
             key?.DeleteValue("freesnip", false);
             key?.DeleteValue("FreeSnip", false);
         }
@@ -284,7 +271,7 @@ public class UpgradeSafetyTests
 </Task>";
         Assert.True(StartupTaskHelper.HasBatteryOrPowerRestrictionsInXml(defaultWindowsTaskXml));
 
-        string cleanXml = StartupTaskDefinition.Create(@"C:\SnapVox\snapvox.exe", "S-1-5-21-12345", elevated: true);
+        string cleanXml = StartupTaskDefinition.Create(@"C:\FreeSnip\freesnip.exe", "S-1-5-21-12345", elevated: true);
         Assert.False(StartupTaskHelper.HasBatteryOrPowerRestrictionsInXml(cleanXml));
     }
 
@@ -344,7 +331,7 @@ public class UpgradeSafetyTests
         try
         {
             StartupTaskHelper.IsElevatedOverride = true;
-            string cleanXml = StartupTaskDefinition.Create(@"C:\SnapVox\snapvox.exe", "S-1-5-21-12345", elevated: true);
+            string cleanXml = StartupTaskDefinition.Create(@"C:\FreeSnip\freesnip.exe", "S-1-5-21-12345", elevated: true);
             StartupTaskHelper.RunProcessWithOutputHook = (file, args, timeout) =>
             {
                 commands.Add(args);
@@ -374,7 +361,7 @@ public class UpgradeSafetyTests
     private sealed class TestFiles : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "FreeSnipUpgradeTests_" + Guid.NewGuid().ToString("N"));
-        public string Settings => Path.Combine(_root, "snapvox.ini");
+        public string Settings => Path.Combine(_root, "freesnip.ini");
         public string BackupRoot => Path.Combine(_root, "recovery");
         public string ConfigFolder => Path.Combine(_root, "config");
         public string InstallFolder => Path.Combine(_root, "install");

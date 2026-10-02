@@ -142,7 +142,7 @@
                         <TextBlock Text="Application Behavior" Classes="header"/>
                         <CheckBox Name="ChkKeepBackup" Content="Keep a 24-hour backup of captures and extracted text" AutomationProperties.Name="Keep a 24 hour backup of captures and extracted text" />
                         <CheckBox Name="ChkCloseEditor" Content="Close the image editor after Save, Copy or OCR" AutomationProperties.Name="Close the image editor after Save, Copy or OCR" IsChecked="False" />
-                        <CheckBox Name="ChkWarnClose" Content="Warn before closing the image editor with unsaved changes" AutomationProperties.Name="Warn before closing the image editor with unsaved changes" />
+                        <CheckBox Name="ChkWarnClose" Content="Warn before closing the image editor with unsaved changes" AutomationProperties.Name="Warn before closing the image editor with unsaved changes" IsChecked="False" />
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="0,2">
                             <CheckBox Name="ChkAddBorder" Content="Add a frame border to captures" AutomationProperties.Name="Add a frame border to captures" VerticalAlignment="Center" />
                             <StackPanel Name="FrameBorderOptionsPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -290,8 +290,8 @@
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Scroll:" Classes="field-label"/>
-                                    <TextBox Name="TxtScrollCaptureDelimiterKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Scroll capture hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                    <TextBlock Text="Scroll Delimiter:" Classes="field-label"/>
+                                    <TextBox Name="TxtScrollCaptureDelimiterKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Scroll capture delimiter hotkey" ToolTip.Tip="Key used to finish scroll capture (default: Enter). Click, then press the key you want."/>
                                 </StackPanel>
 
                             </StackPanel>

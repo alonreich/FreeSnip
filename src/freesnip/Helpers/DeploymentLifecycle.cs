@@ -83,122 +83,6 @@ internal static class DeploymentLifecycle
         }
     }
 
-    internal sealed class LegacyFootprint
-    {
-        public bool HasRunningProcesses { get; init; }
-        public bool HasInstallFolder { get; init; }
-        public bool HasLegacyConfig { get; init; }
-        public bool HasLegacyTask { get; init; }
-        public bool IsDetected => HasRunningProcesses || HasInstallFolder || HasLegacyConfig || HasLegacyTask;
-    }
-
-    internal static async Task<LegacyFootprint> DetectLegacyFootprintAsync()
-    {
-        bool hasProcesses = StartupTaskHelper.FindRunningLegacyProcesses().Length > 0;
-        bool hasDir = Directory.Exists(StartupTaskHelper.LegacyInstallFolder);
-        string legacyIni = Path.Combine(StartupTaskHelper.LegacyConfigurationFolder, "snapvox.ini");
-        bool hasConfig = File.Exists(legacyIni) || StartupTaskHelper.GetSettingsCandidates().Any(c => c.Contains("snapvox", StringComparison.OrdinalIgnoreCase) && File.Exists(c));
-        bool hasTask = await StartupTaskHelper.HasLegacyScheduledTaskAsync().ConfigureAwait(false);
-
-        return new LegacyFootprint
-        {
-            HasRunningProcesses = hasProcesses,
-            HasInstallFolder = hasDir,
-            HasLegacyConfig = hasConfig,
-            HasLegacyTask = hasTask
-        };
-    }
-
-    internal static string TranslateSettings(string input)
-    {
-        if (string.IsNullOrEmpty(input)) return input;
-        string result = Regex.Replace(
-            input,
-            @"^\[(snapvox|SnapVox)\]",
-            "[FreeSnip]",
-            RegexOptions.Multiline | RegexOptions.IgnoreCase);
-
-        result = result.Replace(@"\SnapVox\", @"\FreeSnip\", StringComparison.OrdinalIgnoreCase);
-        result = result.Replace(@"\snapvox\", @"\freesnip\", StringComparison.OrdinalIgnoreCase);
-
-        // If CloseEditorOnAction is not explicitly set in the legacy settings, retain the legacy SnapVox default (false)
-        if (!Regex.IsMatch(result, @"^\s*CloseEditorOnAction\s*=", RegexOptions.Multiline | RegexOptions.IgnoreCase))
-        {
-            if (Regex.IsMatch(result, @"\[Core\]", RegexOptions.IgnoreCase))
-            {
-                result = Regex.Replace(
-                    result,
-                    @"(\[Core\])",
-                    "$1" + Environment.NewLine + "CloseEditorOnAction=false",
-                    RegexOptions.IgnoreCase);
-            }
-            else
-            {
-                result += Environment.NewLine + "[Core]" + Environment.NewLine + "CloseEditorOnAction=false" + Environment.NewLine;
-            }
-        }
-
-        return result;
-    }
-
-    internal static async Task<bool> ProbeStagedBinaryAsync(string exePath, DeploymentLogger logger, CancellationToken ct)
-    {
-        try
-        {
-            await logger.LogAsync("MIGRATION", "PROBE_START", $"Executing: {exePath} --test-probe", ct).ConfigureAwait(false);
-            if (!File.Exists(exePath))
-            {
-                await logger.LogAsync("MIGRATION", "PROBE_FAIL", $"File does not exist: {exePath}", ct).ConfigureAwait(false);
-                return false;
-            }
-
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = exePath,
-                    Arguments = "--test-probe",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                }
-            };
-
-            if (!process.Start())
-            {
-                await logger.LogAsync("MIGRATION", "PROBE_FAIL", "Failed to launch probe process", ct).ConfigureAwait(false);
-                return false;
-            }
-
-            try
-            {
-                await process.WaitForExitAsync(ct).WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
-            }
-            catch (TimeoutException)
-            {
-                try { process.Kill(); } catch { }
-                await logger.LogAsync("MIGRATION", "PROBE_TIMEOUT", "Probe timed out after 10s", ct).ConfigureAwait(false);
-                return false;
-            }
-
-            if (process.ExitCode != 0)
-            {
-                string stderr = await process.StandardError.ReadToEndAsync(ct).ConfigureAwait(false);
-                await logger.LogAsync("MIGRATION", "PROBE_FAIL", $"Exit code: {process.ExitCode}, Error: {stderr}", ct).ConfigureAwait(false);
-                return false;
-            }
-
-            await logger.LogAsync("MIGRATION", "PROBE_SUCCESS", "Probe succeeded with exit code 0", ct).ConfigureAwait(false);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            await logger.LogAsync("MIGRATION", "PROBE_EXCEPTION", ex.Message, ct, ex).ConfigureAwait(false);
-            return false;
-        }
-    }
-
     public static async Task<int> RunInstallAsync(CancellationToken ct = default, bool? isWorkerOverride = null)
     {
         bool isWorker = isWorkerOverride ?? Environment.GetCommandLineArgs().Any(a => a.Equals("--install-worker", StringComparison.OrdinalIgnoreCase));
@@ -259,37 +143,11 @@ internal static class DeploymentLifecycle
                 await logger.LogAsync("INSTALL", "CONFLICT_OVERRIDE", $"User chose to continue despite {conflict}", ct).ConfigureAwait(false);
             }
 
-            var legacyFootprint = await DetectLegacyFootprintAsync().ConfigureAwait(false);
             bool existingFreeSnip = DetectExistingInstallation();
-            bool isLegacyMigration = legacyFootprint.IsDetected;
-
             bool keepUserSettings = false;
             bool cleanWipeRequested = false;
 
-            if (isLegacyMigration)
-            {
-                await logger.LogAsync("MIGRATION", "LEGACY_DETECTED",
-                    $"Legacy SnapVox footprint detected: Dir={legacyFootprint.HasInstallFolder}, Config={legacyFootprint.HasLegacyConfig}, Task={legacyFootprint.HasLegacyTask}, Running={legacyFootprint.HasRunningProcesses}", ct).ConfigureAwait(false);
-
-                var migrationChoice = await ShowBlockingPromptAsync(progress,
-                    "An existing SnapVox installation was detected on this system.\r\n\r\n" +
-                    "Yes    - Migrate to FreeSnip and KEEP my settings\r\n" +
-                    "No     - Clean install FreeSnip: do not migrate legacy settings\r\n" +
-                    "Cancel - Abort the installation",
-                    "FreeSnip Migration",
-                    MessageBoxButtons.YesNoCancel,
-                    MessageBoxIcon.Question).ConfigureAwait(false);
-
-                if (migrationChoice == DialogResult.Cancel)
-                {
-                    await ReportAsync(progress, logger, 100, "ABORT", "CANCELLED", "Migration cancelled by user.", ct).ConfigureAwait(false);
-                    return 0;
-                }
-
-                keepUserSettings = migrationChoice == DialogResult.Yes;
-                cleanWipeRequested = migrationChoice == DialogResult.No;
-            }
-            else if (existingFreeSnip)
+            if (existingFreeSnip)
             {
                 var upgradeChoice = await ShowBlockingPromptAsync(progress,
                     "An existing FreeSnip installation was detected on this system.\r\n\r\n" +
@@ -308,11 +166,6 @@ internal static class DeploymentLifecycle
                 }
                 keepUserSettings = upgradeChoice == DialogResult.Yes;
                 cleanWipeRequested = upgradeChoice == DialogResult.No;
-            }
-
-            if (isLegacyMigration)
-            {
-                return await ExecuteLegacyMigrationWorkflowAsync(progress, logger, keepUserSettings, cleanWipeRequested, ct).ConfigureAwait(false);
             }
 
             if (!await WaitForApplicationsToCloseAsync(progress, ct).ConfigureAwait(false)) return 0;
@@ -367,362 +220,6 @@ internal static class DeploymentLifecycle
         }
     }
 
-    private static async Task<int> ExecuteLegacyMigrationWorkflowAsync(DeploymentProgress progress, DeploymentLogger logger, bool keepUserSettings, bool cleanWipeRequested, CancellationToken ct)
-    {
-        await logger.LogAsync("MIGRATION", "START", "Starting two-phase fail-safe migration from SnapVox to FreeSnip", ct).ConfigureAwait(false);
-
-        // =====================================================================
-        // PHASE 1: PROBE, STAGE & VERIFY (Zero Impact on SnapVox)
-        // =====================================================================
-        await ReportAsync(progress, logger, 10, "MIGRATION", "PHASE1_START", "Phase 1: Backing up settings & staging FreeSnip...", ct).ConfigureAwait(false);
-
-        bool legacyTaskPresent = await StartupTaskHelper.HasLegacyScheduledTaskAsync().ConfigureAwait(false);
-        bool restoreAdminStartup = legacyTaskPresent || StartupTaskHelper.DetectAdminStartupInSettingsCandidates();
-
-        string settingsBackupFolder = null;
-        try
-        {
-            if (keepUserSettings)
-            {
-                await ReportAsync(progress, logger, 20, "MIGRATION", "SETTINGS_BACKUP", "Securing durable settings backup and translation...", ct).ConfigureAwait(false);
-                settingsBackupFolder = await BackupAndTranslateLegacySettingsAsync(logger, ct).ConfigureAwait(false);
-            }
-
-            await ReportAsync(progress, logger, 35, "MIGRATION", "STAGE_PAYLOAD", "Shadow staging FreeSnip binaries...", ct).ConfigureAwait(false);
-            await StageFreeSnipPayloadAsync(progress, logger, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            // CRITICAL GUARD: Abort immediately. Log failure, purge staged C:\Program Files\FreeSnip\, exit.
-            // SnapVox remains running and completely unmodified.
-            await logger.LogAsync("MIGRATION", "PHASE1_ABORT", $"Phase 1 verification failed: {ex.Message}. Rolling back staged files.", ct, ex).ConfigureAwait(false);
-            await AbortAndRollbackPhase1Async(logger, ct).ConfigureAwait(false);
-            throw new InvalidOperationException("FreeSnip verification probe failed. Migration aborted; SnapVox remains untouched: " + ex.Message, ex);
-        }
-
-        // =====================================================================
-        // PHASE 2: ATOMIC SWITCHOVER & DECOMMISSION (Only after Phase 1 succeeds)
-        // =====================================================================
-        await ReportAsync(progress, logger, 70, "MIGRATION", "PHASE2_START", "Phase 2: Handing over processes & registering FreeSnip...", ct).ConfigureAwait(false);
-
-        // 4. Clean Process Handover
-        await ReportAsync(progress, logger, 75, "MIGRATION", "PROCESS_HANDOVER", "Closing SnapVox cleanly...", ct).ConfigureAwait(false);
-        await HandoverOrTerminateLegacyProcessesAsync(logger, ct).ConfigureAwait(false);
-
-        // 5. Register FreeSnip System Anchors
-        await ReportAsync(progress, logger, 80, "MIGRATION", "REGISTER_ANCHORS", "Registering FreeSnip anchors...", ct).ConfigureAwait(false);
-        await WriteUninstallRegistryAsync(logger, ct).ConfigureAwait(false);
-        await RegisterFileAssociationsAsync(logger, ct).ConfigureAwait(false);
-        await CreateStartMenuShortcutAsync(logger, ct).ConfigureAwait(false);
-        NotifyShellAssociationsChanged();
-
-        await StartupTaskHelper.RestoreStartupAfterInstallAsync(keepUserSettings, restoreAdminStartup).ConfigureAwait(false);
-
-        // 6. Decommission Legacy SnapVox Footprint
-        await ReportAsync(progress, logger, 88, "MIGRATION", "DECOMMISSION", "Decommissioning legacy SnapVox footprint...", ct).ConfigureAwait(false);
-        await DecommissionLegacySnapVoxFootprintAsync(logger, ct).ConfigureAwait(false);
-
-        // 7. Launch FreeSnip
-        await ReportAsync(progress, logger, 95, "MIGRATION", "LAUNCH", "Launching FreeSnip...", ct).ConfigureAwait(false);
-        await LaunchInstalledApplicationAsync().ConfigureAwait(false);
-
-        string finalMsg = "FreeSnip installed and configured successfully. Legacy SnapVox migrated.";
-        await ReportAsync(progress, logger, 100, "SUCCESS", "COMPLETE", finalMsg, ct).ConfigureAwait(false);
-        await AwaitUserAcknowledgementAsync(progress, logger, finalMsg + " Click Finish to close.", ct).ConfigureAwait(false);
-        return 0;
-    }
-
-    internal static async Task<string> BackupAndTranslateLegacySettingsAsync(DeploymentLogger logger, CancellationToken ct)
-    {
-        string backupRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FreeSnipUpgradeBackups");
-        string timestampFolder = Path.Combine(backupRoot, DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(timestampFolder);
-
-        var candidates = StartupTaskHelper.GetSettingsCandidates()
-            .Where(c => c.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
-            .Where(File.Exists)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (candidates.Count == 0)
-        {
-            string directLegacyIni = Path.Combine(StartupTaskHelper.LegacyConfigurationFolder, "snapvox.ini");
-            if (File.Exists(directLegacyIni)) candidates.Add(directLegacyIni);
-        }
-
-        if (candidates.Count == 0)
-        {
-            await logger.LogAsync("MIGRATION", "BACKUP_NONE", "No legacy SnapVox settings found to backup", ct).ConfigureAwait(false);
-            return null;
-        }
-
-        // Prioritize %AppData%\snapvox\snapvox.ini, followed by candidate with highest content length (most custom settings)
-        string legacyAppDataIni = Path.Combine(StartupTaskHelper.LegacyConfigurationFolder, "snapvox.ini");
-        candidates = candidates
-            .OrderByDescending(c => string.Equals(c, legacyAppDataIni, StringComparison.OrdinalIgnoreCase))
-            .ThenByDescending(c => { try { return new FileInfo(c).Length; } catch { return 0L; } })
-            .ToList();
-
-        string primarySource = null;
-        foreach (var src in candidates)
-        {
-            byte[] rawBytes = await File.ReadAllBytesAsync(src, ct).ConfigureAwait(false);
-            string backupCopyPath = Path.Combine(timestampFolder, Path.GetFileName(src));
-            if (File.Exists(backupCopyPath)) backupCopyPath = Path.Combine(timestampFolder, Guid.NewGuid().ToString("N") + "_" + Path.GetFileName(src));
-            await File.WriteAllBytesAsync(backupCopyPath, rawBytes, ct).ConfigureAwait(false);
-
-            string srcHash = Convert.ToHexString(SHA256.HashData(rawBytes));
-            string destHash = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(backupCopyPath, ct).ConfigureAwait(false)));
-            if (!string.Equals(srcHash, destHash, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new IOException($"SHA-256 verification failed backing up {src} to {backupCopyPath}");
-            }
-
-            if (primarySource == null) primarySource = backupCopyPath;
-            await logger.LogAsync("MIGRATION", "BACKUP_VERIFIED", $"{src} -> {backupCopyPath} (SHA256: {srcHash})", ct).ConfigureAwait(false);
-        }
-
-        if (primarySource != null)
-        {
-            string rawText = await File.ReadAllTextAsync(primarySource, Encoding.UTF8, ct).ConfigureAwait(false);
-            string translatedText = TranslateSettings(rawText);
-            string targetConfigDir = StartupTaskHelper.ConfigurationFolder;
-            Directory.CreateDirectory(targetConfigDir);
-            string stagedFreesnipIni = Path.Combine(targetConfigDir, "freesnip.ini");
-            await File.WriteAllTextAsync(stagedFreesnipIni, translatedText, Encoding.UTF8, ct).ConfigureAwait(false);
-            await logger.LogAsync("MIGRATION", "SETTINGS_TRANSLATED", $"Staged translated config at {stagedFreesnipIni}", ct).ConfigureAwait(false);
-        }
-
-        return timestampFolder;
-    }
-
-    private static async Task StageFreeSnipPayloadAsync(DeploymentProgress progress, DeploymentLogger logger, CancellationToken ct)
-    {
-        string installFolder = StartupTaskHelper.InstallFolder;
-        Directory.CreateDirectory(installFolder);
-
-        await ReportAsync(progress, logger, 45, "STAGE", "COPY", "Staging FreeSnip binaries...", ct).ConfigureAwait(false);
-        await CopyFileAggressiveAsync(RuntimePathHelper.ExecutablePath, StartupTaskHelper.InstallPath, logger, ct).ConfigureAwait(false);
-        await CopyFileAggressiveAsync(RuntimePathHelper.ExecutablePath, StartupTaskHelper.UninstallExePath, logger, ct).ConfigureAwait(false);
-
-        if (PayloadExtractor.HasEmbeddedPayload())
-        {
-            await ReportAsync(progress, logger, 55, "STAGE", "EXTRACT", "Extracting bundled payload...", ct).ConfigureAwait(false);
-            await PayloadExtractor.ExtractToAsync(installFolder, ct).ConfigureAwait(false);
-        }
-
-        if (!File.Exists(StartupTaskHelper.InstallPath))
-            throw new FileNotFoundException("FreeSnip.exe not found after staging.", StartupTaskHelper.InstallPath);
-        if (!File.Exists(StartupTaskHelper.UninstallExePath))
-            throw new FileNotFoundException("Uninstall.exe not found after staging.", StartupTaskHelper.UninstallExePath);
-
-        await ReportAsync(progress, logger, 62, "STAGE", "PROBE", "Probing FreeSnip binary integrity...", ct).ConfigureAwait(false);
-        bool probeOk = await ProbeStagedBinaryAsync(StartupTaskHelper.InstallPath, logger, ct).ConfigureAwait(false);
-        if (!probeOk)
-        {
-            throw new InvalidOperationException("Binary integrity probe failed for " + StartupTaskHelper.InstallPath);
-        }
-    }
-
-    private static async Task AbortAndRollbackPhase1Async(DeploymentLogger logger, CancellationToken ct)
-    {
-        await logger.LogAsync("MIGRATION", "ABORT_ROLLBACK", "Phase 1 verification failed. Cleaning up staged FreeSnip to leave SnapVox unmodified.", ct).ConfigureAwait(false);
-        try
-        {
-            if (Directory.Exists(StartupTaskHelper.InstallFolder))
-            {
-                Directory.Delete(StartupTaskHelper.InstallFolder, true);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogSwallowed("AbortAndRollbackPhase1Async", "Delete Staged InstallFolder", ex);
-        }
-    }
-
-    private static async Task HandoverOrTerminateLegacyProcessesAsync(DeploymentLogger logger, CancellationToken ct)
-    {
-        var pids = StartupTaskHelper.FindRunningLegacyProcesses();
-        if (pids.Length == 0) return;
-
-        await logger.LogAsync("MIGRATION", "LEGACY_CLOSE_REQUEST", $"Requesting clean exit for {pids.Length} legacy processes", ct).ConfigureAwait(false);
-
-        foreach (int pid in pids)
-        {
-            try
-            {
-                using var proc = Process.GetProcessById(pid);
-                if (!proc.HasExited)
-                {
-                    proc.CloseMainWindow();
-                }
-            }
-            catch { }
-        }
-
-        var sw = Stopwatch.StartNew();
-        while (sw.ElapsedMilliseconds < 3000)
-        {
-            if (StartupTaskHelper.FindRunningLegacyProcesses().Length == 0)
-            {
-                await logger.LogAsync("MIGRATION", "LEGACY_EXIT_CLEAN", "All legacy processes exited cleanly.", ct).ConfigureAwait(false);
-                return;
-            }
-            await Task.Delay(200, ct).ConfigureAwait(false);
-        }
-
-        foreach (int pid in StartupTaskHelper.FindRunningLegacyProcesses())
-        {
-            try
-            {
-                using var proc = Process.GetProcessById(pid);
-                if (!proc.HasExited)
-                {
-                    proc.Kill();
-                    await logger.LogAsync("MIGRATION", "LEGACY_KILL", $"Terminated lingering legacy process PID={pid}", ct).ConfigureAwait(false);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogSwallowed("HandoverOrTerminateLegacyProcessesAsync", $"Kill PID {pid}", ex);
-            }
-        }
-    }
-
-    internal static async Task DecommissionLegacySnapVoxFootprintAsync(DeploymentLogger logger, CancellationToken ct)
-    {
-        await logger.LogAsync("MIGRATION", "DECOMMISSION_START", "Decommissioning legacy SnapVox footprint", ct).ConfigureAwait(false);
-
-        // 1. Scheduled Task
-        try
-        {
-            await StartupTaskHelper.DeleteLegacyScheduledTaskAsync().ConfigureAwait(false);
-            await logger.LogAsync("MIGRATION", "LEGACY_TASK_DELETED", StartupTaskHelper.LegacyScheduledTaskName, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            LogSwallowed("DecommissionLegacySnapVoxFootprintAsync", "DeleteLegacyScheduledTask", ex);
-        }
-
-        // 2. Run Keys & Autostart
-        StartupTaskHelper.PurgeAllRunKeys();
-
-        // 3. Purge all Legacy Directories
-        foreach (string dir in DeploymentFootprint.GetLegacyDirectoryPurgeTargets(includeInstallFolder: true))
-        {
-            if (Directory.Exists(dir))
-            {
-                await PurgeDirectoryRecursiveAsync(dir, logger, ct).ConfigureAwait(false);
-            }
-        }
-
-        // 4. Purge %TMP% residual files and test directories
-        await PurgeLegacyTempResidualsAsync(logger, ct).ConfigureAwait(false);
-
-        // 5. Purge Registry Uninstall Keys (Legacy Only)
-        foreach (var target in DeploymentFootprint.GetUninstallRegistryPurgeTargets())
-        {
-            if (target.SubKeyPath.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
-            {
-                await DeleteSubKeyTreeAsync(target.Hive, target.View, target.SubKeyPath, logger, ct).ConfigureAwait(false);
-            }
-        }
-
-        // 6. Purge Registry App Keys (Legacy Only)
-        foreach (var target in DeploymentFootprint.GetAppRegistryPurgeTargets())
-        {
-            if (target.Path.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
-            {
-                await DeleteSubKeyTreeAsync(target.Hive, target.View, target.Path, logger, ct).ConfigureAwait(false);
-            }
-        }
-
-        // 7. Scrub Shell & File Associations (Classes, ProgID, OpenWith)
-        foreach (RegistryHive hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
-        {
-            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
-            {
-                try
-                {
-                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
-                    using var classes = baseKey.OpenSubKey(@"SOFTWARE\Classes", true);
-                    if (classes != null)
-                    {
-                        try { classes.DeleteSubKeyTree(DeploymentFootprint.LegacyProgId, false); } catch { }
-                        try { classes.DeleteSubKeyTree(@"Applications\SnapVox.exe", false); } catch { }
-                        try { classes.DeleteSubKeyTree(@"Applications\snapvox.exe", false); } catch { }
-
-                        foreach (string ext in DeploymentFootprint.ImageExtensions)
-                        {
-                            try
-                            {
-                                using var openWith = classes.OpenSubKey(ext + @"\OpenWithProgids", true);
-                                openWith?.DeleteValue(DeploymentFootprint.LegacyProgId, false);
-                            }
-                            catch { }
-                            try
-                            {
-                                classes.DeleteSubKeyTree(ext + @"\shell\" + DeploymentFootprint.LegacyOpenWithShellName, false);
-                            }
-                            catch { }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogSwallowed("DecommissionLegacySnapVoxFootprintAsync", $"ScrubClasses_{hive}_{view}", ex);
-                }
-            }
-        }
-
-        // 8. Scrub Explorer FileExts
-        await ScrubExplorerFileExtsAsync(logger, ct).ConfigureAwait(false);
-
-        // 9. Scrub MuiCache (Legacy values)
-        foreach (RegistryHive hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
-        {
-            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
-            {
-                try
-                {
-                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
-                    foreach (var mui in DeploymentFootprint.MuiCacheRelativePaths)
-                    {
-                        try
-                        {
-                            using var key = baseKey.OpenSubKey(mui, true);
-                            if (key == null) continue;
-                            foreach (var name in key.GetValueNames())
-                            {
-                                string val = key.GetValue(name)?.ToString() ?? string.Empty;
-                                if (name.Contains("snapvox", StringComparison.OrdinalIgnoreCase) || val.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    try { key.DeleteValue(name, false); } catch { }
-                                }
-                            }
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-            }
-        }
-
-        // 10. Scrub Push Notifications
-        await ScrubPushNotificationsAsync(logger, ct).ConfigureAwait(false);
-
-        // 11. Scrub AppCompatFlags
-        await ScrubAppCompatFlagsAsync(logger, ct).ConfigureAwait(false);
-
-        // 12. Scrub Start TileProperties
-        await ScrubTilePropertiesAsync(logger, ct).ConfigureAwait(false);
-
-        // 13. Delete Legacy Shortcuts
-        await DeleteLegacyShortcutsAsync(logger, ct).ConfigureAwait(false);
-
-        await logger.LogAsync("MIGRATION", "DECOMMISSION_END", "Legacy SnapVox decommission completed", ct).ConfigureAwait(false);
-    }
-
     internal static async Task ScrubExplorerFileExtsAsync(DeploymentLogger logger, CancellationToken ct)
     {
         try
@@ -737,7 +234,6 @@ internal static class DeploymentLifecycle
                 using var extKey = fileExtsKey.OpenSubKey(extName, true);
                 if (extKey == null) continue;
 
-                // 1. Scrub OpenWithList
                 try
                 {
                     using var openWithList = extKey.OpenSubKey("OpenWithList", true);
@@ -748,7 +244,7 @@ internal static class DeploymentLifecycle
                         {
                             if (string.Equals(valName, "MRUList", StringComparison.OrdinalIgnoreCase)) continue;
                             string valData = openWithList.GetValue(valName)?.ToString() ?? string.Empty;
-                            if (valData.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
+                            if (valData.Contains("freesnip", StringComparison.OrdinalIgnoreCase))
                             {
                                 valuesToDelete.Add(valName);
                             }
@@ -775,7 +271,6 @@ internal static class DeploymentLifecycle
                     LogSwallowed("ScrubExplorerFileExts.OpenWithList", extName, ex);
                 }
 
-                // 2. Scrub OpenWithProgids
                 try
                 {
                     using var openWithProgids = extKey.OpenSubKey("OpenWithProgids", true);
@@ -783,7 +278,7 @@ internal static class DeploymentLifecycle
                     {
                         foreach (string valName in openWithProgids.GetValueNames())
                         {
-                            if (valName.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
+                            if (valName.Contains("freesnip", StringComparison.OrdinalIgnoreCase))
                             {
                                 openWithProgids.DeleteValue(valName, false);
                                 await logger.LogAsync("REGISTRY", "FILEEXTS_PURGE", $@"HKCU\...\FileExts\{extName}\OpenWithProgids\{valName}", ct).ConfigureAwait(false);
@@ -796,7 +291,6 @@ internal static class DeploymentLifecycle
                     LogSwallowed("ScrubExplorerFileExts.OpenWithProgids", extName, ex);
                 }
 
-                // 3. Scrub UserChoice / UserChoiceLatest
                 foreach (string choiceSub in new[] { "UserChoice", "UserChoiceLatest" })
                 {
                     try
@@ -805,7 +299,7 @@ internal static class DeploymentLifecycle
                         if (choiceKey != null)
                         {
                             string progId = choiceKey.GetValue("ProgId")?.ToString() ?? string.Empty;
-                            if (progId.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
+                            if (progId.Contains("freesnip", StringComparison.OrdinalIgnoreCase))
                             {
                                 extKey.DeleteSubKeyTree(choiceSub, false);
                                 await logger.LogAsync("REGISTRY", "FILEEXTS_CHOICE_PURGE", $@"HKCU\...\FileExts\{extName}\{choiceSub}", ct).ConfigureAwait(false);
@@ -835,7 +329,7 @@ internal static class DeploymentLifecycle
             {
                 foreach (string subName in pushKey.GetSubKeyNames())
                 {
-                    if (subName.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
+                    if (subName.Contains(DeploymentFootprint.AppName, StringComparison.OrdinalIgnoreCase))
                     {
                         try
                         {
@@ -870,7 +364,7 @@ internal static class DeploymentLifecycle
 
                     foreach (string valName in storeKey.GetValueNames())
                     {
-                        if (valName.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
+                        if (valName.Contains(DeploymentFootprint.AppName, StringComparison.OrdinalIgnoreCase))
                         {
                             try
                             {
@@ -902,7 +396,7 @@ internal static class DeploymentLifecycle
             {
                 foreach (string sub in tileKey.GetSubKeyNames())
                 {
-                    if (sub.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
+                    if (sub.Contains(DeploymentFootprint.AppName, StringComparison.OrdinalIgnoreCase))
                     {
                         try
                         {
@@ -920,93 +414,6 @@ internal static class DeploymentLifecycle
         catch (Exception ex)
         {
             LogSwallowed("ScrubTilePropertiesAsync", "Root", ex);
-        }
-    }
-
-    private static async Task PurgeLegacyTempResidualsAsync(DeploymentLogger logger, CancellationToken ct)
-    {
-        string tempDir = Path.GetTempPath();
-        if (!Directory.Exists(tempDir)) return;
-
-        string[] specificFiles =
-        {
-            Path.Combine(tempDir, "SnapVox_Installation.log"),
-            Path.Combine(tempDir, "snapvox_installation.log")
-        };
-        foreach (string file in specificFiles)
-        {
-            if (File.Exists(file))
-            {
-                await DeleteFileWithRetryAsync(file, logger, ct).ConfigureAwait(false);
-            }
-        }
-
-        try
-        {
-            var tempFiles = Directory.EnumerateFiles(tempDir, "*", SearchOption.TopDirectoryOnly)
-                .Where(f =>
-                {
-                    string fname = Path.GetFileName(f);
-                    return fname.StartsWith("snapvox", StringComparison.OrdinalIgnoreCase);
-                }).ToList();
-
-            foreach (string f in tempFiles)
-            {
-                await DeleteFileWithRetryAsync(f, logger, ct).ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogSwallowed("PurgeLegacyTempResidualsAsync", "EnumerateFiles", ex);
-        }
-
-        try
-        {
-            var tempSubDirs = Directory.EnumerateDirectories(tempDir, "*", SearchOption.TopDirectoryOnly)
-                .Where(d =>
-                {
-                    string dname = Path.GetFileName(d);
-                    return dname.StartsWith("snapvox", StringComparison.OrdinalIgnoreCase);
-                }).ToList();
-
-            foreach (string d in tempSubDirs)
-            {
-                await PurgeDirectoryRecursiveAsync(d, logger, ct).ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogSwallowed("PurgeLegacyTempResidualsAsync", "EnumerateDirectories", ex);
-        }
-    }
-
-    private static async Task DeleteLegacyShortcutsAsync(DeploymentLogger logger, CancellationToken ct)
-    {
-        foreach (string dir in DeploymentFootprint.GetShortcutSearchFolders())
-        {
-            if (!Directory.Exists(dir)) continue;
-            foreach (string legacyName in DeploymentFootprint.LegacyShortcutFileNames)
-            {
-                string path = Path.Combine(dir, legacyName);
-                if (File.Exists(path))
-                {
-                    await DeleteFileWithRetryAsync(path, logger, ct).ConfigureAwait(false);
-                }
-            }
-
-            try
-            {
-                var residualLnks = Directory.EnumerateFiles(dir, "*.lnk", SearchOption.AllDirectories)
-                    .Where(f => Path.GetFileName(f).Contains("snapvox", StringComparison.OrdinalIgnoreCase)).ToList();
-                foreach (string lnk in residualLnks)
-                {
-                    await DeleteFileWithRetryAsync(lnk, logger, ct).ConfigureAwait(false);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogSwallowed("DeleteLegacyShortcutsAsync", dir, ex);
-            }
         }
     }
 
@@ -1117,12 +524,6 @@ internal static class DeploymentLifecycle
 
         await ReportAsync(progress, logger, start + 10, "CLEANUP", "TASKS", "Removing triggers...", ct).ConfigureAwait(false);
         await RunHiddenProcessAsync("schtasks.exe", $"/Delete /TN \"{DeploymentFootprint.ScheduledTaskName}\" /F", 5000, logger, ct).ConfigureAwait(false);
-        try
-        {
-            await RunHiddenProcessAsync("schtasks.exe", $"/Delete /TN \"{DeploymentFootprint.LegacyScheduledTaskName}\" /F", 5000, logger, ct).ConfigureAwait(false);
-        }
-        catch { }
-
         var targets = DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: true).ToList();
         var allowedRoots = new[]
         {
@@ -1131,27 +532,7 @@ internal static class DeploymentLifecycle
             DeploymentFootprint.RoamingAppDataFolder,
             DeploymentFootprint.LocalAppDataFolder,
             DeploymentFootprint.TempAppFolder,
-            DeploymentFootprint.DeploymentTempRoot,
-            StartupTaskHelper.LegacyInstallFolder,
-            StartupTaskHelper.LegacyConfigurationFolder,
-            DeploymentFootprint.LegacyProgramDataFolder,
-            DeploymentFootprint.LegacyProgramDataFolderAlt,
-            DeploymentFootprint.LegacyRoamingAppDataFolder,
-            DeploymentFootprint.LegacyRoamingAppDataFolderAlt,
-            DeploymentFootprint.LegacyLocalAppDataFolder,
-            DeploymentFootprint.LegacyLocalAppDataFolderAlt,
-            DeploymentFootprint.LegacyTempAppFolder,
-            DeploymentFootprint.LegacyTempAppFolderAlt,
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "snapvox"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SnapVox"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "snapvox"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SnapVox"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "snapvox"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SnapVox"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "SnapVox"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "snapvox"),
-            Path.Combine(Path.GetTempPath(), "SnapVox"),
-            Path.Combine(Path.GetTempPath(), "snapvox")
+            DeploymentFootprint.DeploymentTempRoot
         };
         targets.RemoveAll(t => !allowedRoots.Any(root =>
             t.StartsWith(root, StringComparison.OrdinalIgnoreCase) || string.Equals(t, root, StringComparison.OrdinalIgnoreCase)));
@@ -1393,8 +774,7 @@ internal static class DeploymentLifecycle
                         if (key == null) continue;
                         foreach (var name in key.GetValueNames())
                         {
-                            if (name.Contains(DeploymentFootprint.AppName, StringComparison.OrdinalIgnoreCase) ||
-                                name.Contains("snapvox", StringComparison.OrdinalIgnoreCase))
+                            if (name.Contains(DeploymentFootprint.AppName, StringComparison.OrdinalIgnoreCase))
                             {
                                 try 
                                 { 
@@ -1429,7 +809,6 @@ internal static class DeploymentLifecycle
     private static async Task DeleteRunRegistryValuesAsync(DeploymentLogger logger, CancellationToken ct)
     {
         string installFolder = StartupTaskHelper.InstallFolder.TrimEnd(Path.DirectorySeparatorChar);
-        string legacyFolder = StartupTaskHelper.LegacyInstallFolder.TrimEnd(Path.DirectorySeparatorChar);
 
         foreach (RegistryHive hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
         {
@@ -1450,8 +829,7 @@ internal static class DeploymentLifecycle
                             if (!nameMatch)
                             {
                                 string data = key.GetValue(name)?.ToString() ?? string.Empty;
-                                dataMatch = data.IndexOf(installFolder, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                            data.IndexOf(legacyFolder, StringComparison.OrdinalIgnoreCase) >= 0;
+                                dataMatch = data.IndexOf(installFolder, StringComparison.OrdinalIgnoreCase) >= 0;
                             }
 
                             if (!nameMatch && !dataMatch) continue;
@@ -1698,7 +1076,6 @@ internal static class DeploymentLifecycle
         }
 
         string installFolder = StartupTaskHelper.InstallFolder.TrimEnd(Path.DirectorySeparatorChar);
-        string legacyFolder = StartupTaskHelper.LegacyInstallFolder.TrimEnd(Path.DirectorySeparatorChar);
         foreach (RegistryHive hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
         {
             foreach (RegistryView view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
@@ -1714,7 +1091,7 @@ internal static class DeploymentLifecycle
                         {
                             bool nameMatch = DeploymentFootprint.RunValueNames.Any(candidate => string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase));
                             string data = key.GetValue(name)?.ToString() ?? string.Empty;
-                            if (nameMatch || data.IndexOf(installFolder, StringComparison.OrdinalIgnoreCase) >= 0 || data.IndexOf(legacyFolder, StringComparison.OrdinalIgnoreCase) >= 0)
+                            if (nameMatch || data.IndexOf(installFolder, StringComparison.OrdinalIgnoreCase) >= 0)
                                 residue.Add($"Autostart value: {hive}\\{runPath}\\{name}");
                         }
                     }
@@ -1730,7 +1107,7 @@ internal static class DeploymentLifecycle
         foreach (string dir in DeploymentFootprint.GetShortcutSearchFolders())
         {
             if (!Directory.Exists(dir)) continue;
-            foreach (string name in DeploymentFootprint.ShortcutFileNames.Concat(DeploymentFootprint.LegacyShortcutFileNames))
+            foreach (string name in DeploymentFootprint.ShortcutFileNames)
             {
                 string path = Path.Combine(dir, name);
                 if (File.Exists(path)) residue.Add($"Shortcut: {path}");
@@ -1739,18 +1116,6 @@ internal static class DeploymentLifecycle
 
         if (await StartupTaskHelper.HasElevatedStartupTaskAsync().ConfigureAwait(false))
             residue.Add($"Scheduled task: {DeploymentFootprint.ScheduledTaskName}");
-
-        if (await StartupTaskHelper.HasLegacyScheduledTaskAsync().ConfigureAwait(false))
-            residue.Add($"Legacy scheduled task: {StartupTaskHelper.LegacyScheduledTaskName}");
-
-        using (var baseKey = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64))
-        {
-            foreach (var pushSub in DeploymentFootprint.PushNotificationPurgeSubKeys)
-            {
-                using var pKey = baseKey.OpenSubKey(pushSub);
-                if (pKey != null) residue.Add($"Push notification: {pushSub}");
-            }
-        }
 
         foreach (string item in residue)
             await logger.LogAsync("VERIFY", "RESIDUE", item, ct).ConfigureAwait(false);
@@ -1840,19 +1205,12 @@ internal static class DeploymentLifecycle
             LogSwallowed("DeleteFileAssociationsRegistryAsync", DeploymentFootprint.ProgId, ex);
         }
 
-        try 
-        { 
-            classes.DeleteSubKeyTree(DeploymentFootprint.LegacyProgId, false); 
-        } 
-        catch { }
-
         foreach (string ext in DeploymentFootprint.ImageExtensions)
         {
             try 
             { 
                 using var openWith = classes.OpenSubKey(ext + @"\OpenWithProgids", true); 
                 openWith?.DeleteValue(DeploymentFootprint.ProgId, false); 
-                openWith?.DeleteValue(DeploymentFootprint.LegacyProgId, false); 
             } 
             catch (Exception ex)
             { 
@@ -1869,12 +1227,6 @@ internal static class DeploymentLifecycle
                 await logger.LogAsync("REGISTRY", "DELETE_SHELL_FAIL", $"{ext} :: {ex.Message}", ct).ConfigureAwait(false);
                 LogSwallowed("DeleteFileAssociationsRegistryAsync", $"{ext}\\shell\\{DeploymentFootprint.OpenWithShellName}", ex);
             }
-
-            try 
-            { 
-                classes.DeleteSubKeyTree(ext + @"\shell\" + DeploymentFootprint.LegacyOpenWithShellName, false); 
-            } 
-            catch { }
         }
     }
 
@@ -1889,8 +1241,6 @@ internal static class DeploymentLifecycle
                 await DeleteFileWithRetryAsync(path, logger, ct).ConfigureAwait(false);
             }
         }
-
-        await DeleteLegacyShortcutsAsync(logger, ct).ConfigureAwait(false);
     }
 
     private static async Task PurgeUserGeneratedArtifactsAsync(DeploymentLogger logger, CancellationToken ct)

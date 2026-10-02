@@ -561,7 +561,7 @@
                     <Button Classes="toolbar" Name="DownloadButton" AutomationProperties.Name="Save" ToolTip.Tip="Save (Ctrl+S)" Click="OnDownloadClick" IsDefault="False">
                         <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/download.svg" />
                     </Button>
-                    <Button Classes="toolbar" Name="CopyButton" AutomationProperties.Name="Copy image to clipboard" ToolTip.Tip="Copy image to clipboard (Ctrl+C)" Click="OnCopyClick" IsDefault="False">
+                    <Button Classes="toolbar" Name="CopyButton" AutomationProperties.Name="Copy image to clipboard" ToolTip.Tip="Copy image to clipboard" Click="OnCopyClick" IsDefault="False">
                         <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/copy.svg" />
                     </Button>
                     

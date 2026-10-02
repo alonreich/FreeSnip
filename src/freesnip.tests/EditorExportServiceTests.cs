@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Threading.Tasks;
 using SixLabors.ImageSharp;
@@ -209,7 +209,6 @@ namespace freesnip.tests
             }
         }
 
-        // ── PNG-default regression tests ──────────────────────────────────────
 
         /// <summary>
         /// Default invocation (allowPng not explicitly specified) of GenerateDownloadFileName must produce a .png extension.
@@ -257,7 +256,6 @@ namespace freesnip.tests
                 byte[] bytes = await File.ReadAllBytesAsync(pngPath);
                 Assert.True(bytes.Length > 4, "PNG file must be longer than 4 bytes.");
 
-                // PNG magic bytes: 0x89 'P' 'N' 'G'
                 Assert.Equal(0x89, bytes[0]);
                 Assert.Equal(0x50, bytes[1]);
                 Assert.Equal(0x4E, bytes[2]);
@@ -282,11 +280,8 @@ namespace freesnip.tests
             try
             {
                 using var image = new Image<Rgba32>(4, 4);
-                // Pixel 0,0: 100% transparent
                 image[0, 0] = new Rgba32(0, 0, 0, 0);
-                // Pixel 1,1: 50% semi-transparent red
                 image[1, 1] = new Rgba32(255, 0, 0, 128);
-                // Pixel 2,2: 100% opaque green
                 image[2, 2] = new Rgba32(0, 255, 0, 255);
 
                 string pngPath = Path.Combine(tempDir, "alpha_test.png");
@@ -329,7 +324,6 @@ namespace freesnip.tests
                 byte[] bytes = await File.ReadAllBytesAsync(jpgPath);
                 Assert.True(bytes.Length > 2, "JPEG file must be longer than 2 bytes.");
 
-                // JPEG magic bytes: 0xFF 0xD8
                 Assert.Equal(0xFF, bytes[0]);
                 Assert.Equal(0xD8, bytes[1]);
             }

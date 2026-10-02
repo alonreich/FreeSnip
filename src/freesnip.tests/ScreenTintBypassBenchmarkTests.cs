@@ -89,7 +89,7 @@ namespace freesnip.tests
                     IntPtr hwnd = CreateWindowExW(
                         WsExToolwindow,
                         "STATIC",
-                        $"SnapVox_BenchmarkWindow_{i}",
+                        $"FreeSnip_BenchmarkWindow_{i}",
                         WsPopup | WsVisible,
                         0, 0, 10, 10,
                         IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);

@@ -8,30 +8,21 @@ namespace freesnip.tests
 {
     /// <summary>
     /// These lists feed an elevated recursive deleter (DeploymentLifecycle.PurgeDirectoryRecursiveAsync).
-    /// Every assertion here is a guardrail against deleting anything SnapVox does not own.
+    /// Every assertion here is a guardrail against deleting anything FreeSnip does not own.
     /// </summary>
     public class DeploymentFootprintTests
     {
         private static string Normalize(string p) => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         [Fact]
-        public void DirectoryPurgeTargets_AllLiveInsideSnapvoxOwnedRoots()
+        public void DirectoryPurgeTargets_AllLiveInsideFreeSnipOwnedRoots()
         {
-            string tempRoot = Normalize(Path.GetTempPath());
             string programData = Normalize(DeploymentFootprint.ProgramDataFolder);
             string roaming = Normalize(DeploymentFootprint.RoamingAppDataFolder);
             string local = Normalize(DeploymentFootprint.LocalAppDataFolder);
             string install = Normalize(DeploymentFootprint.InstallFolder);
-            string legacyInstall = Normalize(DeploymentFootprint.LegacyInstallFolder);
-            string legacyRoaming = Normalize(DeploymentFootprint.LegacyRoamingAppDataFolder);
-            string legacyLocal = Normalize(DeploymentFootprint.LegacyLocalAppDataFolder);
-            string legacyProgramData = Normalize(DeploymentFootprint.LegacyProgramDataFolder);
-            string legacyProgramDataAlt = Normalize(DeploymentFootprint.LegacyProgramDataFolderAlt);
-            string legacyRoamingAlt = Normalize(DeploymentFootprint.LegacyRoamingAppDataFolderAlt);
-            string legacyLocalAlt = Normalize(DeploymentFootprint.LegacyLocalAppDataFolderAlt);
-            string legacyTempAlt = Normalize(DeploymentFootprint.LegacyTempAppFolderAlt);
-            string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            string legacyX86 = string.IsNullOrEmpty(programFilesX86) ? string.Empty : Normalize(Path.Combine(programFilesX86, DeploymentFootprint.LegacyDisplayName));
+            string tempApp = Normalize(DeploymentFootprint.TempAppFolder);
+            string deploymentTemp = Normalize(DeploymentFootprint.DeploymentTempRoot);
 
             foreach (string target in DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: true))
             {
@@ -41,17 +32,8 @@ namespace freesnip.tests
                     t.StartsWith(programData, StringComparison.OrdinalIgnoreCase) ||
                     t.StartsWith(roaming, StringComparison.OrdinalIgnoreCase) ||
                     t.StartsWith(local, StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(legacyInstall, StringComparison.OrdinalIgnoreCase) ||
-                    (!string.IsNullOrEmpty(legacyX86) && t.StartsWith(legacyX86, StringComparison.OrdinalIgnoreCase)) ||
-                    t.StartsWith(legacyRoaming, StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(legacyRoamingAlt, StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(legacyLocal, StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(legacyLocalAlt, StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(legacyProgramData, StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(legacyProgramDataAlt, StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(Normalize(DeploymentFootprint.TempAppFolder), StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(Normalize(DeploymentFootprint.LegacyTempAppFolder), StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(legacyTempAlt, StringComparison.OrdinalIgnoreCase),
+                    t.StartsWith(tempApp, StringComparison.OrdinalIgnoreCase) ||
+                    t.StartsWith(deploymentTemp, StringComparison.OrdinalIgnoreCase),
                     $"Purge target escapes owned roots: {target}");
             }
         }
@@ -87,37 +69,35 @@ namespace freesnip.tests
             Assert.Empty(DeploymentFootprint.GetUserArtifactPatterns());
             string downloads = Normalize(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"));
             string recovery = Normalize(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FreeSnipUpgradeBackups"));
-            string legacyRecovery = Normalize(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SnapVoxUpgradeBackups"));
             foreach (string target in DeploymentFootprint.GetDirectoryPurgeTargets(true))
             {
                 string root = Normalize(target) + Path.DirectorySeparatorChar;
                 Assert.False(downloads.StartsWith(root, StringComparison.OrdinalIgnoreCase));
                 Assert.False(recovery.StartsWith(root, StringComparison.OrdinalIgnoreCase));
-                Assert.False(legacyRecovery.StartsWith(root, StringComparison.OrdinalIgnoreCase));
             }
         }
 
         [Fact]
-        public void UninstallRegistryPurgeTargets_OnlyContainSnapVoxOrFreeSnipKeys()
+        public void UninstallRegistryPurgeTargets_OnlyContainFreeSnipKeys()
         {
             foreach (var target in DeploymentFootprint.GetUninstallRegistryPurgeTargets())
             {
                 Assert.True(
                     target.SubKeyPath.Contains("FreeSnip", StringComparison.OrdinalIgnoreCase) ||
-                    target.SubKeyPath.Contains("snapvox", StringComparison.OrdinalIgnoreCase),
+                    target.SubKeyPath.Contains("freesnip", StringComparison.OrdinalIgnoreCase),
                     $"Unexpected uninstall target: {target.SubKeyPath}");
                 Assert.Contains("Uninstall", target.SubKeyPath, StringComparison.OrdinalIgnoreCase);
             }
         }
 
         [Fact]
-        public void AppRegistryPurgeTargets_OnlyContainSnapVoxOrFreeSnipKeys()
+        public void AppRegistryPurgeTargets_OnlyContainFreeSnipKeys()
         {
             foreach (var target in DeploymentFootprint.GetAppRegistryPurgeTargets())
             {
                 Assert.True(
                     target.Path.Contains("FreeSnip", StringComparison.OrdinalIgnoreCase) ||
-                    target.Path.Contains("snapvox", StringComparison.OrdinalIgnoreCase),
+                    target.Path.Contains("freesnip", StringComparison.OrdinalIgnoreCase),
                     $"Unexpected app registry target: {target.Path}");
             }
         }
@@ -141,4 +121,3 @@ namespace freesnip.tests
         }
     }
 }
-

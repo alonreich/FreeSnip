@@ -55,7 +55,7 @@ namespace freesnip.editor.forms
 
         /// <summary>
         /// Picks the screen to show an overlay on. Falls back to the screen under the mouse when
-        /// SnapVox has no window open - which is exactly the case after a painter-mode OCR, where
+        /// FreeSnip has no window open - which is exactly the case after a painter-mode OCR, where
         /// the old code silently dropped the confirmation instead of showing it.
         /// </summary>
         private static Screen ResolveTargetScreen(Window contextWindow, out bool anchored)
@@ -139,6 +139,7 @@ namespace freesnip.editor.forms
                     if (icon != null) icon.Foreground = colors[0];
                     if (chrome != null) chrome.BorderBrush = colors[0];
 
+                    window.ShowActivated = false;
                     window.Show();
                     window.UpdateLayout();
 
@@ -211,8 +212,8 @@ namespace freesnip.editor.forms
                     var viewbox = window.FindControl<Viewbox>("NotificationViewbox");
                     if (viewbox != null) viewbox.Stretch = Avalonia.Media.Stretch.None;
                     
-                    Application.Current.TryFindResource("SnapVoxPanelDarkBrush", out var bgResource);
-                    Application.Current.TryFindResource("SnapVoxAccentBrush", out var fgResource);
+                    Application.Current.TryFindResource("FreeSnipPanelDarkBrush", out var bgResource);
+                    Application.Current.TryFindResource("FreeSnipAccentBrush", out var fgResource);
                     var bgBrush = (bgResource as IBrush) ?? new SolidColorBrush(Color.FromArgb(204, 45, 45, 48));
                     var fgBrush = (fgResource as IBrush) ?? Brushes.Gold;
 
@@ -236,6 +237,7 @@ namespace freesnip.editor.forms
                     }
 
                     window.Opacity = 0;
+                    window.ShowActivated = false;
                     window.Show();
                     window.UpdateLayout();
 

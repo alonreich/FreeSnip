@@ -15,7 +15,7 @@ namespace freesnip.helpers
         private const string RunKey6432 = @"Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run";
         private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string ApplicationName = "FreeSnip";
-        private static readonly string[] LegacyNames = { "FreeSnip", "freesnip", "SnapVox", "snapvox" };
+        private static readonly string[] LegacyNames = { "FreeSnip", "freesnip" };
 
         private static string GetExecutablePath(string arguments = null, string executablePath = null)
         {

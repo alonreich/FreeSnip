@@ -205,9 +205,10 @@ namespace freesnip.helpers
     {
         private static readonly ILog Log = LogHelper.GetLogger(typeof(ScrollFrameStitcher));
         private const int MinMovementPixels = 2;
-        private const double MaxAverageDiff = 32.0;
-        private const double MaxRefinedDiff = 32.0;
-        private const int BandHeightPixels = 257;
+        private const double MaxTileSad = 18.0;
+        private const double StationarySadThreshold = 4.0;
+        private const double BlankVarianceThreshold = 6.0;
+
         public const long DefaultMaxCompositePixels = 180L * 1024L * 1024L;
         public const int DefaultMaxSegments = int.MaxValue;
 
@@ -218,23 +219,28 @@ namespace freesnip.helpers
         public int MaxSegmentsLimit { get; set; } = DefaultMaxSegments;
 
         private readonly List<ScrollSegment> _segments = new List<ScrollSegment>();
-        private SampleFrame _previousSample;
-        private byte[] _previousBand;
-        private int _bandWidth;
-        private int _bandHeight;
-        private int _offsetX;
-        private int _offsetY;
-        private int _frameWidth;
-        private int _frameHeight;
-        private bool _disposed;
+        private readonly List<(Image<Bgra32> Frame, FrameLuma Luma, int OffsetX, int OffsetY)> _recentFrames = new();
+        private const int MaxRecentFrames = 3;
 
+        private FrameLuma _previousLuma;
+        private Image<Bgra32> _previousFrame;
         private Image<Bgra32> _firstFrame;
         private Image<Bgra32> _lastFrame;
+
+        private int _frameWidth;
+        private int _frameHeight;
+        private int _offsetX;
+        private int _offsetY;
         private bool _viewportDetected;
         private Rectangle _viewport;
+        private bool _isTrackingLost;
+        private bool _scrollAxisLocked;
+        private bool _isVerticalScroll = true;
+        private bool _disposed;
 
         public int AcceptedFrames { get; private set; }
         public int SegmentCount => _segments.Count;
+        public bool IsTrackingLost => _isTrackingLost;
         public long CurrentCompositePixels
         {
             get
@@ -257,6 +263,8 @@ namespace freesnip.helpers
             }
         }
         internal IReadOnlyList<ScrollSegment> Segments => _segments;
+        public Rectangle Viewport => _viewport;
+        public bool ViewportDetected => _viewportDetected;
 
         public ScrollFrameStitcher(int maxSegments = DefaultMaxSegments, long maxCompositePixels = DefaultMaxCompositePixels)
         {
@@ -277,11 +285,13 @@ namespace freesnip.helpers
         public ScrollFrameStatus AddFrame(Image<Bgra32> frame)
         {
             if (frame == null) return ScrollFrameStatus.Rejected;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
 
             try
             {
                 if (IsSegmentCeilingReached)
                 {
+                    Log.Info("[STEP:WARN] ScrollFrameStitcher.AddFrame - Segment or memory ceiling reached.");
                     return ScrollFrameStatus.Rejected;
                 }
 
@@ -291,71 +301,149 @@ namespace freesnip.helpers
                     _frameHeight = frame.Height;
                     _firstFrame = frame.Clone(x => { });
                     _lastFrame = frame.Clone(x => { });
-                    Rectangle initialArea = GetCentralContentArea(frame.Width, frame.Height);
-                    _previousSample = SampleFrame.Create(frame, initialArea);
-                    _previousBand = BuildBand(frame, initialArea);
+                    _previousFrame = frame.Clone(x => { });
+                    _previousLuma = new FrameLuma(frame);
+                    _recentFrames.Add((frame.Clone(x => { }), new FrameLuma(frame), 0, 0));
+
                     AcceptedFrames = 1;
+                    Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Accepted initial anchor frame ({_frameWidth}x{_frameHeight}).");
                     return ScrollFrameStatus.Accepted;
                 }
 
-                if (frame.Width != _frameWidth || frame.Height != _frameHeight) return ScrollFrameStatus.Rejected;
-
-                Rectangle safeSearchArea = _viewportDetected ? _viewport : GetCentralContentArea(_frameWidth, _frameHeight);
-                SampleFrame currentSample = SampleFrame.Create(frame, safeSearchArea);
-                MovementEstimate estimate = EstimateMovement(_previousSample, currentSample);
-
-                if (!estimate.IsReliable)
+                if (frame.Width != _frameWidth || frame.Height != _frameHeight)
                 {
-                    currentSample.Dispose();
+                    Log.Warn($"[STEP:FAIL] ScrollFrameStitcher.AddFrame - Frame dimension mismatch: expected {_frameWidth}x{_frameHeight}, got {frame.Width}x{frame.Height}.");
                     return ScrollFrameStatus.Rejected;
                 }
 
-                byte[] currentBand = BuildBand(frame, safeSearchArea);
-                estimate = RefineMovement(_previousBand, currentBand, estimate);
-                
-                if (!estimate.IsReliable)
-                {
-                    currentSample.Dispose();
-                    return ScrollFrameStatus.Rejected;
-                }
-
-                if (Math.Abs(estimate.DeltaX) < MinMovementPixels && Math.Abs(estimate.DeltaY) < MinMovementPixels)
-                {
-                    currentSample.Dispose();
-                    return ScrollFrameStatus.Duplicate;
-                }
+                var currentLuma = new FrameLuma(frame);
 
                 if (!_viewportDetected)
                 {
-                    _viewport = DetectViewport(_firstFrame, frame);
+                    var motion = EstimateGlobalMotion(_previousLuma, currentLuma);
+                    if (!motion.IsReliable)
+                    {
+                        currentLuma.Dispose();
+                        Log.Info($"[STEP:WARN] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Initial motion estimation unreliable.");
+                        return ScrollFrameStatus.Rejected;
+                    }
+
+                    if (Math.Abs(motion.DeltaX) < MinMovementPixels && Math.Abs(motion.DeltaY) < MinMovementPixels)
+                    {
+                        currentLuma.Dispose();
+                        return ScrollFrameStatus.Duplicate;
+                    }
+
+                    if (!_scrollAxisLocked)
+                    {
+                        _isVerticalScroll = Math.Abs(motion.DeltaY) >= Math.Abs(motion.DeltaX);
+                        _scrollAxisLocked = true;
+                    }
+
+                    int effDx = _isVerticalScroll ? 0 : motion.DeltaX;
+                    int effDy = _isVerticalScroll ? motion.DeltaY : 0;
+
+                    _viewport = DetectScrollingViewport(_previousLuma, currentLuma, effDx, effDy);
                     _viewportDetected = true;
+                    Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame - Viewport detected: [{_viewport.X}, {_viewport.Y}, {_viewport.Width}x{_viewport.Height}] (Motion: dx={effDx}, dy={effDy}).");
+
                     _segments.Clear();
                     _segments.Add(new ScrollSegment(_firstFrame.Clone(ctx => ctx.Crop(_viewport)), 0, 0));
-                    
-                    currentSample.Dispose();
-                    currentSample = SampleFrame.Create(frame, _viewport);
-                    currentBand = BuildBand(frame, _viewport);
-                    
-                    _previousSample.Dispose();
-                    _previousSample = SampleFrame.Create(_firstFrame, _viewport);
-                    _previousBand = BuildBand(_firstFrame, _viewport);
-                    estimate = EstimateMovement(_previousSample, currentSample);
-                    estimate = RefineMovement(_previousBand, currentBand, estimate);
+
+                    _offsetX += effDx;
+                    _offsetY += effDy;
+                    AddVisibleStrips(frame, _offsetX, _offsetY, effDx, effDy);
+
+                    UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
+                    AcceptedFrames++;
+                    _isTrackingLost = false;
+                    return ScrollFrameStatus.Accepted;
                 }
 
-                _offsetX += estimate.DeltaX;
-                _offsetY += estimate.DeltaY;
-                AddVisibleStrips(frame, _offsetX, _offsetY, estimate.DeltaX, estimate.DeltaY);
+                bool? lockAxis = _scrollAxisLocked ? _isVerticalScroll : null;
+                var vpMotion = EstimateViewportMotion(_previousLuma, currentLuma, _viewport, lockAxis);
+                if (vpMotion.IsReliable)
+                {
+                    int effDx = _scrollAxisLocked && _isVerticalScroll ? 0 : vpMotion.DeltaX;
+                    int effDy = _scrollAxisLocked && !_isVerticalScroll ? 0 : vpMotion.DeltaY;
 
-                _previousSample.Dispose();
-                _previousSample = currentSample;
-                _previousBand = currentBand;
+                    if (Math.Abs(effDx) < MinMovementPixels && Math.Abs(effDy) < MinMovementPixels)
+                    {
+                        currentLuma.Dispose();
+                        return ScrollFrameStatus.Duplicate;
+                    }
 
-                _lastFrame?.Dispose();
-                _lastFrame = frame.Clone(x => { });
+                    _offsetX += effDx;
+                    _offsetY += effDy;
+                    AddVisibleStrips(frame, _offsetX, _offsetY, effDx, effDy);
 
-                AcceptedFrames++;
-                return ScrollFrameStatus.Accepted;
+                    UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
+                    AcceptedFrames++;
+                    _isTrackingLost = false;
+                    return ScrollFrameStatus.Accepted;
+                }
+
+                // Fallback to Global Motion if Viewport Motion failed against previous frame
+                var fallbackGlobal = EstimateGlobalMotion(_previousLuma, currentLuma, lockAxis);
+                if (fallbackGlobal.IsReliable)
+                {
+                    int effDx = _scrollAxisLocked && _isVerticalScroll ? 0 : fallbackGlobal.DeltaX;
+                    int effDy = _scrollAxisLocked && !_isVerticalScroll ? 0 : fallbackGlobal.DeltaY;
+
+                    if (Math.Abs(effDx) < MinMovementPixels && Math.Abs(effDy) < MinMovementPixels)
+                    {
+                        currentLuma.Dispose();
+                        return ScrollFrameStatus.Duplicate;
+                    }
+
+                    _offsetX += effDx;
+                    _offsetY += effDy;
+                    AddVisibleStrips(frame, _offsetX, _offsetY, effDx, effDy);
+
+                    UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
+                    AcceptedFrames++;
+                    _isTrackingLost = false;
+                    Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Global motion fallback accepted (dx={effDx}, dy={effDy}).");
+                    return ScrollFrameStatus.Accepted;
+                }
+
+                // Re-acquisition against recent accepted frames
+                Log.Info($"[STEP:WARN] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Viewport tracking lost against previous frame. Attempting re-acquisition against {_recentFrames.Count} recent frames.");
+                for (int i = _recentFrames.Count - 1; i >= 0; i--)
+                {
+                    var recent = _recentFrames[i];
+                    var reacquireMotion = EstimateViewportMotion(recent.Luma, currentLuma, _viewport, lockAxis);
+                    if (!reacquireMotion.IsReliable)
+                    {
+                        reacquireMotion = EstimateGlobalMotion(recent.Luma, currentLuma, lockAxis);
+                    }
+
+                    int effDx = _scrollAxisLocked && _isVerticalScroll ? 0 : reacquireMotion.DeltaX;
+                    int effDy = _scrollAxisLocked && !_isVerticalScroll ? 0 : reacquireMotion.DeltaY;
+
+                    if (reacquireMotion.IsReliable && (Math.Abs(effDx) >= MinMovementPixels || Math.Abs(effDy) >= MinMovementPixels))
+                    {
+                        int newOffsetX = recent.OffsetX + effDx;
+                        int newOffsetY = recent.OffsetY + effDy;
+                        int stepDx = newOffsetX - _offsetX;
+                        int stepDy = newOffsetY - _offsetY;
+
+                        _offsetX = newOffsetX;
+                        _offsetY = newOffsetY;
+                        AddVisibleStrips(frame, _offsetX, _offsetY, stepDx, stepDy);
+
+                        UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
+                        AcceptedFrames++;
+                        _isTrackingLost = false;
+                        Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Re-acquired tracking against recent frame {i} (New offset: {_offsetX}, {_offsetY}).");
+                        return ScrollFrameStatus.Accepted;
+                    }
+                }
+
+                _isTrackingLost = true;
+                currentLuma.Dispose();
+                Log.Warn($"[STEP:FAIL] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Re-acquisition failed. Rejecting frame to prevent corruption.");
+                return ScrollFrameStatus.Rejected;
             }
             finally
             {
@@ -363,204 +451,520 @@ namespace freesnip.helpers
             }
         }
 
-        private Rectangle DetectViewport(Image<Bgra32> a, Image<Bgra32> b)
+        private static MovementEstimate EstimateGlobalMotion(FrameLuma prev, FrameLuma curr, bool? lockVertical = null)
         {
-            int width = a.Width;
-            int height = a.Height;
+            int w = prev.Width;
+            int h = prev.Height;
+            int blockSize = Math.Clamp(Math.Min(w, h) / 20, 16, 32);
+            int cols = w / blockSize;
+            int rows = h / blockSize;
 
-            bool RowMatches(int y)
+            var candidateBlocks = new List<(int X0, int Y0, int X1, int Y1)>();
+            for (int r = 0; r < rows; r++)
             {
-                long diff = 0;
-                int step = Math.Max(1, width / 120);
-                int sampled = 0;
-                a.ProcessPixelRows(b, (aa, bb) =>
+                int y0 = r * blockSize;
+                int y1 = Math.Min(h, (r + 1) * blockSize);
+                for (int c = 0; c < cols; c++)
                 {
-                    var spanA = aa.GetRowSpan(y);
-                    var spanB = bb.GetRowSpan(y);
-                    for (int x = 0; x < width; x += step)
+                    int x0 = c * blockSize;
+                    int x1 = Math.Min(w, (c + 1) * blockSize);
+
+                    double variance = ComputeVariance(prev, x0, y0, x1, y1);
+                    if (variance < BlankVarianceThreshold) continue;
+
+                    double sad0 = ComputeBlockSad(prev, curr, x0, y0, x1, y1, 0, 0);
+                    if (sad0 > StationarySadThreshold)
                     {
-                        int r = Math.Abs(spanA[x].R - spanB[x].R);
-                        int g = Math.Abs(spanA[x].G - spanB[x].G);
-                        int bl = Math.Abs(spanA[x].B - spanB[x].B);
-                        diff += (r + g + bl) / 3;
-                        sampled++;
+                        candidateBlocks.Add((x0, y0, x1, y1));
                     }
-                });
-                return sampled == 0 || diff < sampled * 3;
-            }
-
-            int top = 0;
-            for (int y = 0; y < height - 4; y++)
-            {
-                if (!RowMatches(y) && !RowMatches(y + 1) && !RowMatches(y + 2))
-                {
-                    top = y;
-                    break;
                 }
             }
 
-            int bottom = height - 1;
-            for (int y = height - 1; y > top + 4; y--)
+            if (candidateBlocks.Count == 0)
             {
-                if (!RowMatches(y) && !RowMatches(y - 1) && !RowMatches(y - 2))
+                return new MovementEstimate(0, 0, true);
+            }
+
+            int sampleCount = Math.Min(candidateBlocks.Count, 32);
+            var sampledBlocks = new List<(int X0, int Y0, int X1, int Y1)>(sampleCount);
+            int step = Math.Max(1, candidateBlocks.Count / sampleCount);
+            for (int i = 0; i < candidateBlocks.Count && sampledBlocks.Count < sampleCount; i += step)
+            {
+                sampledBlocks.Add(candidateBlocks[i]);
+            }
+
+            int maxDy = Math.Max(2, (int)(h * 0.85));
+            int maxDx = Math.Max(2, (int)(w * 0.85));
+
+            int bestDx = 0, bestDy = 0;
+            int bestAgreement = 0;
+            double bestAvgSad = double.MaxValue;
+            double bestScore = double.MaxValue;
+
+            void EvaluateCandidate(int dx, int dy)
+            {
+                int agreeing = 0;
+                double totalSad = 0;
+                foreach (var b in sampledBlocks)
                 {
-                    bottom = y;
-                    break;
+                    int bx0 = b.X0 + dx;
+                    int by0 = b.Y0 + dy;
+                    int bx1 = b.X1 + dx;
+                    int by1 = b.Y1 + dy;
+                    if (bx0 < 0 || by0 < 0 || bx1 > w || by1 > h) continue;
+
+                    double sad = ComputeBlockSad(prev, curr, b.X0, b.Y0, b.X1, b.Y1, dx, dy);
+                    if (sad <= MaxTileSad)
+                    {
+                        agreeing++;
+                        totalSad += sad;
+                    }
+                }
+
+                if (agreeing == 0) return;
+                double avgSad = totalSad / agreeing;
+                double ratio = (double)agreeing / sampledBlocks.Count;
+                if (ratio < 0.20 && agreeing < 2) return;
+
+                double score = (1.0 - ratio) * 100.0 + avgSad + (Math.Abs(dx) + Math.Abs(dy)) * 0.01;
+                if (score < bestScore - 1e-4)
+                {
+                    bestScore = score;
+                    bestAgreement = agreeing;
+                    bestAvgSad = avgSad;
+                    bestDx = dx;
+                    bestDy = dy;
                 }
             }
 
-            if (bottom <= top + 32)
+            int coarseStepY = h > 400 ? 2 : 1;
+            if (lockVertical != false)
             {
-                top = 0;
-                bottom = height - 1;
+                for (int dyMag = 2; dyMag <= maxDy; dyMag += coarseStepY)
+                {
+                    EvaluateCandidate(0, dyMag);
+                    EvaluateCandidate(0, -dyMag);
+                }
+            }
+
+            int coarseStepX = w > 400 ? 2 : 1;
+            if (lockVertical != true)
+            {
+                for (int dxMag = 2; dxMag <= maxDx; dxMag += coarseStepX)
+                {
+                    EvaluateCandidate(dxMag, 0);
+                    EvaluateCandidate(-dxMag, 0);
+                }
+            }
+
+            if (bestAgreement > 0)
+            {
+                int cDx = bestDx;
+                int cDy = bestDy;
+                int dyStart = lockVertical == false ? 0 : cDy - coarseStepY;
+                int dyEnd = lockVertical == false ? 0 : cDy + coarseStepY;
+                int dxStart = lockVertical == true ? 0 : cDx - 2;
+                int dxEnd = lockVertical == true ? 0 : cDx + 2;
+
+                for (int dy = dyStart; dy <= dyEnd; dy++)
+                {
+                    for (int dx = dxStart; dx <= dxEnd; dx++)
+                    {
+                        if (dx == 0 && dy == 0) continue;
+                        EvaluateCandidate(dx, dy);
+                    }
+                }
+            }
+
+            bool reliable = bestAgreement >= 2 && bestAvgSad <= MaxTileSad;
+            return new MovementEstimate(bestDx, bestDy, reliable);
+        }
+
+        private static Rectangle DetectScrollingViewport(FrameLuma prev, FrameLuma curr, int dx, int dy)
+        {
+            int w = prev.Width;
+            int h = prev.Height;
+
+            int xInteriorStart = (int)(w * 0.15);
+            int xInteriorEnd = (int)(w * 0.85);
+            int yInteriorStart = (int)(h * 0.15);
+            int yInteriorEnd = (int)(h * 0.85);
+
+            // 1. Detect Top Header (Outside-in from y = 0 downward)
+            int maxHeaderH = Math.Min(220, (int)(h * 0.30));
+            int exactTop = 0;
+            int firstMovingY = -1;
+            int lastStationaryFeatureY = -1;
+
+            for (int y = 0; y < maxHeaderH; y += 2)
+            {
+                double diff0 = RowAverageDiff(prev, curr, y, xInteriorStart, xInteriorEnd, 0, 0);
+                double diffMotion = RowAverageDiff(prev, curr, y, xInteriorStart, xInteriorEnd, dx, dy);
+
+                bool isRowMoving = diff0 > StationarySadThreshold && diffMotion <= MaxTileSad && diffMotion < diff0 - 1.5;
+                if (isRowMoving && firstMovingY < 0)
+                {
+                    firstMovingY = y;
+                    break;
+                }
+
+                if (diff0 <= StationarySadThreshold)
+                {
+                    lastStationaryFeatureY = y;
+                }
+            }
+
+            if (firstMovingY >= 0)
+            {
+                exactTop = (lastStationaryFeatureY >= 0 && lastStationaryFeatureY <= firstMovingY)
+                    ? Math.Min(firstMovingY, lastStationaryFeatureY + 2)
+                    : firstMovingY;
             }
             else
             {
-                if (top > height * 0.60) top = 0;
-                if (bottom < height * 0.30) bottom = height - 1;
+                exactTop = 0;
             }
 
-            int left = 0;
-            int right = width - 1;
+            // 2. Detect Bottom Footer (Outside-in from y = h - 1 upward)
+            int maxFooterH = Math.Min(120, (int)(h * 0.20));
+            int exactBottom = h;
+            int lastMovingY = -1;
+            int firstStationaryFooterY = -1;
 
-            return new Rectangle(left, top, right - left + 1, bottom - top + 1);
+            for (int y = h - 1; y >= h - maxFooterH; y -= 2)
+            {
+                double diff0 = RowAverageDiff(prev, curr, y, xInteriorStart, xInteriorEnd, 0, 0);
+                double diffMotion = RowAverageDiff(prev, curr, y, xInteriorStart, xInteriorEnd, dx, dy);
+
+                bool isRowMoving = diff0 > StationarySadThreshold && diffMotion <= MaxTileSad && diffMotion < diff0 - 1.5;
+                if (isRowMoving && lastMovingY < 0)
+                {
+                    lastMovingY = y;
+                    break;
+                }
+
+                if (diff0 <= StationarySadThreshold)
+                {
+                    firstStationaryFooterY = y;
+                }
+            }
+
+            if (lastMovingY >= 0)
+            {
+                exactBottom = (firstStationaryFooterY >= 0 && firstStationaryFooterY >= lastMovingY)
+                    ? Math.Max(lastMovingY + 1, firstStationaryFooterY)
+                    : lastMovingY + 1;
+            }
+            else
+            {
+                exactBottom = h;
+            }
+
+            // 3. Detect Left Sidebar (Outside-in from x = 0 rightward)
+            int maxLeftW = Math.Min(500, (int)(w * 0.45));
+            int exactLeft = 0;
+            int firstMovingX = -1;
+            int lastStationaryFeatureX = -1;
+
+            for (int x = 0; x < maxLeftW; x += 2)
+            {
+                double diff0 = ColAverageDiff(prev, curr, x, yInteriorStart, yInteriorEnd, 0, 0);
+                double diffMotion = ColAverageDiff(prev, curr, x, yInteriorStart, yInteriorEnd, dx, dy);
+
+                bool isColMoving = diff0 > StationarySadThreshold && diffMotion <= MaxTileSad && diffMotion < diff0 - 1.5;
+                if (isColMoving && firstMovingX < 0)
+                {
+                    firstMovingX = x;
+                    break;
+                }
+
+                if (diff0 <= StationarySadThreshold)
+                {
+                    lastStationaryFeatureX = x;
+                }
+            }
+
+            if (firstMovingX >= 0)
+            {
+                exactLeft = (lastStationaryFeatureX >= 0 && lastStationaryFeatureX <= firstMovingX)
+                    ? Math.Min(firstMovingX, lastStationaryFeatureX + 2)
+                    : firstMovingX;
+            }
+            else
+            {
+                exactLeft = 0;
+            }
+
+            // 4. Detect Right Scrollbar (Outside-in from x = w - 1 leftward)
+            int maxRightW = Math.Min(120, (int)(w * 0.15));
+            int exactRight = w;
+            int lastMovingX = -1;
+            int firstStationaryScrollbarX = -1;
+
+            for (int x = w - 1; x >= w - maxRightW; x -= 2)
+            {
+                double diff0 = ColAverageDiff(prev, curr, x, yInteriorStart, yInteriorEnd, 0, 0);
+                double diffMotion = ColAverageDiff(prev, curr, x, yInteriorStart, yInteriorEnd, dx, dy);
+
+                bool isColMoving = diff0 > StationarySadThreshold && diffMotion <= MaxTileSad && diffMotion < diff0 - 1.5;
+                if (isColMoving && lastMovingX < 0)
+                {
+                    lastMovingX = x;
+                    break;
+                }
+
+                if (diff0 <= StationarySadThreshold)
+                {
+                    firstStationaryScrollbarX = x;
+                }
+            }
+
+            if (lastMovingX >= 0)
+            {
+                exactRight = (firstStationaryScrollbarX >= 0 && firstStationaryScrollbarX >= lastMovingX)
+                    ? Math.Max(lastMovingX + 1, firstStationaryScrollbarX)
+                    : lastMovingX + 1;
+            }
+            else
+            {
+                exactRight = w;
+            }
+
+            int vpWidth = exactRight - exactLeft;
+            int vpHeight = exactBottom - exactTop;
+
+            // Invariant: Viewport must cover at least 30% of width and 30% of height
+            if (vpWidth < (int)(w * 0.30))
+            {
+                exactLeft = 0;
+                exactRight = w;
+                vpWidth = w;
+            }
+
+            if (vpHeight < (int)(h * 0.30))
+            {
+                exactTop = 0;
+                exactBottom = h;
+                vpHeight = h;
+            }
+
+            return new Rectangle(exactLeft, exactTop, vpWidth, vpHeight);
         }
 
-        private static Rectangle GetCentralContentArea(int width, int height)
+        private static MovementEstimate EstimateViewportMotion(FrameLuma prev, FrameLuma curr, Rectangle vp, bool? lockVertical = null)
         {
-            int topMargin = Math.Max(0, (int)(height * 0.15));
-            int bottomMargin = Math.Max(0, (int)(height * 0.08));
-            int sideMargin = Math.Max(0, (int)(width * 0.08));
-            int contentWidth = Math.Max(16, width - sideMargin * 2);
-            int contentHeight = Math.Max(16, height - topMargin - bottomMargin);
-            return new Rectangle(sideMargin, topMargin, contentWidth, contentHeight);
-        }
+            int vx0 = vp.X;
+            int vy0 = vp.Y;
+            int vx1 = vp.Right;
+            int vy1 = vp.Bottom;
+            int vw = vp.Width;
+            int vh = vp.Height;
 
-        public Image<Bgra32> BuildImage(IProgress<double> progress = null)
-        {
-            if (AcceptedFrames < 1 || _firstFrame == null) return null;
-            if (_segments.Count == 0 || !_viewportDetected)
+            int blockSize = Math.Clamp(Math.Min(vw, vh) / 20, 16, 32);
+            int cols = vw / blockSize;
+            int rows = vh / blockSize;
+
+            var candidateBlocks = new List<(int X0, int Y0, int X1, int Y1)>();
+            for (int r = 0; r < rows; r++)
             {
-                return _firstFrame.Clone(x => { });
-            }
-            int minX = int.MaxValue, minY = int.MaxValue;
-            int maxX = int.MinValue, maxY = int.MinValue;
-            foreach (var segment in _segments)
-            {
-                minX = Math.Min(minX, segment.X);
-                minY = Math.Min(minY, segment.Y);
-                maxX = Math.Max(maxX, segment.X + segment.Image.Width);
-                maxY = Math.Max(maxY, segment.Y + segment.Image.Height);
-            }
-
-            int vpW = maxX - minX;
-            int vpH = maxY - minY;
-            int width = _frameWidth;
-            int height = vpH + _viewport.Top + (_frameHeight - _viewport.Bottom);
-
-            if (width <= 0 || height <= 0) return null;
-
-            long totalPixels = (long)width * height;
-            long pixelCeiling = MaxCompositePixelsLimit;
-            if (totalPixels > pixelCeiling)
-            {
-                int clampedHeight = (int)(pixelCeiling / width);
-                if (clampedHeight < _frameHeight) clampedHeight = _frameHeight;
-                Log.Warn($"Scroll capture composite dimension ({width}x{height}, {totalPixels} pixels) exceeds MaxCompositePixels ({pixelCeiling}). Clamping composite height to {clampedHeight} pixels.");
-                height = clampedHeight;
-            }
-
-            var result = new Image<Bgra32>(width, height);
-            Image<Bgra32> header = null;
-            Image<Bgra32> footer = null;
-            Image<Bgra32> leftBar = null;
-            Image<Bgra32> rightBar = null;
-
-            try
-            {
-                if (_viewport.Top > 0 && _frameWidth > 0 && height > 0)
+                int y0 = vy0 + r * blockSize;
+                int y1 = Math.Min(vy1, vy0 + (r + 1) * blockSize);
+                for (int c = 0; c < cols; c++)
                 {
-                    int headerH = Math.Min(_viewport.Top, height);
-                    header = _firstFrame.Clone(c => c.Crop(new Rectangle(0, 0, _frameWidth, headerH)));
-                    result.Mutate(ctx => ctx.DrawImage(header, new Point(0, 0), 1f));
-                }
+                    int x0 = vx0 + c * blockSize;
+                    int x1 = Math.Min(vx1, vx0 + (c + 1) * blockSize);
 
-                int footerHeight = _frameHeight - _viewport.Bottom;
-                if (footerHeight > 0 && _frameWidth > 0 && height >= footerHeight)
-                {
-                    footer = _lastFrame.Clone(c => c.Crop(new Rectangle(0, _viewport.Bottom, _frameWidth, footerHeight)));
-                }
+                    double variance = ComputeVariance(prev, x0, y0, x1, y1);
+                    if (variance < BlankVarianceThreshold) continue;
 
-                if (_viewport.Left > 0 && _viewport.Height > 0)
-                {
-                    leftBar = _firstFrame.Clone(c => c.Crop(new Rectangle(0, _viewport.Top, _viewport.Left, _viewport.Height)));
-                }
-
-                int rightBarWidth = _frameWidth - _viewport.Right;
-                if (rightBarWidth > 0 && _viewport.Height > 0)
-                {
-                    rightBar = _firstFrame.Clone(c => c.Crop(new Rectangle(_viewport.Right, _viewport.Top, rightBarWidth, _viewport.Height)));
-                }
-
-                int currentY = Math.Max(0, _viewport.Top);
-                int bottomLimit = footer != null ? Math.Max(0, height - footer.Height) : height;
-                int stepY = Math.Max(1, _viewport.Height);
-
-                while (currentY < bottomLimit)
-                {
-                    if (leftBar != null)
+                    double sad0 = ComputeBlockSad(prev, curr, x0, y0, x1, y1, 0, 0);
+                    if (sad0 > StationarySadThreshold)
                     {
-                        result.Mutate(ctx => ctx.DrawImage(leftBar, new Point(0, currentY), 1f));
+                        candidateBlocks.Add((x0, y0, x1, y1));
                     }
-                    if (rightBar != null)
-                    {
-                        result.Mutate(ctx => ctx.DrawImage(rightBar, new Point(_viewport.Right, currentY), 1f));
-                    }
-                    currentY += stepY;
                 }
-
-                int count = 0;
-                foreach (var segment in _segments)
-                {
-                    int targetX = segment.X - minX + _viewport.Left;
-                    int targetY = segment.Y - minY + _viewport.Top;
-                    if (targetY < height && targetX < width && targetY + segment.Image.Height > 0 && targetX + segment.Image.Width > 0)
-                    {
-                        result.Mutate(ctx => ctx.DrawImage(segment.Image, new Point(targetX, targetY), 1f));
-                    }
-                    count++;
-                    progress?.Report((double)count / _segments.Count);
-                }
-
-                if (footer != null)
-                {
-                    result.Mutate(ctx => ctx.DrawImage(footer, new Point(0, height - footer.Height), 1f));
-                }
-
-                return result;
             }
-            finally
+
+            // If we have candidate feature blocks inside the viewport, use consensus motion
+            if (candidateBlocks.Count >= 2)
             {
-                header?.Dispose();
-                footer?.Dispose();
-                leftBar?.Dispose();
-                rightBar?.Dispose();
-            }
-        }
+                int sampleCount = Math.Min(candidateBlocks.Count, 32);
+                var sampledBlocks = new List<(int X0, int Y0, int X1, int Y1)>(sampleCount);
+                int step = Math.Max(1, candidateBlocks.Count / sampleCount);
+                for (int i = 0; i < candidateBlocks.Count && sampledBlocks.Count < sampleCount; i += step)
+                {
+                    sampledBlocks.Add(candidateBlocks[i]);
+                }
 
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-            _previousSample?.Dispose();
-            _firstFrame?.Dispose();
-            _lastFrame?.Dispose();
-            foreach (var segment in _segments) segment.Image.Dispose();
-            _segments.Clear();
+                int maxDy = Math.Max(2, (int)(vh * 0.85));
+                int maxDx = Math.Max(2, (int)(vw * 0.85));
+
+                int bestDx = 0, bestDy = 0;
+                int bestAgreement = 0;
+                double bestAvgSad = double.MaxValue;
+                double bestScore = double.MaxValue;
+
+                void EvaluateCandidate(int dx, int dy)
+                {
+                    int agreeing = 0;
+                    double totalSad = 0;
+                    foreach (var b in sampledBlocks)
+                    {
+                        int bx0 = b.X0 + dx;
+                        int by0 = b.Y0 + dy;
+                        int bx1 = b.X1 + dx;
+                        int by1 = b.Y1 + dy;
+                        if (bx0 < 0 || by0 < 0 || bx1 > prev.Width || by1 > prev.Height) continue;
+
+                        double sad = ComputeBlockSad(prev, curr, b.X0, b.Y0, b.X1, b.Y1, dx, dy);
+                        if (sad <= MaxTileSad)
+                        {
+                            agreeing++;
+                            totalSad += sad;
+                        }
+                    }
+
+                    if (agreeing == 0) return;
+                    double avgSad = totalSad / agreeing;
+                    double ratio = (double)agreeing / sampledBlocks.Count;
+                    if (ratio < 0.20 && agreeing < 2) return;
+
+                    double penalty = (Math.Abs(dx) + Math.Abs(dy)) * 0.0005;
+                    double score = avgSad - (agreeing * 0.5) + penalty;
+                    if (score < bestScore - 1e-4)
+                    {
+                        bestScore = score;
+                        bestAvgSad = avgSad;
+                        bestAgreement = agreeing;
+                        bestDx = dx;
+                        bestDy = dy;
+                    }
+                }
+
+                int coarseStepY = vh > 400 ? 2 : 1;
+                if (lockVertical != false)
+                {
+                    for (int dyMag = 2; dyMag <= maxDy; dyMag += coarseStepY)
+                    {
+                        EvaluateCandidate(0, dyMag);
+                        EvaluateCandidate(0, -dyMag);
+                    }
+                }
+
+                int coarseStepX = vw > 400 ? 2 : 1;
+                if (lockVertical != true)
+                {
+                    for (int dxMag = 2; dxMag <= maxDx; dxMag += coarseStepX)
+                    {
+                        EvaluateCandidate(dxMag, 0);
+                        EvaluateCandidate(-dxMag, 0);
+                    }
+                }
+
+                if (bestAgreement > 0)
+                {
+                    int cDx = bestDx;
+                    int cDy = bestDy;
+                    int dyStart = lockVertical == false ? 0 : cDy - coarseStepY;
+                    int dyEnd = lockVertical == false ? 0 : cDy + coarseStepY;
+                    int dxStart = lockVertical == true ? 0 : cDx - 2;
+                    int dxEnd = lockVertical == true ? 0 : cDx + 2;
+
+                    for (int dy = dyStart; dy <= dyEnd; dy++)
+                    {
+                        for (int dx = dxStart; dx <= dxEnd; dx++)
+                        {
+                            if (dx == 0 && dy == 0) continue;
+                            EvaluateCandidate(dx, dy);
+                        }
+                    }
+                }
+
+                if (bestAgreement >= 2 && bestAvgSad <= MaxTileSad)
+                {
+                    return new MovementEstimate(bestDx, bestDy, true);
+                }
+            }
+
+            // Fallback: area SAD search inside viewport
+            int areaMaxDy = Math.Max(2, (int)(vh * 0.85));
+            int areaMaxDx = Math.Max(2, (int)(vw * 0.85));
+            int areaBestDx = 0, areaBestDy = 0;
+            double areaBestSad = double.MaxValue;
+
+            void CheckShift(int dx, int dy)
+            {
+                int ox0 = Math.Max(vx0, vx0 - dx);
+                int oy0 = Math.Max(vy0, vy0 - dy);
+                int ox1 = Math.Min(vx1, vx1 - dx);
+                int oy1 = Math.Min(vy1, vy1 - dy);
+                int ow = ox1 - ox0;
+                int oh = oy1 - oy0;
+                if (ow < 16 || oh < 16 || (long)ow * oh < ((long)vw * vh) / 10) return;
+
+                double sad = ComputeAreaSad(prev, curr, ox0, oy0, ox1, oy1, dx, dy);
+                double penalty = (Math.Abs(dx) + Math.Abs(dy)) * 0.0005;
+                double cost = sad + penalty;
+                if (cost < areaBestSad - 1e-4)
+                {
+                    areaBestSad = cost;
+                    areaBestDx = dx;
+                    areaBestDy = dy;
+                }
+            }
+
+            int aCoarseY = vh > 400 ? 2 : 1;
+            if (lockVertical != false)
+            {
+                for (int dyMag = 0; dyMag <= areaMaxDy; dyMag += aCoarseY)
+                {
+                    CheckShift(0, dyMag);
+                    if (dyMag > 0) CheckShift(0, -dyMag);
+                }
+            }
+
+            int aCoarseX = vw > 400 ? 2 : 1;
+            if (lockVertical != true)
+            {
+                for (int dxMag = aCoarseX; dxMag <= areaMaxDx; dxMag += aCoarseX)
+                {
+                    CheckShift(dxMag, 0);
+                    CheckShift(-dxMag, 0);
+                }
+            }
+
+            int acDx = areaBestDx;
+            int acDy = areaBestDy;
+            int aDyStart = lockVertical == false ? 0 : acDy - aCoarseY;
+            int aDyEnd = lockVertical == false ? 0 : acDy + aCoarseY;
+            int aDxStart = lockVertical == true ? 0 : acDx - 2;
+            int aDxEnd = lockVertical == true ? 0 : acDx + 2;
+
+            for (int dy = aDyStart; dy <= aDyEnd; dy++)
+            {
+                for (int dx = aDxStart; dx <= aDxEnd; dx++)
+                {
+                    CheckShift(dx, dy);
+                }
+            }
+
+            bool areaReliable = areaBestSad <= MaxTileSad;
+            return new MovementEstimate(areaBestDx, areaBestDy, areaReliable);
         }
 
         private void AddVisibleStrips(Image<Bgra32> frame, int offsetX, int offsetY, int deltaX, int deltaY)
         {
+            if (_scrollAxisLocked && _isVerticalScroll)
+            {
+                deltaX = 0;
+                offsetX = 0;
+            }
+            else if (_scrollAxisLocked && !_isVerticalScroll)
+            {
+                deltaY = 0;
+                offsetY = 0;
+            }
+
             int absY = Math.Abs(deltaY);
             int absX = Math.Abs(deltaX);
 
@@ -568,7 +972,6 @@ namespace freesnip.helpers
             {
                 int h = Math.Min(absY, _viewport.Height);
 
-                // Memory-bounded streaming check: clamp strip height if approaching limit
                 if (_frameWidth > 0 && MaxCompositePixelsLimit > 0)
                 {
                     long maxAllowedHeight = MaxCompositePixelsLimit / _frameWidth;
@@ -590,196 +993,443 @@ namespace freesnip.helpers
                     ? new Rectangle(_viewport.X, _viewport.Bottom - h, _viewport.Width, h)
                     : new Rectangle(_viewport.X, _viewport.Top, _viewport.Width, h);
                 int y = deltaY > 0 ? offsetY + _viewport.Height - h : offsetY;
-                _segments.Add(new ScrollSegment(frame.Clone(ctx => ctx.Crop(crop)), offsetX, y));
+                _segments.Add(new ScrollSegment(frame.Clone(ctx => ctx.Crop(crop)), 0, y));
             }
             else if (absX > absY && absX >= MinMovementPixels)
             {
                 int w = Math.Min(absX, _viewport.Width);
+
+                if (_frameHeight > 0 && MaxCompositePixelsLimit > 0)
+                {
+                    long maxAllowedWidth = MaxCompositePixelsLimit / _frameHeight;
+                    long previousWidth = (long)_frameWidth + Math.Max(Math.Abs(offsetX - deltaX), Math.Abs(offsetY - deltaY));
+                    if (previousWidth >= maxAllowedWidth)
+                    {
+                        return;
+                    }
+                    long remainingWidth = maxAllowedWidth - previousWidth;
+                    if (w > remainingWidth)
+                    {
+                        w = (int)remainingWidth;
+                    }
+                }
+
                 if (w <= 0) return;
 
                 Rectangle crop = deltaX > 0
                     ? new Rectangle(_viewport.Right - w, _viewport.Top, w, _viewport.Height)
                     : new Rectangle(_viewport.X, _viewport.Top, w, _viewport.Height);
                 int x = deltaX > 0 ? offsetX + _viewport.Width - w : offsetX;
-                _segments.Add(new ScrollSegment(frame.Clone(ctx => ctx.Crop(crop)), x, offsetY));
+                _segments.Add(new ScrollSegment(frame.Clone(ctx => ctx.Crop(crop)), x, 0));
             }
         }
 
-        private static MovementEstimate EstimateMovement(SampleFrame previous, SampleFrame current)
+        private void UpdatePreviousFrame(Image<Bgra32> frame, FrameLuma luma, int offsetX, int offsetY)
         {
-            if (previous == null || current == null || previous.Width != current.Width || previous.Height != current.Height)
-                return MovementEstimate.Failed;
+            _previousLuma?.Dispose();
+            _previousFrame?.Dispose();
+            _previousLuma = luma;
+            _previousFrame = frame.Clone(x => { });
 
-            int width = previous.Width;
-            int height = previous.Height;
-            int maxDx = Math.Max(1, Math.Min(14, (int)(width * 0.12)));
-            int maxDy = Math.Max(1, (int)(height * 0.85));
-            int minOverlap = Math.Max(32, (width * height) / 10);
-            double bestCost = double.MaxValue;
-            double bestScore = double.MaxValue;
-            int bestDx = 0, bestDy = 0;
+            _lastFrame?.Dispose();
+            _lastFrame = frame.Clone(x => { });
 
-            for (int dyMag = 0; dyMag <= maxDy; dyMag++)
+            _recentFrames.Add((frame.Clone(x => { }), new FrameLuma(frame), offsetX, offsetY));
+            if (_recentFrames.Count > MaxRecentFrames)
             {
-                for (int dySign = 1; dySign >= -1; dySign -= 2)
+                var oldest = _recentFrames[0];
+                _recentFrames.RemoveAt(0);
+                oldest.Frame?.Dispose();
+                oldest.Luma?.Dispose();
+            }
+        }
+
+        private static double ComputeVariance(FrameLuma luma, int x0, int y0, int x1, int y1)
+        {
+            double sum = 0, sumSq = 0;
+            int count = 0;
+            int w = luma.Width;
+            for (int y = y0; y < y1; y += 2)
+            {
+                int row = y * w;
+                for (int x = x0; x < x1; x += 2)
                 {
-                    int dy = dyMag * dySign;
-                    if (dyMag == 0 && dySign == -1) continue;
-
-                    for (int dxMag = 0; dxMag <= maxDx; dxMag++)
-                    {
-                        for (int dxSign = 1; dxSign >= -1; dxSign -= 2)
-                        {
-                            int dx = dxMag * dxSign;
-                            if (dxMag == 0 && dxSign == -1) continue;
-
-                            int xStart = Math.Max(0, -dx), yStart = Math.Max(0, -dy);
-                            int xEnd = Math.Min(width, width - dx), yEnd = Math.Min(height, height - dy);
-                            int overlapW = xEnd - xStart, overlapH = yEnd - yStart;
-                            if (overlapW <= 0 || overlapH <= 0 || overlapW * overlapH < minOverlap) continue;
-
-                            double score = AverageDiff(previous, current, dx, dy, xStart, yStart, xEnd, yEnd);
-                            double penalty = 1.0 + 0.10 * ((double)dyMag / height) + 0.05 * ((double)dxMag / width);
-                            double cost = score * penalty + (Math.Abs(dx) * 0.10);
-
-                            if (cost < bestCost - 1e-4)
-                            {
-                                bestCost = cost;
-                                bestScore = score;
-                                bestDx = dx;
-                                bestDy = dy;
-                            }
-                        }
-                    }
+                    byte val = luma.Pixels[row + x];
+                    sum += val;
+                    sumSq += val * val;
+                    count++;
                 }
             }
-
-            int originalDx = (int)Math.Round((double)bestDx * previous.Step);
-            int originalDy = (int)Math.Round((double)bestDy * previous.Step);
-            return new MovementEstimate(originalDx, originalDy, bestScore <= MaxAverageDiff);
+            if (count == 0) return 0;
+            double mean = sum / count;
+            return Math.Max(0, (sumSq / count) - (mean * mean));
         }
 
-        private static double AverageDiff(SampleFrame previous, SampleFrame current, int dx, int dy, int xStart, int yStart, int xEnd, int yEnd)
+        private static double ComputeBlockSad(FrameLuma prev, FrameLuma curr, int x0, int y0, int x1, int y1, int dx, int dy)
         {
-            long diff = 0; int count = 0;
-            int stride = Math.Max(1, Math.Min(xEnd - xStart, yEnd - yStart) / 40);
-            for (int y = yStart; y < yEnd; y += stride)
+            long diff = 0;
+            int count = 0;
+            int w = prev.Width;
+            int h = prev.Height;
+
+            for (int y = y0; y < y1; y += 2)
             {
-                int previousRow = (y + dy) * previous.Width;
-                int currentRow = y * current.Width;
-                for (int x = xStart; x < xEnd; x += stride)
+                int py = y + dy;
+                if (py < 0 || py >= h) continue;
+                int pRow = py * w;
+                int cRow = y * w;
+                for (int x = x0; x < x1; x += 2)
                 {
-                    diff += Math.Abs(previous.Gray[previousRow + x + dx] - current.Gray[currentRow + x]);
+                    int px = x + dx;
+                    if (px < 0 || px >= w) continue;
+                    diff += Math.Abs(prev.Pixels[pRow + px] - curr.Pixels[cRow + x]);
                     count++;
                 }
             }
             return count == 0 ? double.MaxValue : (double)diff / count;
         }
 
-        private byte[] BuildBand(Image<Bgra32> frame, Rectangle area)
+        private static double ComputeAreaSad(FrameLuma prev, FrameLuma curr, int x0, int y0, int x1, int y1, int dx, int dy)
         {
-            _bandWidth = area.Width;
-            _bandHeight = Math.Min(BandHeightPixels, area.Height);
-            if (_bandWidth <= 0 || _bandHeight <= 0)
+            long diff = 0;
+            int count = 0;
+            int w = prev.Width;
+            int h = prev.Height;
+            int step = Math.Max(2, Math.Min(x1 - x0, y1 - y0) / 40);
+
+            for (int y = y0; y < y1; y += step)
             {
-                return Array.Empty<byte>();
-            }
-            byte[] band = new byte[_bandWidth * _bandHeight];
-            int top = area.Top + (area.Height - _bandHeight) / 2;
-            frame.ProcessPixelRows(accessor =>
-            {
-                for (int y = 0; y < _bandHeight; y++)
+                int py = y + dy;
+                if (py < 0 || py >= h) continue;
+                int pRow = py * w;
+                int cRow = y * w;
+                for (int x = x0; x < x1; x += step)
                 {
-                    Span<Bgra32> row = accessor.GetRowSpan(Math.Min(frame.Height - 1, Math.Max(0, top + y)));
-                    int target = y * _bandWidth;
-                    for (int x = 0; x < _bandWidth; x++)
-                    {
-                        Bgra32 px = row[Math.Min(frame.Width - 1, Math.Max(0, area.Left + x))];
-                        band[target + x] = (byte)((px.R * 30 + px.G * 59 + px.B * 11) / 100);
-                    }
-                }
-            });
-            return band;
-        }
-
-        private MovementEstimate RefineMovement(byte[] previous, byte[] current, MovementEstimate coarse)
-        {
-            if (previous == null || current == null || previous.Length != current.Length || _bandWidth <= 0 || _bandHeight <= 0)
-                return coarse;
-
-            int yRadius = Math.Min(24, Math.Max(8, _bandWidth / 160 + 4));
-            int xRadius = 4;
-            const int stride = 3;
-            int bestDx = coarse.DeltaX, bestDy = coarse.DeltaY;
-            double bestCost = double.MaxValue;
-            double bestScore = double.MaxValue;
-
-            for (int dyOffset = 0; dyOffset <= yRadius; dyOffset++)
-            {
-                for (int dySign = 1; dySign >= -1; dySign -= 2)
-                {
-                    int dy = coarse.DeltaY + dyOffset * dySign;
-                    if (dyOffset == 0 && dySign == -1) continue;
-
-                    for (int dxOffset = 0; dxOffset <= xRadius; dxOffset++)
-                    {
-                        for (int dxSign = 1; dxSign >= -1; dxSign -= 2)
-                        {
-                            int dx = coarse.DeltaX + dxOffset * dxSign;
-                            if (dxOffset == 0 && dxSign == -1) continue;
-
-                            double score = BandDiff(previous, current, dx, dy, stride);
-                            double cost = score + (Math.Abs(dx) * 0.10) + (dyOffset * 0.02);
-                            if (cost < bestCost - 1e-4)
-                            {
-                                bestCost = cost;
-                                bestScore = score;
-                                bestDx = dx;
-                                bestDy = dy;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (bestScore <= MaxRefinedDiff)
-            {
-                return new MovementEstimate(bestDx, bestDy, true);
-            }
-
-            // If coarse estimate was already reliable across the entire frame, preserve it rather than discarding the frame
-            if (coarse.IsReliable)
-            {
-                return coarse;
-            }
-
-            return new MovementEstimate(bestDx, bestDy, false);
-        }
-
-        private double BandDiff(byte[] previous, byte[] current, int dx, int dy, int stride)
-        {
-            int xStart = Math.Max(0, -dx), yStart = Math.Max(0, -dy);
-            int xEnd = Math.Min(_bandWidth, _bandWidth - dx), yEnd = Math.Min(_bandHeight, _bandHeight - dy);
-            if (xEnd - xStart < 8 || yEnd - yStart < 8) return double.MaxValue;
-
-            long diff = 0; int count = 0;
-            for (int y = yStart; y < yEnd; y += stride)
-            {
-                int previousRow = (y + dy) * _bandWidth;
-                int currentRow = y * _bandWidth;
-                for (int x = xStart; x < xEnd; x += stride)
-                {
-                    diff += Math.Abs(previous[previousRow + x + dx] - current[currentRow + x]);
+                    int px = x + dx;
+                    if (px < 0 || px >= w) continue;
+                    diff += Math.Abs(prev.Pixels[pRow + px] - curr.Pixels[cRow + x]);
                     count++;
                 }
             }
             return count == 0 ? double.MaxValue : (double)diff / count;
+        }
+
+        private static double RowAverageDiff(FrameLuma prev, FrameLuma curr, int y, int xStart, int xEnd, int dx, int dy)
+        {
+            int py = y + dy;
+            if (y < 0 || y >= curr.Height || py < 0 || py >= prev.Height) return double.MaxValue;
+            long diff = 0;
+            int count = 0;
+            int w = prev.Width;
+            int step = Math.Max(1, (xEnd - xStart) / 60);
+            int pRow = py * w;
+            int cRow = y * w;
+
+            for (int x = xStart; x < xEnd; x += step)
+            {
+                int px = x + dx;
+                if (px < 0 || px >= w) continue;
+                diff += Math.Abs(prev.Pixels[pRow + px] - curr.Pixels[cRow + x]);
+                count++;
+            }
+            return count == 0 ? 0 : (double)diff / count;
+        }
+
+        private static double ColAverageDiff(FrameLuma prev, FrameLuma curr, int x, int yStart, int yEnd, int dx, int dy)
+        {
+            int px = x + dx;
+            if (x < 0 || x >= curr.Width || px < 0 || px >= prev.Width) return double.MaxValue;
+            long diff = 0;
+            int count = 0;
+            int w = prev.Width;
+            int h = prev.Height;
+            int step = Math.Max(1, (yEnd - yStart) / 60);
+
+            for (int y = yStart; y < yEnd; y += step)
+            {
+                int py = y + dy;
+                if (py < 0 || py >= h) continue;
+                diff += Math.Abs(prev.Pixels[py * w + px] - curr.Pixels[y * w + x]);
+                count++;
+            }
+            return count == 0 ? 0 : (double)diff / count;
+        }
+
+        private static double ComputeRowVariance(FrameLuma luma, int y, int xStart, int xEnd)
+        {
+            if (y < 0 || y >= luma.Height) return 0;
+            double sum = 0, sumSq = 0;
+            int count = 0;
+            int w = luma.Width;
+            int row = y * w;
+            int step = Math.Max(1, (xEnd - xStart) / 60);
+            for (int x = xStart; x < xEnd; x += step)
+            {
+                byte val = luma.Pixels[row + x];
+                sum += val;
+                sumSq += val * val;
+                count++;
+            }
+            if (count == 0) return 0;
+            double mean = sum / count;
+            return Math.Max(0, (sumSq / count) - (mean * mean));
+        }
+
+        private static double ComputeColVariance(FrameLuma luma, int x, int yStart, int yEnd)
+        {
+            if (x < 0 || x >= luma.Width) return 0;
+            double sum = 0, sumSq = 0;
+            int count = 0;
+            int w = luma.Width;
+            int step = Math.Max(1, (yEnd - yStart) / 60);
+            for (int y = yStart; y < yEnd; y += step)
+            {
+                byte val = luma.Pixels[y * w + x];
+                sum += val;
+                sumSq += val * val;
+                count++;
+            }
+            if (count == 0) return 0;
+            double mean = sum / count;
+            return Math.Max(0, (sumSq / count) - (mean * mean));
+        }
+
+        public Image<Bgra32> BuildImage(IProgress<double> progress = null)
+        {
+            if (AcceptedFrames < 1 || _firstFrame == null) return null;
+            if (_segments.Count == 0 || !_viewportDetected)
+            {
+                return _firstFrame.Clone(x => { });
+            }
+
+            int minX = int.MaxValue, minY = int.MaxValue;
+            int maxX = int.MinValue, maxY = int.MinValue;
+            foreach (var segment in _segments)
+            {
+                minX = Math.Min(minX, segment.X);
+                minY = Math.Min(minY, segment.Y);
+                maxX = Math.Max(maxX, segment.X + segment.Image.Width);
+                maxY = Math.Max(maxY, segment.Y + segment.Image.Height);
+            }
+
+            int vpW = maxX - minX;
+            int vpH = maxY - minY;
+
+            int headerH = _viewport.Top;
+            int footerH = Math.Max(0, _frameHeight - _viewport.Bottom);
+            int leftBarW = _viewport.Left;
+            int rightBarW = Math.Max(0, _frameWidth - _viewport.Right);
+
+            bool isVertical = _scrollAxisLocked ? _isVerticalScroll : (vpH >= vpW);
+            int width = isVertical ? _frameWidth : (leftBarW + vpW + rightBarW);
+            int height = isVertical ? (headerH + vpH + footerH) : _frameHeight;
+
+            if (width <= 0 || height <= 0) return null;
+
+            long totalPixels = (long)width * height;
+            long pixelCeiling = MaxCompositePixelsLimit;
+            if (totalPixels > pixelCeiling)
+            {
+                if (isVertical)
+                {
+                    int clampedHeight = (int)(pixelCeiling / width);
+                    if (clampedHeight < _frameHeight) clampedHeight = _frameHeight;
+                    Log.Warn($"Scroll capture composite dimension ({width}x{height}, {totalPixels} pixels) exceeds MaxCompositePixels ({pixelCeiling}). Clamping composite height to {clampedHeight} pixels.");
+                    height = clampedHeight;
+                }
+                else
+                {
+                    int clampedWidth = (int)(pixelCeiling / height);
+                    if (clampedWidth < _frameWidth) clampedWidth = _frameWidth;
+                    Log.Warn($"Scroll capture composite dimension ({width}x{height}, {totalPixels} pixels) exceeds MaxCompositePixels ({pixelCeiling}). Clamping composite width to {clampedWidth} pixels.");
+                    width = clampedWidth;
+                }
+            }
+
+            var result = new Image<Bgra32>(width, height);
+            Image<Bgra32> header = null;
+            Image<Bgra32> footer = null;
+            Image<Bgra32> leftBar = null;
+            Image<Bgra32> rightBar = null;
+
+            try
+            {
+                if (isVertical)
+                {
+                    if (headerH > 0 && _frameWidth > 0 && height > 0)
+                    {
+                        int effectiveH = Math.Min(headerH, height);
+                        header = _firstFrame.Clone(c => c.Crop(new Rectangle(0, 0, _frameWidth, effectiveH)));
+                        result.Mutate(ctx => ctx.DrawImage(header, new Point(0, 0), 1f));
+                    }
+
+                    if (footerH > 0 && _frameWidth > 0 && height >= footerH)
+                    {
+                        footer = _lastFrame.Clone(c => c.Crop(new Rectangle(0, _viewport.Bottom, _frameWidth, footerH)));
+                        result.Mutate(ctx => ctx.DrawImage(footer, new Point(0, height - footerH), 1f));
+                    }
+
+                    if (leftBarW > 0 && _viewport.Height > 0)
+                    {
+                        leftBar = _firstFrame.Clone(c => c.Crop(new Rectangle(0, _viewport.Top, leftBarW, _viewport.Height)));
+                        int curY = headerH;
+                        int limitY = height - footerH;
+                        int drawH = Math.Min(leftBar.Height, limitY - curY);
+                        if (drawH > 0)
+                        {
+                            using var topSlice = leftBar.Clone(c => c.Crop(new Rectangle(0, 0, leftBarW, drawH)));
+                            result.Mutate(ctx => ctx.DrawImage(topSlice, new Point(0, curY), 1f));
+                            curY += drawH;
+                        }
+                        if (curY < limitY)
+                        {
+                            using var bottomRow = leftBar.Clone(c => c.Crop(new Rectangle(0, leftBar.Height - 1, leftBarW, 1)));
+                            bottomRow.Mutate(ctx => ctx.Resize(leftBarW, limitY - curY));
+                            result.Mutate(ctx => ctx.DrawImage(bottomRow, new Point(0, curY), 1f));
+                        }
+                    }
+
+                    if (rightBarW > 0 && _viewport.Height > 0)
+                    {
+                        rightBar = _firstFrame.Clone(c => c.Crop(new Rectangle(_viewport.Right, _viewport.Top, rightBarW, _viewport.Height)));
+                        int curY = headerH;
+                        int limitY = height - footerH;
+                        int drawH = Math.Min(rightBar.Height, limitY - curY);
+                        if (drawH > 0)
+                        {
+                            using var topSlice = rightBar.Clone(c => c.Crop(new Rectangle(0, 0, rightBarW, drawH)));
+                            result.Mutate(ctx => ctx.DrawImage(topSlice, new Point(_viewport.Right, curY), 1f));
+                            curY += drawH;
+                        }
+                        if (curY < limitY)
+                        {
+                            using var bottomRow = rightBar.Clone(c => c.Crop(new Rectangle(0, rightBar.Height - 1, rightBarW, 1)));
+                            bottomRow.Mutate(ctx => ctx.Resize(rightBarW, limitY - curY));
+                            result.Mutate(ctx => ctx.DrawImage(bottomRow, new Point(_viewport.Right, curY), 1f));
+                        }
+                    }
+
+                    int count = 0;
+                    foreach (var segment in _segments)
+                    {
+                        int targetX = _viewport.Left;
+                        int targetY = segment.Y - minY + _viewport.Top;
+                        if (targetY < height && targetX < width && targetY + segment.Image.Height > 0 && targetX + segment.Image.Width > 0)
+                        {
+                            result.Mutate(ctx => ctx.DrawImage(segment.Image, new Point(targetX, targetY), 1f));
+                        }
+                        count++;
+                        progress?.Report((double)count / _segments.Count);
+                    }
+                }
+                else
+                {
+                    if (leftBarW > 0 && _frameHeight > 0 && width > 0)
+                    {
+                        int effectiveW = Math.Min(leftBarW, width);
+                        leftBar = _firstFrame.Clone(c => c.Crop(new Rectangle(0, 0, effectiveW, _frameHeight)));
+                        result.Mutate(ctx => ctx.DrawImage(leftBar, new Point(0, 0), 1f));
+                    }
+
+                    if (rightBarW > 0 && _frameHeight > 0 && width >= rightBarW)
+                    {
+                        rightBar = _lastFrame.Clone(c => c.Crop(new Rectangle(_viewport.Right, 0, rightBarW, _frameHeight)));
+                        result.Mutate(ctx => ctx.DrawImage(rightBar, new Point(width - rightBarW, 0), 1f));
+                    }
+
+                    if (headerH > 0 && _viewport.Width > 0)
+                    {
+                        header = _firstFrame.Clone(c => c.Crop(new Rectangle(_viewport.Left, 0, _viewport.Width, headerH)));
+                        int curX = leftBarW;
+                        int limitX = width - rightBarW;
+                        int drawW = Math.Min(header.Width, limitX - curX);
+                        if (drawW > 0)
+                        {
+                            using var leftSlice = header.Clone(c => c.Crop(new Rectangle(0, 0, drawW, headerH)));
+                            result.Mutate(ctx => ctx.DrawImage(leftSlice, new Point(curX, 0), 1f));
+                            curX += drawW;
+                        }
+                        if (curX < limitX)
+                        {
+                            using var rightCol = header.Clone(c => c.Crop(new Rectangle(header.Width - 1, 0, 1, headerH)));
+                            rightCol.Mutate(ctx => ctx.Resize(limitX - curX, headerH));
+                            result.Mutate(ctx => ctx.DrawImage(rightCol, new Point(curX, 0), 1f));
+                        }
+                    }
+
+                    if (footerH > 0 && _viewport.Width > 0)
+                    {
+                        footer = _lastFrame.Clone(c => c.Crop(new Rectangle(_viewport.Left, _viewport.Bottom, _viewport.Width, footerH)));
+                        int curX = leftBarW;
+                        int limitX = width - rightBarW;
+                        int drawW = Math.Min(footer.Width, limitX - curX);
+                        if (drawW > 0)
+                        {
+                            using var leftSlice = footer.Clone(c => c.Crop(new Rectangle(0, 0, drawW, footerH)));
+                            result.Mutate(ctx => ctx.DrawImage(leftSlice, new Point(curX, height - footerH), 1f));
+                            curX += drawW;
+                        }
+                        if (curX < limitX)
+                        {
+                            using var rightCol = footer.Clone(c => c.Crop(new Rectangle(footer.Width - 1, 0, 1, footerH)));
+                            rightCol.Mutate(ctx => ctx.Resize(limitX - curX, footerH));
+                            result.Mutate(ctx => ctx.DrawImage(rightCol, new Point(curX, height - footerH), 1f));
+                        }
+                    }
+
+                    int count = 0;
+                    foreach (var segment in _segments)
+                    {
+                        int targetX = segment.X - minX + _viewport.Left;
+                        int targetY = _viewport.Top;
+                        if (targetY < height && targetX < width && targetY + segment.Image.Height > 0 && targetX + segment.Image.Width > 0)
+                        {
+                            result.Mutate(ctx => ctx.DrawImage(segment.Image, new Point(targetX, targetY), 1f));
+                        }
+                        count++;
+                        progress?.Report((double)count / _segments.Count);
+                    }
+                }
+
+                return result;
+            }
+            finally
+            {
+                header?.Dispose();
+                footer?.Dispose();
+                leftBar?.Dispose();
+                rightBar?.Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _previousLuma?.Dispose();
+            _previousFrame?.Dispose();
+            _firstFrame?.Dispose();
+            _lastFrame?.Dispose();
+            foreach (var r in _recentFrames)
+            {
+                r.Frame?.Dispose();
+                r.Luma?.Dispose();
+            }
+            _recentFrames.Clear();
+            foreach (var segment in _segments) segment.Image?.Dispose();
+            _segments.Clear();
         }
     }
 
     internal sealed class ScrollSegment
     {
-        public ScrollSegment(Image<Bgra32> image, int x, int y) { Image = image; X = x; Y = y; }
+        public ScrollSegment(Image<Bgra32> image, int x, int y)
+        {
+            Image = image;
+            X = x;
+            Y = y;
+        }
+
         public Image<Bgra32> Image { get; }
         public int X { get; }
         public int Y { get; }
@@ -787,57 +1437,50 @@ namespace freesnip.helpers
 
     internal readonly struct MovementEstimate
     {
-        public MovementEstimate(int deltaX, int deltaY, bool reliable) { DeltaX = deltaX; DeltaY = deltaY; IsReliable = reliable; }
+        public MovementEstimate(int deltaX, int deltaY, bool reliable)
+        {
+            DeltaX = deltaX;
+            DeltaY = deltaY;
+            IsReliable = reliable;
+        }
+
         public int DeltaX { get; }
         public int DeltaY { get; }
         public bool IsReliable { get; }
+
         public static MovementEstimate Failed => new MovementEstimate(0, 0, false);
     }
 
-    internal sealed class SampleFrame : IDisposable
+    internal sealed class FrameLuma : IDisposable
     {
-        private SampleFrame(byte[] gray, int width, int height, int step) { Gray = gray; Width = width; Height = height; Step = step; }
-        public byte[] Gray { get; private set; }
+        public byte[] Pixels { get; private set; }
         public int Width { get; }
         public int Height { get; }
-        public int Step { get; }
 
-        public static SampleFrame Create(Image<Bgra32> image, Rectangle area)
+        public FrameLuma(Image<Bgra32> image)
         {
-            int contentWidth = area.Width > 0 ? area.Width : image.Width;
-            int contentHeight = area.Height > 0 ? area.Height : image.Height;
-            
-            if (area.Width <= 0 || area.Height <= 0)
-            {
-                area = new Rectangle(0, 0, image.Width, image.Height);
-                contentWidth = image.Width;
-                contentHeight = image.Height;
-            }
-
-            int step = Math.Max(1, Math.Max(contentWidth / 180, contentHeight / 140));
-            int sampleWidth = Math.Max(1, contentWidth / step);
-            int sampleHeight = Math.Max(1, contentHeight / step);
-            byte[] gray = new byte[sampleWidth * sampleHeight];
+            Width = image.Width;
+            Height = image.Height;
+            Pixels = new byte[Width * Height];
 
             image.ProcessPixelRows(accessor =>
             {
-                for (int sy = 0; sy < sampleHeight; sy++)
+                for (int y = 0; y < Height; y++)
                 {
-                    int sourceY = Math.Min(image.Height - 1, Math.Max(0, area.Top + sy * step));
-                    Span<Bgra32> row = accessor.GetRowSpan(sourceY);
-                    int targetRow = sy * sampleWidth;
-                    for (int sx = 0; sx < sampleWidth; sx++)
+                    Span<Bgra32> row = accessor.GetRowSpan(y);
+                    int offset = y * Width;
+                    for (int x = 0; x < Width; x++)
                     {
-                        int sourceX = Math.Min(image.Width - 1, Math.Max(0, area.Left + sx * step));
-                        Bgra32 px = row[sourceX];
-                        gray[targetRow + sx] = (byte)((px.R * 30 + px.G * 59 + px.B * 11) / 100);
+                        Bgra32 px = row[x];
+                        Pixels[offset + x] = (byte)((px.R * 30 + px.G * 59 + px.B * 11) / 100);
                     }
                 }
             });
-
-            return new SampleFrame(gray, sampleWidth, sampleHeight, step);
         }
 
-        public void Dispose() { Gray = null; }
+        public void Dispose()
+        {
+            Pixels = null;
+        }
     }
 }

@@ -12,7 +12,6 @@ namespace freesnip.tests
         public void AuthoritativeName_MatchesSingleInstanceArbitratorSpecification()
         {
             Assert.Equal(@"Global\FreeSnip_SingleInstance_Arbitrator", ResourceMutex.SingleInstanceArbitratorName);
-            Assert.Equal(@"Global\SnapVox_SingleInstance_Arbitrator", ResourceMutex.LegacySingleInstanceArbitratorName);
         }
 
         [Fact]

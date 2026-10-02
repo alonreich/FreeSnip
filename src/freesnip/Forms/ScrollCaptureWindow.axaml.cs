@@ -36,7 +36,8 @@ namespace freesnip.forms
         private static bool IsClosingAll;
         private static bool IsFinishing;
         private static ScrollCaptureBarWindow BarWindow;
-        private static readonly bool IsSnapVoxElevated = Win32WindowHelper.IsProcessElevated((uint)Environment.ProcessId);
+        private static readonly bool IsFreeSnipElevated = Win32WindowHelper.IsProcessElevated((uint)Environment.ProcessId);
+
 
         private PixelRect _screenBounds;
         private Canvas _mainCanvas;
@@ -203,7 +204,7 @@ namespace freesnip.forms
             string key = config.ScrollCaptureDelimiterHotkey;
             if (string.IsNullOrWhiteSpace(key))
             {
-                key = "Space";
+                key = "Enter";
             }
 
             bool ctrlReq = key.Contains("Ctrl", StringComparison.OrdinalIgnoreCase);
@@ -222,9 +223,9 @@ namespace freesnip.forms
             if (winReq != winDown) return false;
 
             string keyName = key.Split('+').Last().Trim();
-            int vkCode = 0x20;
-            if (string.Equals(keyName, "Space", StringComparison.OrdinalIgnoreCase)) vkCode = 0x20;
-            else if (string.Equals(keyName, "Enter", StringComparison.OrdinalIgnoreCase) || string.Equals(keyName, "Return", StringComparison.OrdinalIgnoreCase)) vkCode = 0x0D;
+            int vkCode = 0x0D;
+            if (string.Equals(keyName, "Enter", StringComparison.OrdinalIgnoreCase) || string.Equals(keyName, "Return", StringComparison.OrdinalIgnoreCase)) vkCode = 0x0D;
+            else if (string.Equals(keyName, "Space", StringComparison.OrdinalIgnoreCase)) vkCode = 0x20;
             else if (string.Equals(keyName, "Escape", StringComparison.OrdinalIgnoreCase) || string.Equals(keyName, "Esc", StringComparison.OrdinalIgnoreCase)) vkCode = 0x1B;
             else if (string.Equals(keyName, "Tab", StringComparison.OrdinalIgnoreCase)) vkCode = 0x09;
             else if (Enum.TryParse<freesnip.foundation.core.AvaloniaShims.Keys>(keyName, true, out var parsedKey)) vkCode = (int)parsedKey;
@@ -253,7 +254,6 @@ namespace freesnip.forms
             _screenBounds = screenBounds;
             InitializeComponent();
             freesnip.foundation.core.UiLayoutDirection.Apply(this);
-            App.ForceRedTrayIcon(true);
 
             double scaling = 1.0;
             try
@@ -321,16 +321,24 @@ namespace freesnip.forms
                 if (screens == null || screens.Count == 0)
                 {
                     RestoreOwner();
-                    App.ForceRedTrayIcon(false);
                     return;
                 }
 
-                foreach (PixelRect screen in screens)
+                try
                 {
-                    var window = new ScrollCaptureWindow(screen);
-                    window.Show();
-                    window.Activate();
-                    window.Focus();
+                    foreach (PixelRect screen in screens)
+                    {
+                        var window = new ScrollCaptureWindow(screen);
+                        window.Show();
+                        window.Activate();
+                        window.Focus();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Failed to initialize scroll capture overlay windows.", ex);
+                    CloseAllOverlays();
+                    RestoreOwner();
                 }
             });
         }
@@ -380,9 +388,9 @@ namespace freesnip.forms
             lock (Sync)
             {
                 ActiveWindows.Remove(this);
-                if (ActiveWindows.Count == 0)
+                if (!IsClosingAll && ActiveWindows.Count == 0)
                 {
-                    App.ForceRedTrayIcon(false);
+                    _ = ExitModeAsync();
                 }
             }
         }
@@ -458,7 +466,7 @@ namespace freesnip.forms
             string key = config.ScrollCaptureDelimiterHotkey;
             if (string.IsNullOrWhiteSpace(key))
             {
-                key = "Space";
+                key = "Enter";
             }
 
             bool ctrl = key.Contains("Ctrl", StringComparison.OrdinalIgnoreCase);
@@ -488,9 +496,9 @@ namespace freesnip.forms
                 return;
             }
 
-            if (IsSelectedWindowElevated && !IsSnapVoxElevated)
+            if (IsSelectedWindowElevated && !IsFreeSnipElevated)
             {
-                BroadcastStatus("ACCESS DENIED", "Run SnapVox as Admin to capture");
+                BroadcastStatus("ACCESS DENIED", "Run FreeSnip as Admin to capture");
                 return;
             }
 
@@ -509,17 +517,6 @@ namespace freesnip.forms
                 _lastMovementTime = DateTime.UtcNow;
                 _hasScrolled = false;
 
-                Recorder = new ScrollCaptureRecorder(rect);
-                Recorder.SegmentCeilingReached += () =>
-                {
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        BroadcastStatus("LIMIT REACHED (PAUSED)", "Maximum memory reached (180 MP) · Space/Enter finishes");
-                        BarWindow?.UpdateHudState(ScrollHudState.LimitReached);
-                    });
-                };
-                Recorder.Start();
-                IsRecording = true;
                 foreach (var win in ActiveWindows) 
                 { 
                     win.Cursor = RecordingCursor; 
@@ -527,11 +524,32 @@ namespace freesnip.forms
                     win.IsHitTestVisible = false;
                     win.Hide();
                 }
-                ShowFloatingBar(rect);
+
+                if (Dispatcher.UIThread.CheckAccess())
+                {
+                    Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+                }
+
                 if (SelectedWindowHandle != IntPtr.Zero)
                 {
                     Win32WindowHelper.SetForegroundWindow(SelectedWindowHandle);
                 }
+
+                await Task.Delay(100);
+
+                Recorder = new ScrollCaptureRecorder(rect);
+                Recorder.SegmentCeilingReached += () =>
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        BroadcastStatus("LIMIT REACHED (PAUSED)", "Maximum memory reached (180 MP) · Enter finishes");
+                        BarWindow?.UpdateHudState(ScrollHudState.LimitReached);
+                    });
+                };
+                Recorder.Start();
+                IsRecording = true;
+
+                ShowFloatingBar(rect);
                 StartInputPolling();
                 BroadcastStatus("SCROLLING ACTIVE", "Recording started. Scroll down now using your mouse wheel.");
             }
@@ -542,9 +560,9 @@ namespace freesnip.forms
                 {
                     if (win._exitButton != null) win._exitButton.IsVisible = true;
                 }
-                if (!IsSnapVoxElevated)
+                if (!IsFreeSnipElevated)
                 {
-                    BroadcastStatus("ACCESS DENIED / BLOCKED", "Run SnapVox as Admin to capture this app");
+                    BroadcastStatus("ACCESS DENIED / BLOCKED", "Run FreeSnip as Admin to capture this app");
                 }
                 else
                 {
@@ -644,11 +662,18 @@ namespace freesnip.forms
             {
                 if (recorder != null)
                 {
-                    var progress = new Progress<double>(p => 
+                    if (!_hasScrolled || recorder.AcceptedFrames <= 1)
                     {
-                        BroadcastStatus("Building image", $"Stitching: {(int)(p * 100)}%");
-                    });
-                    result = await recorder.FinishAsync(progress).ConfigureAwait(false);
+                        result = null;
+                    }
+                    else
+                    {
+                        var progress = new Progress<double>(p => 
+                        {
+                            BroadcastStatus("Building image", $"Stitching: {(int)(p * 100)}%");
+                        });
+                        result = await recorder.FinishAsync(progress).ConfigureAwait(false);
+                    }
                     await recorder.DisposeAsync().ConfigureAwait(false);
                 }
 
@@ -669,7 +694,7 @@ namespace freesnip.forms
                             win.Activate();
                             win.Focus();
                         }
-                        BroadcastStatus("Try again more slowly", "Space = start");
+                        BroadcastStatus("NO SCROLLING DETECTED", "Keep pointer over window and scroll content · Enter to start");
                         IsFinishing = false;
                     });
                     return;
@@ -712,7 +737,7 @@ namespace freesnip.forms
                         win.Activate();
                         win.Focus();
                     }
-                    BroadcastStatus("Try again more slowly", "Space = start");
+                    BroadcastStatus("Try again more slowly", "Enter to start");
                     IsFinishing = false;
                 });
             }
@@ -787,15 +812,15 @@ namespace freesnip.forms
 
             if (rect.IsEmpty)
             {
-                BroadcastStatus("Point at a window", "Left-click or Space to start (Esc exits)");
+                BroadcastStatus("Point at a window", "Left-click window or press Enter to start (Esc exits)");
             }
             else if (IsSelectedWindowElevated)
             {
-                BroadcastStatus("ELEVATED WINDOW DETECTED", "Run SnapVox as Admin to capture");
+                BroadcastStatus("ELEVATED WINDOW DETECTED", "Run FreeSnip as Admin to capture");
             }
             else
             {
-                BroadcastStatus("Window ready", "Left-click or Space to start (Esc exits)");
+                BroadcastStatus("Window ready", "Left-click window or press Enter to start (Esc exits)");
             }
         }
 
@@ -900,7 +925,6 @@ namespace freesnip.forms
                 BarWindow = null;
             }
 
-            App.ForceRedTrayIcon(false);
             IsClosingAll = false;
         }
 

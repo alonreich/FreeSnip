@@ -283,7 +283,7 @@ namespace freesnip.editor.forms
                 await freesnip.editor.helpers.ConfirmDialog.ShowAlertAsync(
                     this,
                     "Picture Would Be Too Big",
-                    $"{w} x {h} is about {(long)w * h / 1_000_000L} megapixels. SnapVox stops at {MaxResultPixels / 1_000_000L} megapixels because anything larger can run the computer out of memory. Choose a smaller percentage and try again.",
+                    $"{w} x {h} is about {(long)w * h / 1_000_000L} megapixels. FreeSnip stops at {MaxResultPixels / 1_000_000L} megapixels because anything larger can run the computer out of memory. Choose a smaller percentage and try again.",
                     "OK",
                     true).ConfigureAwait(true);
                 return;

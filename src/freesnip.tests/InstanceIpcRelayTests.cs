@@ -14,7 +14,6 @@ namespace freesnip.tests
         public void AuthoritativePipeName_MatchesSpecification()
         {
             Assert.Equal(@"Local\FreeSnip_Instance_IpcPipe", InstanceIpcRelay.PipeName);
-            Assert.Equal(@"Local\SnapVox_Instance_IpcPipe", InstanceIpcRelay.LegacyPipeName);
             Assert.Equal("ACTIVATE", InstanceIpcRelay.MessageActivate);
             Assert.Equal("OPEN_FILE:", InstanceIpcRelay.MessageOpenFilePrefix);
             Assert.Equal("ACK", InstanceIpcRelay.Acknowledgment);
@@ -23,7 +22,7 @@ namespace freesnip.tests
         [Fact]
         public async Task ActivateMessage_TransmittedAndAcknowledged()
         {
-            string pipeName = @"Local\SnapVox_Test_Pipe_" + Guid.NewGuid().ToString("N");
+            string pipeName = @"Local\FreeSnip_Test_Pipe_" + Guid.NewGuid().ToString("N");
             var received = new List<string>();
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -47,7 +46,7 @@ namespace freesnip.tests
         [Fact]
         public async Task OpenFileMessage_TransmittedAndAcknowledged()
         {
-            string pipeName = @"Local\SnapVox_Test_Pipe_" + Guid.NewGuid().ToString("N");
+            string pipeName = @"Local\FreeSnip_Test_Pipe_" + Guid.NewGuid().ToString("N");
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using var server = new InstanceIpcServer(msg =>
@@ -72,7 +71,7 @@ namespace freesnip.tests
         [Fact]
         public async Task SendRelayCommandAsync_NoArgs_TransmitsActivate()
         {
-            string pipeName = @"Local\SnapVox_Test_Pipe_" + Guid.NewGuid().ToString("N");
+            string pipeName = @"Local\FreeSnip_Test_Pipe_" + Guid.NewGuid().ToString("N");
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using var server = new InstanceIpcServer(msg =>
@@ -94,7 +93,7 @@ namespace freesnip.tests
         [Fact]
         public async Task SendRelayCommandAsync_FileArgs_TransmitsOpenFileWithFullPath()
         {
-            string pipeName = @"Local\SnapVox_Test_Pipe_" + Guid.NewGuid().ToString("N");
+            string pipeName = @"Local\FreeSnip_Test_Pipe_" + Guid.NewGuid().ToString("N");
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using var server = new InstanceIpcServer(msg =>
@@ -119,7 +118,7 @@ namespace freesnip.tests
         [Fact]
         public async Task ClientTimeout_WhenNoServerListening_FailsCleanlyWithoutThrowing()
         {
-            string nonExistentPipe = @"Local\SnapVox_NonExistent_" + Guid.NewGuid().ToString("N");
+            string nonExistentPipe = @"Local\FreeSnip_NonExistent_" + Guid.NewGuid().ToString("N");
 
             bool result = await InstanceIpcClient.SendMessageAsync(InstanceIpcRelay.MessageActivate, timeoutMs: 150, pipeName: nonExistentPipe);
 
@@ -129,7 +128,7 @@ namespace freesnip.tests
         [Fact]
         public async Task MultipleSequentialMessages_ProcessedCorrectly()
         {
-            string pipeName = @"Local\SnapVox_Test_Pipe_" + Guid.NewGuid().ToString("N");
+            string pipeName = @"Local\FreeSnip_Test_Pipe_" + Guid.NewGuid().ToString("N");
             var received = new List<string>();
 
             await using var server = new InstanceIpcServer(msg =>
@@ -157,7 +156,7 @@ namespace freesnip.tests
         [Fact]
         public async Task ConcurrentClientMessages_HandledGracefully()
         {
-            string pipeName = @"Local\SnapVox_Test_Pipe_" + Guid.NewGuid().ToString("N");
+            string pipeName = @"Local\FreeSnip_Test_Pipe_" + Guid.NewGuid().ToString("N");
             var received = new List<string>();
 
             await using var server = new InstanceIpcServer(msg =>
@@ -183,7 +182,7 @@ namespace freesnip.tests
         [Fact]
         public async Task ServerDisposal_CancelsListenerGracefully()
         {
-            string pipeName = @"Local\SnapVox_Test_Pipe_" + Guid.NewGuid().ToString("N");
+            string pipeName = @"Local\FreeSnip_Test_Pipe_" + Guid.NewGuid().ToString("N");
 
             var server = new InstanceIpcServer(_ => Task.CompletedTask, pipeName);
             server.Start();
@@ -191,10 +190,8 @@ namespace freesnip.tests
             await Task.Delay(50);
             await server.DisposeAsync();
 
-            // After disposal, client attempting connection should fail/timeout cleanly
             bool result = await InstanceIpcClient.SendMessageAsync(InstanceIpcRelay.MessageActivate, timeoutMs: 150, pipeName: pipeName);
             Assert.False(result);
         }
     }
 }
-

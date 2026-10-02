@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 using System;
 using System.Collections.Generic;
 using Avalonia;
@@ -300,19 +300,14 @@ namespace freesnip.tests
                 Assert.Equal(48.0, initialHeight);
                 double initialWidth = border.Width;
 
-                // Simulate typing long multiline text that exceeds available height
                 textBox.Text = "Line One of the annotation\nLine Two that definitely wraps and requires more vertical height\nLine Three of text";
 
-                // Invariant: FontSize MUST be locked and preserved
                 Assert.Equal(24.0, textBox.FontSize);
 
-                // Invariant: Border Height must dynamically expand downwards
                 Assert.True(border.Height > initialHeight, $"Border height {border.Height} should have expanded beyond {initialHeight}");
 
-                // Invariant: Border Width must remain strictly anchored
                 Assert.Equal(initialWidth, border.Width);
 
-                // Invariant: MaxHeight of textBox adapts to expanded border
                 Assert.True(textBox.MaxHeight > 48 - 12);
             }
             finally
@@ -345,13 +340,11 @@ namespace freesnip.tests
             double baseFontSize = textBox.FontSize;
             Assert.True(baseFontSize >= 8.0);
 
-            // Drag corner to enlarge significantly (e.g. 600x300)
             border.Width = 600;
             border.Height = 300;
             ImageEditorWindow.FitTextBoxToBorder(border, textBox);
             Assert.True(textBox.FontSize > baseFontSize, $"Enlarging bounding box should increase font size (was {baseFontSize}, now {textBox.FontSize})");
 
-            // Drag corner to shrink significantly (e.g. 70x30)
             border.Width = 70;
             border.Height = 30;
             ImageEditorWindow.FitTextBoxToBorder(border, textBox);
@@ -382,7 +375,6 @@ namespace freesnip.tests
             double innerWidthBefore = textBox.Width;
             double innerMaxHeightBefore = textBox.MaxHeight;
 
-            // Expand border thickness outward by delta = 4 (from 2 to 6)
             double oldT = 2;
             double newT = 6;
             double delta = newT - oldT;
@@ -391,7 +383,6 @@ namespace freesnip.tests
             border.BorderThickness = new Thickness(newT);
             ImageEditorWindow.SetTextBoxBoundsToBorder(border, textBox);
 
-            // Invariant: Inner text bounds must remain perfectly invariant
             Assert.Equal(innerWidthBefore, textBox.Width);
             Assert.Equal(innerMaxHeightBefore, textBox.MaxHeight);
         }
@@ -420,17 +411,14 @@ namespace freesnip.tests
                 ImageEditorWindow.SetTextBoxBoundsToBorder(border, textBox);
                 editor.AttachTextBoxBehavior(border, textBox, config);
 
-                // English (LTR)
                 textBox.Text = "English Text";
                 Assert.Equal(FlowDirection.LeftToRight, textBox.FlowDirection);
                 Assert.Equal(Avalonia.Media.TextAlignment.Center, textBox.TextAlignment);
 
-                // Hebrew (RTL)
                 textBox.Text = "טקסט בעברית";
                 Assert.Equal(FlowDirection.RightToLeft, textBox.FlowDirection);
                 Assert.Equal(Avalonia.Media.TextAlignment.Center, textBox.TextAlignment);
 
-                // Arabic (RTL)
                 textBox.Text = "مرحبا بالعالم";
                 Assert.Equal(FlowDirection.RightToLeft, textBox.FlowDirection);
                 Assert.Equal(Avalonia.Media.TextAlignment.Center, textBox.TextAlignment);

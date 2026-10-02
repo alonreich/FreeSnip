@@ -1,11 +1,11 @@
-SnapVox uses the following third-party open-source libraries and components. We gratefully acknowledge their contributions.
+FreeSnip uses the following third-party open-source libraries and components. We gratefully acknowledge their contributions.
 
 ========================================================================
 1. Greenshot
 ========================================================================
-Portions of the native capture logic and bounds calculations in SnapVox 
+Portions of the native capture logic and bounds calculations in FreeSnip 
 are adapted from Greenshot, which is licensed under the GNU General Public License (GPL).
-SnapVox is released under the GNU General Public License v3.0 (GPLv3) to comply with this.
+FreeSnip is released under the GNU General Public License v3.0 (GPLv3) to comply with this.
 For the full GPL license text, please see the LICENSE.txt file in this repository.
 Source: https://getgreenshot.org/
 
@@ -39,7 +39,7 @@ Source: https://github.com/AvaloniaUI/Avalonia
 3. SixLabors.ImageSharp (v2.x)
 ========================================================================
 SixLabors.ImageSharp is licensed under the SixLabors Split License.
-Because SnapVox is distributed under an OSI-approved open source license (GPLv3), 
+Because FreeSnip is distributed under an OSI-approved open source license (GPLv3), 
 ImageSharp is utilized under the terms of the Apache License, Version 2.0.
 
 Copyright (c) Six Labors

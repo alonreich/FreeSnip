@@ -23,7 +23,6 @@ public static class StartupTaskHelper
 {
     private static ILog Log => LogHelper.IsInitialized ? freesnip.foundation.core.LogHelper.GetLogger(typeof(StartupTaskHelper)) : null;
     public const string ScheduledTaskName = "FreeSnip";
-    public const string LegacyScheduledTaskName = "snapvox";
     private const string ConfigureAdminStartupArgument = "--configure-admin-startup";
     private const string RemoveAdminStartupArgument = "--remove-admin-startup";
 
@@ -31,10 +30,6 @@ public static class StartupTaskHelper
     public static string ConfigurationFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FreeSnip");
     public static string InstallPath => Path.Combine(InstallFolder, "FreeSnip.exe");
     public static string UninstallExePath => Path.Combine(InstallFolder, "Uninstall.exe");
-
-    public static string LegacyInstallFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SnapVox");
-    public static string LegacyConfigurationFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SnapVox");
-    public static string LegacyInstallPath => Path.Combine(LegacyInstallFolder, "SnapVox.exe");
 
     private static void LogSuppressedException(string operation, Exception ex)
     {
@@ -337,19 +332,6 @@ public static class StartupTaskHelper
         }
     }
 
-    public static async Task<bool> HasLegacyScheduledTaskAsync()
-    {
-        try
-        {
-            int exitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Query /TN \"{0}\"", LegacyScheduledTaskName), 10000).ConfigureAwait(false);
-            return exitCode == 0;
-        }
-        catch (Exception ex)
-        {
-            LogSuppressedException("HasLegacyScheduledTask", ex);
-            return false;
-        }
-    }
 
     public static async Task<bool> DeleteElevatedStartupTaskAsync()
     {
@@ -370,20 +352,6 @@ public static class StartupTaskHelper
         }
     }
 
-    public static async Task<bool> DeleteLegacyScheduledTaskAsync()
-    {
-        try
-        {
-            int exitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", LegacyScheduledTaskName), 10000).ConfigureAwait(false);
-            return exitCode == 0;
-        }
-        catch (Exception ex)
-        {
-            LogSuppressedException("DeleteLegacyScheduledTask", ex);
-            return false;
-        }
-    }
-
     private static async Task<bool> DeleteElevatedStartupTaskInCurrentProcessAsync()
     {
         try
@@ -394,14 +362,6 @@ public static class StartupTaskHelper
             }
 
             int exitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", ScheduledTaskName), 10000).ConfigureAwait(false);
-            try
-            {
-                await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", LegacyScheduledTaskName), 10000).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                LogSuppressedException("DeleteElevatedStartupTask.Legacy", ex);
-            }
             StartupHelper.SetRunUser(null, GetStartupTaskExecutablePath());
             ExecutionTrace.LogEvent("StartupTaskHelper.ScheduledTask", "Delete", exitCode.ToString());
             return exitCode == 0 || !await HasElevatedStartupTaskAsync().ConfigureAwait(false);
@@ -460,11 +420,8 @@ public static class StartupTaskHelper
     public static string[] GetSettingsCandidates() => new[]
     {
         Path.Combine(ConfigurationFolder, "freesnip.ini"),
-        Path.Combine(LegacyConfigurationFolder, "snapvox.ini"),
         Path.Combine(InstallFolder, "freesnip.ini"),
-        Path.Combine(InstallFolder, @"Data\Settings\freesnip.ini"),
-        Path.Combine(LegacyInstallFolder, "snapvox.ini"),
-        Path.Combine(LegacyInstallFolder, @"Data\Settings\snapvox.ini")
+        Path.Combine(InstallFolder, @"Data\Settings\freesnip.ini")
     };
 
     public static bool DetectAdminStartupInSettingsCandidates(IEnumerable<string> candidates = null)
@@ -494,7 +451,7 @@ public static class StartupTaskHelper
             @"Software\Microsoft\Windows\CurrentVersion\Run",
             @"Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"
         };
-        string[] valueNames = { "freesnip", "FreeSnip", "snapvox", "SnapVox" };
+        string[] valueNames = { "freesnip", "FreeSnip" };
 
         foreach (RegistryHive hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
         {
@@ -543,20 +500,32 @@ public static class StartupTaskHelper
 
     public static void LogInstallationElevationState(string message)
     {
-        try
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            string path = DeploymentFootprint.TempInstallationLogPath;
-            string logDir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(logDir) && !Directory.Exists(logDir))
+            try
             {
-                Directory.CreateDirectory(logDir);
+                string path = DeploymentFootprint.TempInstallationLogPath;
+                string logDir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(logDir) && !Directory.Exists(logDir))
+                {
+                    Directory.CreateDirectory(logDir);
+                }
+                string line = $"{DateTime.Now:HH:mm:ss.fff}|STARTUP_ELEVATION|INFO|{message}{Environment.NewLine}";
+                using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                using var writer = new StreamWriter(stream, Encoding.UTF8);
+                writer.Write(line);
+                return;
             }
-            string line = $"{DateTime.Now:HH:mm:ss.fff}|STARTUP_ELEVATION|INFO|{message}{Environment.NewLine}";
-            File.AppendAllText(path, line, Encoding.UTF8);
-        }
-        catch (Exception ex)
-        {
-            LogSuppressedException("LogInstallationElevationState", ex);
+            catch (IOException)
+            {
+                if (attempt == 2) break;
+                Thread.Sleep(20);
+            }
+            catch (Exception ex)
+            {
+                LogSuppressedException("LogInstallationElevationState", ex);
+                break;
+            }
         }
     }
 
@@ -567,9 +536,8 @@ public static class StartupTaskHelper
         IniConfig.Init("FreeSnip", IniConfigurationDeployer.ConfigBaseName);
         var config = IniConfig.GetIniSection<CoreConfiguration>(allowSave: false);
         bool candidatesHadElevated = DetectAdminStartupInSettingsCandidates();
-        bool hadLegacyTask = await HasLegacyScheduledTaskAsync().ConfigureAwait(false);
-        bool elevated = keepUserSettings && (hadElevatedStartup || hadLegacyTask || config.RunAsAdministratorOnStartup || candidatesHadElevated);
-        LogInstallationElevationState($"Evaluated elevation requirement: hadElevatedStartup={hadElevatedStartup}, hadLegacyTask={hadLegacyTask}, configFlag={config.RunAsAdministratorOnStartup}, candidatesHadElevated={candidatesHadElevated} -> effectiveElevated={elevated}");
+        bool elevated = keepUserSettings && (hadElevatedStartup || config.RunAsAdministratorOnStartup || candidatesHadElevated);
+        LogInstallationElevationState($"Evaluated elevation requirement: hadElevatedStartup={hadElevatedStartup}, configFlag={config.RunAsAdministratorOnStartup}, candidatesHadElevated={candidatesHadElevated} -> effectiveElevated={elevated}");
 
         if (elevated)
         {
@@ -579,7 +547,6 @@ public static class StartupTaskHelper
                 LogInstallationElevationState("FAILED to configure elevated scheduled task.");
                 throw new IOException("Could not restore administrator startup. Your settings backup has been kept.");
             }
-            try { await DeleteLegacyScheduledTaskAsync().ConfigureAwait(false); } catch { }
             LogInstallationElevationState("Elevated scheduled task configured successfully. Purging Run registry entries to prevent dual startup.");
             PurgeAllRunKeys();
         }
@@ -587,7 +554,6 @@ public static class StartupTaskHelper
         {
             LogInstallationElevationState("Configuring standard non-elevated user startup in HKCU Run...");
             await DeleteElevatedStartupTaskAsync().ConfigureAwait(false);
-            try { await DeleteLegacyScheduledTaskAsync().ConfigureAwait(false); } catch { }
             PurgeAllRunKeys();
             StartupHelper.SetRunUser("--autorun", InstallPath);
             LogInstallationElevationState("Standard user Run startup configured.");
@@ -598,7 +564,6 @@ public static class StartupTaskHelper
         IniConfig.SaveTo(primaryIni);
         foreach (string candidate in GetSettingsCandidates())
         {
-            if (candidate.IndexOf("snapvox", StringComparison.OrdinalIgnoreCase) >= 0) continue;
             if (File.Exists(candidate) && !string.Equals(candidate, primaryIni, StringComparison.OrdinalIgnoreCase))
             {
                 try { IniConfig.SaveTo(candidate); } catch { }
@@ -653,29 +618,6 @@ public static class StartupTaskHelper
                 try
                 {
                     if (IsInstalledExecutable(process.MainModule?.FileName)) ids.Add(process.Id);
-                }
-                catch (Exception ex) when (IsExpectedProcessInspectionException(ex)) { }
-            }
-        }
-        return ids.ToArray();
-    }
-
-    internal static int[] FindRunningLegacyProcesses()
-    {
-        var ids = new System.Collections.Generic.List<int>();
-        string[] legacyNames = { "snapvox", "snapvox_tesseract" };
-        foreach (var process in Process.GetProcesses())
-        {
-            using (process)
-            {
-                if (process.Id == Environment.ProcessId) continue;
-                try
-                {
-                    if (legacyNames.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase) ||
-                        IsInstalledExecutable(process.MainModule?.FileName, LegacyInstallFolder))
-                    {
-                        ids.Add(process.Id);
-                    }
                 }
                 catch (Exception ex) when (IsExpectedProcessInspectionException(ex)) { }
             }

@@ -160,7 +160,8 @@ namespace freesnip.foundation.core
                     AppendToFile = true,
                     File = logFile,
                     Layout = layout,
-                    LockingModel = new FileAppender.MinimalLock()
+                    LockingModel = new FileAppender.MinimalLock(),
+                    Threshold = Level.All
                 };
                 appender.ActivateOptions();
                 BasicConfigurator.Configure(appender);
@@ -212,19 +213,19 @@ namespace freesnip.foundation.core
             }
 
             public ILogger Logger => null;
-            public bool IsDebugEnabled => false;
+            public bool IsDebugEnabled => true;
             public bool IsInfoEnabled => true;
             public bool IsWarnEnabled => true;
             public bool IsErrorEnabled => true;
             public bool IsFatalEnabled => true;
 
-            public void Debug(object message) { }
-            public void Debug(object message, Exception exception) { }
-            public void DebugFormat(string format, params object[] args) { }
-            public void DebugFormat(string format, object arg0) { }
-            public void DebugFormat(string format, object arg0, object arg1) { }
-            public void DebugFormat(string format, object arg0, object arg1, object arg2) { }
-            public void DebugFormat(IFormatProvider provider, string format, params object[] args) { }
+            public void Debug(object message) => Write("DEBUG", message, null);
+            public void Debug(object message, Exception exception) => Write("DEBUG", message, exception);
+            public void DebugFormat(string format, params object[] args) => Write("DEBUG", Format(CultureInfo.InvariantCulture, format, args), null);
+            public void DebugFormat(string format, object arg0) => DebugFormat(format, new[] { arg0 });
+            public void DebugFormat(string format, object arg0, object arg1) => DebugFormat(format, new[] { arg0, arg1 });
+            public void DebugFormat(string format, object arg0, object arg1, object arg2) => DebugFormat(format, new[] { arg0, arg1, arg2 });
+            public void DebugFormat(IFormatProvider provider, string format, params object[] args) => Write("DEBUG", Format(provider, format, args), null);
 
             public void Info(object message) => Write("INFO", message, null);
             public void Info(object message, Exception exception) => Write("INFO", message, exception);
@@ -313,6 +314,7 @@ namespace freesnip.foundation.core
 
                         fileAppender.File = Path.Combine(logDirectory, fileName);
                         fileAppender.LockingModel = new FileAppender.MinimalLock();
+                        fileAppender.Threshold = Level.All;
                         fileAppender.ActivateOptions();
                         configuredLogFile = fileAppender.File;
                     }

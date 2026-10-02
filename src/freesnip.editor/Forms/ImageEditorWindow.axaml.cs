@@ -262,9 +262,9 @@ namespace freesnip.editor.forms
         private AvaloniaControl _hoveredControl;
         private const int PixelateStrengthMin = 2;
         private const int PixelateStrengthMax = 29;
-        private const int PixelateStrengthDefault = 25;
+        private const int PixelateStrengthDefault = 10;
         private const double VectorHitTolerance = 12.0;
-        private const int SnapVoxFrameThickness = 3;
+        private const int FreeSnipFrameThickness = 3;
 
         
         private static readonly Avalonia.Input.Cursor NoneCursor = new(StandardCursorType.None);
@@ -520,6 +520,8 @@ namespace freesnip.editor.forms
             this.AddHandler(InputElement.PointerWheelChangedEvent, OnPointerWheelChanged, RoutingStrategies.Tunnel);
             this.AddHandler(InputElement.KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
             KeyUp += OnWindowKeyUp;
+            Activated += OnWindowActivated;
+            Deactivated += OnWindowDeactivated;
             Title = "FreeSnip Editor";
 
             _selectionIndicator = new Avalonia.Controls.Shapes.Rectangle { 
@@ -542,6 +544,7 @@ namespace freesnip.editor.forms
                 Classes = { "selection-indicator" },
                 Fill = null,
                 StrokeJoin = PenLineJoin.Round,
+                Points = new Avalonia.Points(),
                 IsVisible = false,
                 IsHitTestVisible = false,
                 ZIndex = 9999
@@ -552,6 +555,7 @@ namespace freesnip.editor.forms
                 Classes = { "selection-indicator" },
                 Fill = null,
                 StrokeJoin = PenLineJoin.Round,
+                Points = new Avalonia.Points(),
                 IsVisible = false,
                 IsHitTestVisible = false,
                 ZIndex = 9999
@@ -587,6 +591,7 @@ namespace freesnip.editor.forms
                 StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 3, 2 },
                 Fill = null,
                 StrokeJoin = PenLineJoin.Round,
+                Points = new Avalonia.Points(),
                 IsVisible = false,
                 IsHitTestVisible = false,
                 ZIndex = 9997
@@ -600,6 +605,7 @@ namespace freesnip.editor.forms
                 StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 3, 2 },
                 Fill = null,
                 StrokeJoin = PenLineJoin.Round,
+                Points = new Avalonia.Points(),
                 IsVisible = false,
                 IsHitTestVisible = false,
                 ZIndex = 9997
@@ -654,12 +660,22 @@ namespace freesnip.editor.forms
                     _resizeHandleIndex = idx;
                     if (_selectedControl != null)
                     {
-                        _resizeUnsnappedLeft = Canvas.GetLeft(_selectedControl);
-                        if (double.IsNaN(_resizeUnsnappedLeft)) _resizeUnsnappedLeft = _selectedControl.Bounds.X;
-                        _resizeUnsnappedTop = Canvas.GetTop(_selectedControl);
-                        if (double.IsNaN(_resizeUnsnappedTop)) _resizeUnsnappedTop = _selectedControl.Bounds.Y;
-                        _resizeUnsnappedWidth = double.IsNaN(_selectedControl.Width) ? _selectedControl.Bounds.Width : _selectedControl.Width;
-                        _resizeUnsnappedHeight = double.IsNaN(_selectedControl.Height) ? _selectedControl.Bounds.Height : _selectedControl.Height;
+                        if (TryGetControlBounds(_selectedControl, out var initBounds))
+                        {
+                            _resizeUnsnappedLeft = initBounds.X;
+                            _resizeUnsnappedTop = initBounds.Y;
+                            _resizeUnsnappedWidth = initBounds.Width;
+                            _resizeUnsnappedHeight = initBounds.Height;
+                        }
+                        else
+                        {
+                            _resizeUnsnappedLeft = Canvas.GetLeft(_selectedControl);
+                            if (double.IsNaN(_resizeUnsnappedLeft)) _resizeUnsnappedLeft = _selectedControl.Bounds.X;
+                            _resizeUnsnappedTop = Canvas.GetTop(_selectedControl);
+                            if (double.IsNaN(_resizeUnsnappedTop)) _resizeUnsnappedTop = _selectedControl.Bounds.Y;
+                            _resizeUnsnappedWidth = double.IsNaN(_selectedControl.Width) ? _selectedControl.Bounds.Width : _selectedControl.Width;
+                            _resizeUnsnappedHeight = double.IsNaN(_selectedControl.Height) ? _selectedControl.Bounds.Height : _selectedControl.Height;
+                        }
                     }
                     _dragLastPoint = e.GetPosition(_canvas);
                     bool altPressed = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
@@ -844,7 +860,7 @@ namespace freesnip.editor.forms
                 if (_pixelatePercentText != null)
                 {
                     double pct = (double)(val - PixelateStrengthMin) / (PixelateStrengthMax - PixelateStrengthMin);
-                    _pixelatePercentText.Text = $"{(int)(pct * 100)}%";
+                    _pixelatePercentText.Text = $"{(int)Math.Round(pct * 100)}%";
                 }
                 
                 if (IsPixelateControl(_selectedControl))
@@ -1091,11 +1107,30 @@ namespace freesnip.editor.forms
             }
         }
 
+        private void CleanupOrphanedMultiSelectGroups()
+        {
+            if (_canvas == null) return;
+            var orphanedGroups = _canvas.Children
+                .OfType<Canvas>()
+                .Where(c => c.Tag as string == "MultiSelectGroup" && !ReferenceEquals(c, _selectedControl))
+                .ToList();
+
+            foreach (var group in orphanedGroups)
+            {
+                UngroupMultiSelectGroup(group);
+            }
+        }
+
         private void ResetToolsAndSelection()
         {
             HideCropModePopup();
             if (_lineSizePopup != null) _lineSizePopup.IsOpen = false;
             SetCurrentTool(EditorTool.None);
+            if (_selectedControl is Canvas activeGroup && activeGroup.Tag as string == "MultiSelectGroup")
+            {
+                UngroupMultiSelectGroup(activeGroup);
+            }
+            CleanupOrphanedMultiSelectGroups();
             _selectedControl = null;
             RemovePreviewShape();
             UpdateSelectionIndicator();
@@ -1588,7 +1623,7 @@ namespace freesnip.editor.forms
             if (message != null)
             {
                 message.Text = "The image could not be saved, so nothing was closed. Try Save again, choose Discard to throw the changes away, or Cancel to keep editing.";
-                message.Foreground = this.FindResource("SnapVoxWarningBrush") as IBrush ?? message.Foreground;
+                message.Foreground = this.FindResource("FreeSnipWarningBrush") as IBrush ?? message.Foreground;
             }
 
             SetClosePromptVisible(true);
@@ -2134,6 +2169,7 @@ namespace freesnip.editor.forms
                 Width = source.Width,
                 Height = source.Height,
                 Background = source.Background,
+                Tag = CloneControlTag(source.Tag),
                 IsHitTestVisible = source.IsHitTestVisible
             };
 
@@ -2581,7 +2617,7 @@ namespace freesnip.editor.forms
             double maxAllowedHeight = (targetScreen.WorkingArea.Height - 24) / scaling;
 
             var (targetWidth, targetHeight) = EditorWindowFitter.CalculateInitialSize(
-                _document.Width, _document.Height, _zoomFactor, maxAllowedWidth, maxAllowedHeight, SnapVoxFrameThickness);
+                _document.Width, _document.Height, _zoomFactor, maxAllowedWidth, maxAllowedHeight, FreeSnipFrameThickness);
 
             Width = targetWidth; Height = targetHeight;
 
@@ -3777,7 +3813,7 @@ namespace freesnip.editor.forms
                 return true;
             }
 
-            if (control is Avalonia.Controls.Shapes.Polyline pl && pl.Points.Count > 0)
+            if (control is Avalonia.Controls.Shapes.Polyline pl && pl.Points != null && pl.Points.Count > 0)
             {
                 double polyLeft = CanvasLeft(pl);
                 double polyTop = CanvasTop(pl);
@@ -3820,7 +3856,7 @@ namespace freesnip.editor.forms
                 return false;
             }
 
-            if (control is Avalonia.Controls.Shapes.Polyline pl)
+            if (control is Avalonia.Controls.Shapes.Polyline pl && pl.Points != null)
             {
                 double left = CanvasLeft(pl);
                 double top = CanvasTop(pl);
@@ -3846,6 +3882,13 @@ namespace freesnip.editor.forms
                 .LastOrDefault();
         }
 
+        private static void ResetPolygonIndicator(Avalonia.Controls.Shapes.Polygon indicator)
+        {
+            if (indicator == null) return;
+            indicator.IsVisible = false;
+            indicator.Points = new Avalonia.Points();
+        }
+
         private void UpdateHoverIndicator(AvaloniaControl hovered)
         {
             _hoveredControl = hovered;
@@ -3854,8 +3897,8 @@ namespace freesnip.editor.forms
             {
                 _hoverIndicator.IsVisible = false;
                 if (_circleHoverIndicator != null) _circleHoverIndicator.IsVisible = false;
-                if (_lineHoverIndicator != null) _lineHoverIndicator.IsVisible = false;
-                if (_arrowHoverIndicator != null) _arrowHoverIndicator.IsVisible = false;
+                ResetPolygonIndicator(_lineHoverIndicator);
+                ResetPolygonIndicator(_arrowHoverIndicator);
                 return;
             }
 
@@ -3868,7 +3911,7 @@ namespace freesnip.editor.forms
             {
                 _hoverIndicator.IsVisible = false;
                 if (_circleHoverIndicator != null) _circleHoverIndicator.IsVisible = false;
-                if (_lineHoverIndicator != null) _lineHoverIndicator.IsVisible = false;
+                ResetPolygonIndicator(_lineHoverIndicator);
                 if (_arrowHoverIndicator != null)
                 {
                     Canvas.SetLeft(_arrowHoverIndicator, 0);
@@ -3881,7 +3924,7 @@ namespace freesnip.editor.forms
             {
                 _hoverIndicator.IsVisible = false;
                 if (_circleHoverIndicator != null) _circleHoverIndicator.IsVisible = false;
-                if (_arrowHoverIndicator != null) _arrowHoverIndicator.IsVisible = false;
+                ResetPolygonIndicator(_arrowHoverIndicator);
                 if (_lineHoverIndicator != null)
                 {
                     Canvas.SetLeft(_lineHoverIndicator, 0);
@@ -3893,8 +3936,8 @@ namespace freesnip.editor.forms
             else if (isRound)
             {
                 _hoverIndicator.IsVisible = false;
-                if (_lineHoverIndicator != null) _lineHoverIndicator.IsVisible = false;
-                if (_arrowHoverIndicator != null) _arrowHoverIndicator.IsVisible = false;
+                ResetPolygonIndicator(_lineHoverIndicator);
+                ResetPolygonIndicator(_arrowHoverIndicator);
                 if (_circleHoverIndicator != null)
                 {
                     _circleHoverIndicator.Width = bounds.Width + 8;
@@ -3907,8 +3950,8 @@ namespace freesnip.editor.forms
             else
             {
                 if (_circleHoverIndicator != null) _circleHoverIndicator.IsVisible = false;
-                if (_lineHoverIndicator != null) _lineHoverIndicator.IsVisible = false;
-                if (_arrowHoverIndicator != null) _arrowHoverIndicator.IsVisible = false;
+                ResetPolygonIndicator(_lineHoverIndicator);
+                ResetPolygonIndicator(_arrowHoverIndicator);
                 _hoverIndicator.Width = bounds.Width + 8;
                 _hoverIndicator.Height = bounds.Height + 8;
                 Canvas.SetLeft(_hoverIndicator, bounds.X - 4);
@@ -5220,10 +5263,21 @@ namespace freesnip.editor.forms
 
         private void ResizeSelectedControl(double dx, double dy, bool altSnapBypass = false)
         {
-            double oldW = double.IsNaN(_selectedControl.Width) ? _selectedControl.Bounds.Width : _selectedControl.Width;
-            double oldH = double.IsNaN(_selectedControl.Height) ? _selectedControl.Bounds.Height : _selectedControl.Height;
-            double left = Canvas.GetLeft(_selectedControl); if (double.IsNaN(left)) left = _selectedControl.Bounds.X;
-            double top = Canvas.GetTop(_selectedControl); if (double.IsNaN(top)) top = _selectedControl.Bounds.Y;
+            double oldW, oldH, left, top;
+            if (TryGetControlBounds(_selectedControl, out var curControlBounds))
+            {
+                oldW = curControlBounds.Width;
+                oldH = curControlBounds.Height;
+                left = curControlBounds.X;
+                top = curControlBounds.Y;
+            }
+            else
+            {
+                oldW = double.IsNaN(_selectedControl.Width) ? _selectedControl.Bounds.Width : _selectedControl.Width;
+                oldH = double.IsNaN(_selectedControl.Height) ? _selectedControl.Bounds.Height : _selectedControl.Height;
+                left = Canvas.GetLeft(_selectedControl); if (double.IsNaN(left)) left = _selectedControl.Bounds.X;
+                top = Canvas.GetTop(_selectedControl); if (double.IsNaN(top)) top = _selectedControl.Bounds.Y;
+            }
             bool keepRatio = (_selectedControl is TextBlock) || (_selectedControl is Border b && b.Child is TextBlock) || (_selectedControl is Avalonia.Controls.Image);
             double newW = oldW; double newH = oldH;
 
@@ -5308,14 +5362,28 @@ namespace freesnip.editor.forms
                 lineCtrl.StartPoint = new AvaloniaPoint(lineCtrl.StartPoint.X * scaleX, lineCtrl.StartPoint.Y * scaleY);
                 lineCtrl.EndPoint = new AvaloniaPoint(lineCtrl.EndPoint.X * scaleX, lineCtrl.EndPoint.Y * scaleY);
             }
-            else if (_selectedControl is Avalonia.Controls.Shapes.Polyline polyCtrl)
+            else if (_selectedControl is Avalonia.Controls.Shapes.Polyline polyCtrl && polyCtrl.Points != null && polyCtrl.Points.Count > 0)
             {
-                var newPoints = new System.Collections.Generic.List<AvaloniaPoint>();
+                double pMinX = polyCtrl.Points.Min(p => p.X);
+                double pMinY = polyCtrl.Points.Min(p => p.Y);
+                double pMaxX = polyCtrl.Points.Max(p => p.X);
+                double pMaxY = polyCtrl.Points.Max(p => p.Y);
+                double curW = Math.Max(1.0, pMaxX - pMinX);
+                double curH = Math.Max(1.0, pMaxY - pMinY);
+
+                double sx = newW / curW;
+                double sy = newH / curH;
+
+                var newPoints = new System.Collections.Generic.List<AvaloniaPoint>(polyCtrl.Points.Count);
                 foreach (var pt in polyCtrl.Points)
                 {
-                    newPoints.Add(new AvaloniaPoint(pt.X * scaleX, pt.Y * scaleY));
+                    newPoints.Add(new AvaloniaPoint((pt.X - pMinX) * sx, (pt.Y - pMinY) * sy));
                 }
                 polyCtrl.Points = newPoints;
+                polyCtrl.Width = newW;
+                polyCtrl.Height = newH;
+                polyCtrl.InvalidateMeasure();
+                polyCtrl.InvalidateArrange();
                 polyCtrl.InvalidateVisual();
             }
             else if (_selectedControl is Canvas group)
@@ -5435,13 +5503,20 @@ namespace freesnip.editor.forms
                         foreach (var item in selectedItems)
                         {
                             _canvas.Children.Remove(item);
-                            double iL = Canvas.GetLeft(item);
-                            if (double.IsNaN(iL)) iL = item.Bounds.X;
-                            double iT = Canvas.GetTop(item);
-                            if (double.IsNaN(iT)) iT = item.Bounds.Y;
-                            
-                            Canvas.SetLeft(item, iL - minX);
-                            Canvas.SetTop(item, iT - minY);
+                            if (IsVectorControl(item) && TryGetVectorAbsolutePoints(item, out var vStart, out var vEnd))
+                            {
+                                SetVectorAbsolutePoints(item, new AvaloniaPoint(vStart.X - minX, vStart.Y - minY), new AvaloniaPoint(vEnd.X - minX, vEnd.Y - minY));
+                            }
+                            else
+                            {
+                                double iL = Canvas.GetLeft(item);
+                                if (double.IsNaN(iL)) iL = item.Bounds.X;
+                                double iT = Canvas.GetTop(item);
+                                if (double.IsNaN(iT)) iT = item.Bounds.Y;
+                                
+                                Canvas.SetLeft(item, iL - minX);
+                                Canvas.SetTop(item, iT - minY);
+                            }
                             group.Children.Add(item);
                         }
                         
@@ -5528,8 +5603,8 @@ namespace freesnip.editor.forms
             if (_selectedControl == null || _image == null) { 
                 if (_selectionIndicator != null) _selectionIndicator.IsVisible = false; 
                 if (_circleSelectionIndicator != null) _circleSelectionIndicator.IsVisible = false;
-                if (_lineSelectionIndicator != null) _lineSelectionIndicator.IsVisible = false;
-                if (_arrowSelectionIndicator != null) _arrowSelectionIndicator.IsVisible = false;
+                ResetPolygonIndicator(_lineSelectionIndicator);
+                ResetPolygonIndicator(_arrowSelectionIndicator);
                 foreach (var ind in _multiSelectionIndicators) ind.IsVisible = false;
                 if (_resizeHandles != null) foreach (var handleItem in _resizeHandles) handleItem.IsVisible = false; 
                 if (_deleteBtn != null) _deleteBtn.IsEnabled = false; 
@@ -5538,8 +5613,8 @@ namespace freesnip.editor.forms
                 if (_endHandle != null) _endHandle.IsVisible = false;
                 if (_hoverIndicator != null) _hoverIndicator.IsVisible = false;
                 if (_circleHoverIndicator != null) _circleHoverIndicator.IsVisible = false;
-                if (_lineHoverIndicator != null) _lineHoverIndicator.IsVisible = false;
-                if (_arrowHoverIndicator != null) _arrowHoverIndicator.IsVisible = false;
+                ResetPolygonIndicator(_lineHoverIndicator);
+                ResetPolygonIndicator(_arrowHoverIndicator);
                 HideVectorInfo();
                 if (_pixelateStrengthHandle != null) _pixelateStrengthHandle.IsVisible = false;
                 UpdateModeStatus();
@@ -5557,8 +5632,8 @@ namespace freesnip.editor.forms
             {
                 if (_selectionIndicator != null) _selectionIndicator.IsVisible = false;
                 if (_circleSelectionIndicator != null) _circleSelectionIndicator.IsVisible = false;
-                if (_lineSelectionIndicator != null) _lineSelectionIndicator.IsVisible = false;
-                if (_arrowSelectionIndicator != null) _arrowSelectionIndicator.IsVisible = false;
+                ResetPolygonIndicator(_lineSelectionIndicator);
+                ResetPolygonIndicator(_arrowSelectionIndicator);
                 foreach (var ind in _multiSelectionIndicators) ind.IsVisible = false;
                 return;
             }
@@ -5573,8 +5648,8 @@ namespace freesnip.editor.forms
             {
                 if (_selectionIndicator != null) _selectionIndicator.IsVisible = false;
                 if (_circleSelectionIndicator != null) _circleSelectionIndicator.IsVisible = false;
-                if (_lineSelectionIndicator != null) _lineSelectionIndicator.IsVisible = false;
-                if (_arrowSelectionIndicator != null) _arrowSelectionIndicator.IsVisible = false;
+                ResetPolygonIndicator(_lineSelectionIndicator);
+                ResetPolygonIndicator(_arrowSelectionIndicator);
                 int childCount = group.Children.Count;
                 while (_multiSelectionIndicators.Count < childCount)
                 {
@@ -5629,12 +5704,15 @@ namespace freesnip.editor.forms
                 {
                     if (_selectionIndicator != null) _selectionIndicator.IsVisible = false;
                     if (_circleSelectionIndicator != null) _circleSelectionIndicator.IsVisible = false;
-                    if (_lineSelectionIndicator != null) _lineSelectionIndicator.IsVisible = false;
+                    ResetPolygonIndicator(_lineSelectionIndicator);
                     if (_arrowSelectionIndicator != null)
                     {
                         Canvas.SetLeft(_arrowSelectionIndicator, 0);
                         Canvas.SetTop(_arrowSelectionIndicator, 0);
                         _arrowSelectionIndicator.Points = BuildArrowContourPoints(arrowStart, arrowEnd, GetVectorThickness(_selectedControl), padding: 2.5);
+                        _arrowSelectionIndicator.InvalidateMeasure();
+                        _arrowSelectionIndicator.InvalidateArrange();
+                        _arrowSelectionIndicator.InvalidateVisual();
                         _arrowSelectionIndicator.IsVisible = true;
                     }
                 }
@@ -5642,20 +5720,23 @@ namespace freesnip.editor.forms
                 {
                     if (_selectionIndicator != null) _selectionIndicator.IsVisible = false;
                     if (_circleSelectionIndicator != null) _circleSelectionIndicator.IsVisible = false;
-                    if (_arrowSelectionIndicator != null) _arrowSelectionIndicator.IsVisible = false;
+                    ResetPolygonIndicator(_arrowSelectionIndicator);
                     if (_lineSelectionIndicator != null)
                     {
                         Canvas.SetLeft(_lineSelectionIndicator, 0);
                         Canvas.SetTop(_lineSelectionIndicator, 0);
                         _lineSelectionIndicator.Points = BuildLineContourPoints(vStartPt, vEndPt, GetVectorThickness(_selectedControl), padding: 2.5);
+                        _lineSelectionIndicator.InvalidateMeasure();
+                        _lineSelectionIndicator.InvalidateArrange();
+                        _lineSelectionIndicator.InvalidateVisual();
                         _lineSelectionIndicator.IsVisible = true;
                     }
                 }
                 else if (isRound)
                 {
                     if (_selectionIndicator != null) _selectionIndicator.IsVisible = false;
-                    if (_lineSelectionIndicator != null) _lineSelectionIndicator.IsVisible = false;
-                    if (_arrowSelectionIndicator != null) _arrowSelectionIndicator.IsVisible = false;
+                    ResetPolygonIndicator(_lineSelectionIndicator);
+                    ResetPolygonIndicator(_arrowSelectionIndicator);
                     if (_circleSelectionIndicator != null)
                     {
                         _circleSelectionIndicator.Width = w + 4;
@@ -5668,8 +5749,8 @@ namespace freesnip.editor.forms
                 else
                 {
                     if (_circleSelectionIndicator != null) _circleSelectionIndicator.IsVisible = false;
-                    if (_lineSelectionIndicator != null) _lineSelectionIndicator.IsVisible = false;
-                    if (_arrowSelectionIndicator != null) _arrowSelectionIndicator.IsVisible = false;
+                    ResetPolygonIndicator(_lineSelectionIndicator);
+                    ResetPolygonIndicator(_arrowSelectionIndicator);
                     if (_selectionIndicator != null)
                     {
                         _selectionIndicator.Width = w + 4;
@@ -5681,7 +5762,8 @@ namespace freesnip.editor.forms
                 }
             }
             
-            if (isVector)
+            bool isMultiGroup = _selectedControl is Canvas groupControl && groupControl.Tag as string == "MultiSelectGroup";
+            if (isVector || isMultiGroup)
             {
                 foreach (var handle in _resizeHandles) handle.IsVisible = false;
             }
@@ -6163,10 +6245,19 @@ namespace freesnip.editor.forms
         {
             if (_image == null || !TryBeginEditorOperation()) return false;
             bool saved = false;
+            var totalSw = System.Diagnostics.Stopwatch.StartNew();
+            Log.Info("[STEP:START] SaveToDownloadsAsync - Beginning image export and double-clipboard synchronization.");
             try
             {
+                var flattenSw = System.Diagnostics.Stopwatch.StartNew();
                 using var tempImage = await GetFlattenedImageAsync().ConfigureAwait(true);
-                if (tempImage == null) return false;
+                flattenSw.Stop();
+                if (tempImage == null)
+                {
+                    Log.Error($"[STEP:FAIL] SaveToDownloadsAsync ({flattenSw.ElapsedMilliseconds}ms) - Failed to acquire flattened image.");
+                    return false;
+                }
+                Log.Info($"[STEP:SUCCESS] SaveToDownloadsAsync - Image flattened ({tempImage.Width}x{tempImage.Height}) in {flattenSw.ElapsedMilliseconds}ms.");
 
                 var config = IniConfig.GetIniSection<CoreConfiguration>();
                 string fileName = EditorExportService.GenerateDownloadFileName(_sourceTitle, config.OutputFileAllowPng);
@@ -6175,12 +6266,40 @@ namespace freesnip.editor.forms
                 bool savedToDownloads = target.IsDownloadsFolder;
                 await Task.Run(() => Directory.CreateDirectory(target.Path)).ConfigureAwait(true);
                 string downloadedFilePath = Path.Combine(target.Path, fileName);
+
+                var saveSw = System.Diagnostics.Stopwatch.StartNew();
                 await EditorExportService.SaveImageAsync(tempImage, downloadedFilePath, config.OutputFileAllowPng, config.OutputFileJpegQuality).ConfigureAwait(true);
+                saveSw.Stop();
                 saved = true;
+
+                long fileSizeBytes = 0;
+                try { fileSizeBytes = new FileInfo(downloadedFilePath).Length; } catch { }
+                Log.Info($"[STEP:SUCCESS] SaveToDownloadsAsync - Saved image file '{downloadedFilePath}' ({fileSizeBytes} bytes) in {saveSw.ElapsedMilliseconds}ms.");
 
                 await EditorExportService.SaveToHistoryBackupAsync(fileName, tempImage, config.KeepBackup, config.OutputFileAllowPng, config.OutputFileJpegQuality).ConfigureAwait(true);
 
-                await UiClipboard.SetFilePathThenImageAsync(downloadedFilePath, tempImage, true).ConfigureAwait(true);
+                // --- DOUBLE CLIPBOARD SEQUENCE (Issue 2) ---
+                // 1. Stage CF_DIB of image into clipboard first
+                Log.Info($"[STEP:START] SaveToDownloadsAsync.Clipboard - Staging CF_DIB image into clipboard for '{downloadedFilePath}'.");
+                var dibSw = System.Diagnostics.Stopwatch.StartNew();
+                await UiClipboard.SetImageAsync(tempImage, markFreeSnipEditorImage: true).ConfigureAwait(true);
+                dibSw.Stop();
+                Log.Info($"[STEP:SUCCESS] SaveToDownloadsAsync.Clipboard ({dibSw.ElapsedMilliseconds}ms) - CF_DIB image staged onto clipboard.");
+
+                // 2. Probe CF_DIB format available on clipboard to prevent race conditions
+                bool dibProbed = UiClipboard.ProbeClipboardFormat(UiClipboard.CF_DIB_FORMAT, 150);
+                Log.Info($"[STEP:{(dibProbed ? "SUCCESS" : "FAIL")}] SaveToDownloadsAsync.Clipboard - Probed CF_DIB format available: {dibProbed}.");
+
+                // 3. Immediately insert plain text ONLY wrapped with two " marks from its side of the full path
+                string quotedPath = $"\"{downloadedFilePath}\"";
+                Log.Info($"[STEP:START] SaveToDownloadsAsync.Clipboard - Setting plain text only quoted path: {quotedPath}");
+                var textSw = System.Diagnostics.Stopwatch.StartNew();
+                bool textSetSuccess = await UiClipboard.SetPlainTextOnlyAsync(quotedPath).ConfigureAwait(true);
+                textSw.Stop();
+                Log.Info($"[STEP:{(textSetSuccess ? "SUCCESS" : "FAIL")}] SaveToDownloadsAsync.Clipboard ({textSw.ElapsedMilliseconds}ms) - Plain text quoted path set (Success={textSetSuccess}).");
+
+                bool textProbed = UiClipboard.ProbeClipboardFormat(UiClipboard.CF_UNICODETEXT_FORMAT, 150);
+                Log.Info($"[STEP:{(textProbed ? "SUCCESS" : "FAIL")}] SaveToDownloadsAsync.Clipboard - Probed CF_UNICODETEXT format available: {textProbed}.");
 
                 string overlayMessage = savedToDownloads
                     ? "IMAGE SAVED TO DOWNLOADS"
@@ -6193,6 +6312,9 @@ namespace freesnip.editor.forms
                         OverlayHelper.ShowLightToast("Saved to FreeSnip Temp Folder (Downloads unavailable)", this);
                     }
                 });
+
+                totalSw.Stop();
+                Log.Info($"[STEP:SUCCESS] SaveToDownloadsAsync - Finished entire export and double-clipboard sequence in {totalSw.ElapsedMilliseconds}ms.");
 
                 if (config.CloseEditorOnAction)
                 {
@@ -6215,7 +6337,8 @@ namespace freesnip.editor.forms
             catch (Exception ex)
             {
                 saved = false;
-                Log.Fatal("[DOWNLOAD_CRITICAL_ERROR]", ex);
+                totalSw.Stop();
+                Log.Fatal($"[STEP:FAIL] SaveToDownloadsAsync ({totalSw.ElapsedMilliseconds}ms) - [DOWNLOAD_CRITICAL_ERROR]", ex);
                 Dispatcher.UIThread.Post(() => {
                     OverlayHelper.ShowNotification("Save Failed", this);
                 });
@@ -6251,6 +6374,7 @@ namespace freesnip.editor.forms
 
         private static AnnotationClipboardModel _annotationClipboard;
         private static int _clipboardPasteIteration = 1;
+        private static uint _annotationClipboardSequence = 0;
 
         private AnnotationClipboardModel CreateAnnotationClipboardModel(AvaloniaControl control)
         {
@@ -6367,23 +6491,26 @@ namespace freesnip.editor.forms
 
         private async void HandleContextualCopy(bool allowCloseOnAction = false)
         {
-            // Tier 1: Static OCR Mode Active (_isOcrInteractiveMode == true)
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             if (_isOcrInteractiveMode)
             {
                 if (_selectedOcrWords != null && _selectedOcrWords.Count > 0)
                 {
                     string textToCopy = OcrTextLayout.BuildVisualSelectionText(_selectedOcrWords);
                     await UiClipboard.SetTextAsync(textToCopy).ConfigureAwait(true);
+                    sw.Stop();
+                    Log.Info($"[STEP:SUCCESS] ContextualCopy.Ocr ({sw.ElapsedMilliseconds}ms) - Copied {textToCopy.Length} chars of recognized OCR text.");
                     OverlayHelper.ShowNotification("TEXT COPIED", this);
                 }
                 else
                 {
+                    sw.Stop();
+                    Log.Info($"[STEP:INFO] ContextualCopy.Ocr ({sw.ElapsedMilliseconds}ms) - No OCR words selected.");
                     OverlayHelper.ShowLightToast("NO TEXT SELECTED", this);
                 }
                 return;
             }
 
-            // Tier 2: Canvas Object Selected (_selectedControl != null)
             if (_selectedControl != null)
             {
                 var model = CreateAnnotationClipboardModel(_selectedControl);
@@ -6391,24 +6518,38 @@ namespace freesnip.editor.forms
                 {
                     _annotationClipboard = model;
                     _clipboardPasteIteration = 1;
-                    UiClipboard.SetAnnotationMarker(model.TextContent);
-                    OverlayHelper.ShowLightToast("OBJECT COPIED", this);
+                    _annotationClipboardSequence = UiClipboard.GetCurrentSequenceNumber();
+                    UiClipboard.SetInMemoryAnnotationMarker(true);
+
+                    sw.Stop();
+                    Log.Info($"[STEP:SUCCESS] ContextualCopy ({sw.ElapsedMilliseconds}ms) - Copied {model.ShapeType} (Bounds: {model.SourceLeft:F0},{model.SourceTop:F0},{model.Width:F0}x{model.Height:F0}, Seq: {_annotationClipboardSequence}) to internal clipboard.");
                     return;
+                }
+                else
+                {
+                    sw.Stop();
+                    Log.Warn($"[STEP:FAIL] ContextualCopy ({sw.ElapsedMilliseconds}ms) - Could not construct clipboard model for selected control.");
                 }
             }
 
-            // Tier 3: Default (No Object Selected, Normal Canvas Mode)
-            await CopyFlattenedImageAsync(allowCloseOnAction).ConfigureAwait(true);
+            // Nothing selected: Ctrl+C does nothing. Do not implicitly copy flattened image.
+            sw.Stop();
+            Log.Info($"[STEP:INFO] ContextualCopy ({sw.ElapsedMilliseconds}ms) - No object selected; clipboard unchanged.");
         }
 
         private async Task CopyFlattenedImageAsync(bool allowCloseOnAction)
         {
             if (_image == null || !TryBeginEditorOperation()) return;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log.Info("[STEP:START] CopyFlattenedImageAsync - Flattening image for clipboard transfer.");
             try
             {
-                Log.Info("STAGED COPY INITIATED");
                 using var tempImage = await GetFlattenedImageAsync().ConfigureAwait(true);
-                if (tempImage == null) return;
+                if (tempImage == null)
+                {
+                    Log.Error($"[STEP:FAIL] CopyFlattenedImageAsync ({sw.ElapsedMilliseconds}ms) - Failed to get flattened image.");
+                    return;
+                }
 
                 var config = IniConfig.GetIniSection<CoreConfiguration>();
                 string backupFileName = EditorExportService.GenerateClipboardBackupFileName(config.OutputFileAllowPng);
@@ -6419,6 +6560,9 @@ namespace freesnip.editor.forms
                 Dispatcher.UIThread.Post(() => {
                     OverlayHelper.ShowNotification("IMAGE SAVED TO CLIPBOARD", this);
                 });
+
+                sw.Stop();
+                Log.Info($"[STEP:SUCCESS] CopyFlattenedImageAsync ({sw.ElapsedMilliseconds}ms) - Image copied to clipboard.");
 
                 if (allowCloseOnAction && config.CloseEditorOnAction)
                 {
@@ -6440,7 +6584,8 @@ namespace freesnip.editor.forms
             }
             catch (Exception ex)
             {
-                Log.Fatal("[COPY_CRITICAL_ERROR]", ex);
+                sw.Stop();
+                Log.Fatal($"[STEP:FAIL] CopyFlattenedImageAsync ({sw.ElapsedMilliseconds}ms) - [COPY_CRITICAL_ERROR]", ex);
                 Dispatcher.UIThread.Post(() => {
                     OverlayHelper.ShowNotification("Copy Failed", this);
                 });
@@ -6451,10 +6596,9 @@ namespace freesnip.editor.forms
             }
         }
 
-        private void OnCopyClick(object sender, RoutedEventArgs e)
+        private async void OnCopyClick(object sender, RoutedEventArgs e)
         {
-            bool isToolbarButtonClick = sender != null;
-            HandleContextualCopy(allowCloseOnAction: isToolbarButtonClick);
+            await CopyFlattenedImageAsync(allowCloseOnAction: true).ConfigureAwait(true);
         }
 
         private void RotateSelectedControl(double angleDelta)
@@ -7758,29 +7902,40 @@ namespace freesnip.editor.forms
 
         private async void HandleContextualPaste()
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log.Info("[STEP:START] HandleContextualPaste - Checking clipboard context.");
             if (HasAnnotationInClipboard())
             {
                 PasteAnnotationFromClipboard();
+                sw.Stop();
+                Log.Info($"[STEP:SUCCESS] HandleContextualPaste ({sw.ElapsedMilliseconds}ms) - Annotation pasted from memory.");
                 return;
             }
 
             await PasteImageFromClipboardAsync().ConfigureAwait(true);
+            sw.Stop();
+            Log.Info($"[STEP:SUCCESS] HandleContextualPaste ({sw.ElapsedMilliseconds}ms) - External clipboard paste evaluated.");
+        }
+
+        private void OnWindowActivated(object sender, EventArgs e)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                _annotationClipboardSequence = UiClipboard.GetCurrentSequenceNumber();
+            }
+        }
+
+        private void OnWindowDeactivated(object sender, EventArgs e)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                _annotationClipboardSequence = UiClipboard.GetCurrentSequenceNumber();
+            }
         }
 
         private bool HasAnnotationInClipboard()
         {
-            if (_annotationClipboard == null) return false;
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                if (!UiClipboard.HasAnnotationMarker())
-                {
-                    _annotationClipboard = null;
-                    return false;
-                }
-            }
-
-            return true;
+            return _annotationClipboard?.Prototype != null;
         }
 
         private void PasteAnnotationFromClipboard()
@@ -7879,19 +8034,25 @@ namespace freesnip.editor.forms
             UpdateHoverIndicator(duplicate);
             UpdateThicknessPanelVisibility();
 
-            OverlayHelper.ShowLightToast("OBJECT PASTED", this);
+            Log.Info($"[STEP:SUCCESS] PasteAnnotationFromClipboard - Duplicated {_annotationClipboard.ShapeType} (Iteration: {_clipboardPasteIteration - 1}).");
             _canvas?.Focus();
         }
 
         private async Task PasteImageFromClipboardAsync()
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log.Info("[STEP:START] PasteImageFromClipboardAsync - Fetching image from clipboard.");
             try
             {
-                bool isSnapVoxEditorImage = await UiClipboard.HasSnapVoxEditorImageAsync().ConfigureAwait(true);
+                bool isFreeSnipEditorImage = await UiClipboard.HasFreeSnipEditorImageAsync().ConfigureAwait(true);
                 using var clipboardImage = await UiClipboard.GetImageAsync().ConfigureAwait(true);
-                if (clipboardImage == null) return;
+                if (clipboardImage == null)
+                {
+                    Log.Info($"[STEP:INFO] PasteImageFromClipboardAsync ({sw.ElapsedMilliseconds}ms) - No image available on clipboard.");
+                    return;
+                }
 
-                using var trimmedImage = isSnapVoxEditorImage ? TryTrimSnapVoxFrame(clipboardImage) : null;
+                using var trimmedImage = isFreeSnipEditorImage ? TryTrimFreeSnipFrame(clipboardImage) : null;
                 var image = trimmedImage ?? clipboardImage;
                 var avaloniaBitmap = freesnip.editor.helpers.ImageSharpAvaloniaHelper.ToAvaloniaBitmap(image);
                 double canvasW = _canvas?.Bounds.Width > 0 ? _canvas.Bounds.Width : (_image?.Width ?? 800);
@@ -7940,15 +8101,15 @@ namespace freesnip.editor.forms
             }
         }
 
-        private static ImageSharpImage TryTrimSnapVoxFrame(ImageSharpImage image)
+        private static ImageSharpImage TryTrimFreeSnipFrame(ImageSharpImage image)
         {
-            if (!HasSnapVoxFrame(image)) return null;
-            return image.Clone(x => x.Crop(new SixLabors.ImageSharp.Rectangle(SnapVoxFrameThickness, SnapVoxFrameThickness, image.Width - SnapVoxFrameThickness * 2, image.Height - SnapVoxFrameThickness * 2)));
+            if (!HasFreeSnipFrame(image)) return null;
+            return image.Clone(x => x.Crop(new SixLabors.ImageSharp.Rectangle(FreeSnipFrameThickness, FreeSnipFrameThickness, image.Width - FreeSnipFrameThickness * 2, image.Height - FreeSnipFrameThickness * 2)));
         }
 
-        private static bool HasSnapVoxFrame(ImageSharpImage image)
+        private static bool HasFreeSnipFrame(ImageSharpImage image)
         {
-            if (image == null || image.Width <= SnapVoxFrameThickness * 2 || image.Height <= SnapVoxFrameThickness * 2)
+            if (image == null || image.Width <= FreeSnipFrameThickness * 2 || image.Height <= FreeSnipFrameThickness * 2)
             {
                 return false;
             }
@@ -7959,13 +8120,13 @@ namespace freesnip.editor.forms
             int stepX = Math.Max(1, image.Width / 64);
             int stepY = Math.Max(1, image.Height / 64);
 
-            for (int y = 0; y < SnapVoxFrameThickness; y++)
+            for (int y = 0; y < FreeSnipFrameThickness; y++)
             {
                 SampleHorizontalFrameRow(pixels, y, stepX, ref total, ref matched);
                 SampleHorizontalFrameRow(pixels, image.Height - 1 - y, stepX, ref total, ref matched);
             }
 
-            for (int x = 0; x < SnapVoxFrameThickness; x++)
+            for (int x = 0; x < FreeSnipFrameThickness; x++)
             {
                 SampleVerticalFrameColumn(pixels, x, stepY, ref total, ref matched);
                 SampleVerticalFrameColumn(pixels, image.Width - 1 - x, stepY, ref total, ref matched);
@@ -7979,7 +8140,7 @@ namespace freesnip.editor.forms
             for (int x = 0; x < image.Width; x += step)
             {
                 total++;
-                if (IsSnapVoxFramePixel(image[x, y])) matched++;
+                if (IsFreeSnipFramePixel(image[x, y])) matched++;
             }
         }
 
@@ -7988,11 +8149,11 @@ namespace freesnip.editor.forms
             for (int y = 0; y < image.Height; y += step)
             {
                 total++;
-                if (IsSnapVoxFramePixel(image[x, y])) matched++;
+                if (IsFreeSnipFramePixel(image[x, y])) matched++;
             }
         }
 
-        private static bool IsSnapVoxFramePixel(Rgba32 pixel)
+        private static bool IsFreeSnipFramePixel(Rgba32 pixel)
         {
             return pixel.R <= 30 && pixel.G <= 55 && pixel.B >= 55 && pixel.B <= 160;
         }
@@ -8057,7 +8218,7 @@ namespace freesnip.editor.forms
                     {
                         double polyLeft = CanvasLeft(poly);
                         double polyTop = CanvasTop(poly);
-                        if (poly.Points.Count == 0) continue;
+                        if (poly.Points == null || poly.Points.Count == 0) continue;
 
                         double minAbsX = polyLeft + poly.Points.Min(p => p.X);
                         double maxAbsX = polyLeft + poly.Points.Max(p => p.X);
@@ -8210,7 +8371,7 @@ namespace freesnip.editor.forms
                     {
                         double polyLeft = CanvasLeft(poly);
                         double polyTop = CanvasTop(poly);
-                        if (poly.Points.Count == 0) continue;
+                        if (poly.Points == null || poly.Points.Count == 0) continue;
 
                         double minAbsY = polyTop + poly.Points.Min(p => p.Y);
                         double maxAbsY = polyTop + poly.Points.Max(p => p.Y);
@@ -8577,6 +8738,7 @@ namespace freesnip.editor.forms
                     }
                     else if (child is Avalonia.Controls.Shapes.Polyline poly)
                     {
+                        if (poly.Points == null || poly.Points.Count == 0) continue;
                         var pts = new List<AvaloniaPoint>();
                         foreach (var p in poly.Points)
                         {
@@ -9059,6 +9221,11 @@ namespace freesnip.editor.forms
         void IToolContextBridge.FinalizeSelectedPasteObject() => FinalizeSelectedPasteObject();
         void IToolContextBridge.ClearSelection()
         {
+            if (_selectedControl is Canvas activeGroup && activeGroup.Tag as string == "MultiSelectGroup")
+            {
+                UngroupMultiSelectGroup(activeGroup);
+            }
+            CleanupOrphanedMultiSelectGroups();
             _selectedControl = null;
             UpdateSelectionIndicator();
             UpdateHoverIndicator(null);
@@ -9088,6 +9255,32 @@ namespace freesnip.editor.forms
         }
         void IToolContextBridge.EndFreeDraw()
         {
+            if (_activePolyline != null && _activePolyline.Points != null && _activePolyline.Points.Count > 1)
+            {
+                double pMinX = _activePolyline.Points.Min(p => p.X);
+                double pMinY = _activePolyline.Points.Min(p => p.Y);
+                double pMaxX = _activePolyline.Points.Max(p => p.X);
+                double pMaxY = _activePolyline.Points.Max(p => p.Y);
+                double curW = Math.Max(1.0, pMaxX - pMinX);
+                double curH = Math.Max(1.0, pMaxY - pMinY);
+
+                if (pMinX != 0 || pMinY != 0)
+                {
+                    double curL = Canvas.GetLeft(_activePolyline);
+                    double curT = Canvas.GetTop(_activePolyline);
+                    Canvas.SetLeft(_activePolyline, curL + pMinX);
+                    Canvas.SetTop(_activePolyline, curT + pMinY);
+
+                    var normalized = new System.Collections.Generic.List<AvaloniaPoint>(_activePolyline.Points.Count);
+                    foreach (var pt in _activePolyline.Points)
+                    {
+                        normalized.Add(new AvaloniaPoint(pt.X - pMinX, pt.Y - pMinY));
+                    }
+                    _activePolyline.Points = normalized;
+                }
+                _activePolyline.Width = curW;
+                _activePolyline.Height = curH;
+            }
             _activePolyline = null;
         }
         AvaloniaPoint IToolContextBridge.ApplyCropModeToStart(AvaloniaPoint pt) => ApplyCropModeToStart(pt);

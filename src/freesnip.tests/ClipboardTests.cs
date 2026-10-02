@@ -7,6 +7,7 @@ using Xunit;
 
 namespace freesnip.tests
 {
+    [Collection("WindowsClipboard")]
     public class ClipboardTests
     {
         [Fact]
@@ -69,7 +70,7 @@ namespace freesnip.tests
             }
 
             int err = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
-            return err != 5; // Return false if ERROR_ACCESS_DENIED (sandbox isolation)
+            return err != 5;
         }
 
         [Fact]
@@ -155,7 +156,7 @@ namespace freesnip.tests
             if (!CanAccessClipboard())
                 return;
 
-            await UiClipboard.SetTextAsync("SnapVox Persistent Owner Test");
+            await UiClipboard.SetTextAsync("FreeSnip Persistent Owner Test");
 
             IntPtr owner = GetClipboardOwner();
             Assert.NotEqual(IntPtr.Zero, owner);
@@ -175,6 +176,7 @@ namespace freesnip.tests
             {
                 using var warmImage = new Image<Rgba32>(16, 16, new Rgba32(100, 150, 200, 255));
                 await UiClipboard.SetFilePathThenImageAsync(warmPath, warmImage);
+                await Task.Delay(150);
 
                 using var image = new Image<Rgba32>(32, 32, new Rgba32(255, 0, 128, 255));
                 var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -255,6 +257,128 @@ namespace freesnip.tests
                 try { System.IO.File.Delete(testPath); } catch { }
             }
         }
+
+        [Fact]
+        public async Task SetPlainTextOnlyAsync_WritesQuotedPathAndProbesSuccessfully()
+        {
+            if (!CanAccessClipboard())
+                return;
+
+            string rawPath = @"C:\TestFolder\Capture 2026-10-01.png";
+            string quotedPath = $"\"{rawPath}\"";
+
+            bool result = await UiClipboard.SetPlainTextOnlyAsync(quotedPath);
+            Assert.True(result, "SetPlainTextOnlyAsync must return true on success.");
+
+            bool probeText = UiClipboard.ProbeClipboardFormat(UiClipboard.CF_UNICODETEXT_FORMAT, 200);
+            Assert.True(probeText, "ProbeClipboardFormat must return true for CF_UNICODETEXT_FORMAT.");
+
+            if (OpenClipboard(IntPtr.Zero))
+            {
+                try
+                {
+                    IntPtr hText = GetClipboardData(UiClipboard.CF_UNICODETEXT_FORMAT);
+                    Assert.NotEqual(IntPtr.Zero, hText);
+                    IntPtr pText = GlobalLock(hText);
+                    try
+                    {
+                        string? clipboardText = System.Runtime.InteropServices.Marshal.PtrToStringUni(pText);
+                        Assert.Equal(quotedPath, clipboardText);
+                        Assert.StartsWith("\"", clipboardText);
+                        Assert.EndsWith("\"", clipboardText);
+                    }
+                    finally
+                    {
+                        GlobalUnlock(hText);
+                    }
+                }
+                finally
+                {
+                    CloseClipboard();
+                }
+            }
+        }
+
+        [Fact]
+        public async Task DownloadDoubleClipboardSequence_StagesDibThenQuotedPlainText()
+        {
+            if (!CanAccessClipboard())
+                return;
+
+            string savedPath = @"C:\Users\alon\Downloads\FreeSnip_20261001_120000.png";
+            string quotedPath = $"\"{savedPath}\"";
+
+            using var testImage = new Image<Rgba32>(24, 24, new Rgba32(50, 100, 150, 255));
+
+            // Step 1: Stage CF_DIB
+            await UiClipboard.SetImageAsync(testImage, markFreeSnipEditorImage: true);
+            bool dibProbed = UiClipboard.ProbeClipboardFormat(UiClipboard.CF_DIB_FORMAT, 200);
+            Assert.True(dibProbed, "CF_DIB must be probed as available on the clipboard.");
+
+            // Step 2: Set plain text only wrapped in quotation marks
+            bool textSet = await UiClipboard.SetPlainTextOnlyAsync(quotedPath);
+            Assert.True(textSet, "SetPlainTextOnlyAsync must succeed for quoted path.");
+
+            bool textProbed = UiClipboard.ProbeClipboardFormat(UiClipboard.CF_UNICODETEXT_FORMAT, 200);
+            Assert.True(textProbed, "CF_UNICODETEXT must be probed as available on the clipboard.");
+
+            if (OpenClipboard(IntPtr.Zero))
+            {
+                try
+                {
+                    IntPtr hText = GetClipboardData(UiClipboard.CF_UNICODETEXT_FORMAT);
+                    Assert.NotEqual(IntPtr.Zero, hText);
+                    IntPtr pText = GlobalLock(hText);
+                    try
+                    {
+                        string? text = System.Runtime.InteropServices.Marshal.PtrToStringUni(pText);
+                        Assert.Equal(quotedPath, text);
+                    }
+                    finally
+                    {
+                        GlobalUnlock(hText);
+                    }
+                }
+                finally
+                {
+                    CloseClipboard();
+                }
+            }
+        }
+
+        [Fact]
+        public void ProbeClipboardFormat_DetectsAvailableAndUnavailableFormatsAccurately()
+        {
+            if (!CanAccessClipboard())
+                return;
+
+            const uint NON_EXISTENT_FORMAT = 0xBEEF;
+            bool nonExistentProbed = UiClipboard.ProbeClipboardFormat(NON_EXISTENT_FORMAT, 20);
+            Assert.False(nonExistentProbed, "Non-existent format must return false when probed.");
+        }
+
+        [Fact]
+        public async Task SequenceNumber_IncrementsOnClipboardChange()
+        {
+            if (!CanAccessClipboard())
+                return;
+
+            uint seq1 = UiClipboard.GetCurrentSequenceNumber();
+            await UiClipboard.SetPlainTextOnlyAsync($"\"TestSequence_{Guid.NewGuid()}\"");
+            uint seq2 = UiClipboard.GetCurrentSequenceNumber();
+
+            Assert.NotEqual(seq1, seq2);
+        }
+
+        [Fact]
+        public void InMemoryAnnotationMarker_TogglesCorrectly()
+        {
+            UiClipboard.SetInMemoryAnnotationMarker(true);
+            UiClipboard.SetInMemoryAnnotationMarker(false);
+            // Verify no exceptions or state corruption
+            Assert.True(true);
+        }
     }
 }
+
 

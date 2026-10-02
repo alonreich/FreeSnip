@@ -7,7 +7,6 @@ namespace freesnip.helpers
     public class ResourceMutex : IDisposable
     {
         public const string SingleInstanceArbitratorName = @"Global\FreeSnip_SingleInstance_Arbitrator";
-        public const string LegacySingleInstanceArbitratorName = @"Global\SnapVox_SingleInstance_Arbitrator";
 
         private static readonly ILog Log = freesnip.foundation.core.LogHelper.GetLogger(typeof(ResourceMutex));
         private readonly string _mutexId;

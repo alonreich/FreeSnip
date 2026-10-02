@@ -7,7 +7,7 @@ namespace freesnip.helpers
     /// <summary>
     /// Detects whether the Print Screen key is currently being taken by Windows itself
     /// (Snipping Tool / Snip &amp; Sketch - the Windows 10/11 "Use the Print screen key to open
-    /// screen capture" setting) or by any other program, in which case SnapVox hotkeys that
+    /// screen capture" setting) or by any other program, in which case FreeSnip hotkeys that
     /// rely on Print Screen cannot work. Used for the boot toast and the red Settings warning.
     /// </summary>
     public static class PrintScreenConflictHelper
@@ -15,7 +15,7 @@ namespace freesnip.helpers
         /// <summary>
         /// Windows 10/11 setting "Use the Print screen key to open screen capture"
         /// (Settings &gt; Accessibility &gt; Keyboard). When enabled, Windows grabs Print Screen
-        /// and opens the Snipping Tool, so SnapVox cannot receive the key.
+        /// and opens the Snipping Tool, so FreeSnip cannot receive the key.
         /// </summary>
         public static bool IsWindowsSnippingPrintScreenEnabled()
         {

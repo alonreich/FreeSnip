@@ -14,7 +14,7 @@ def get_downloads_directory():
     return Path.home() / "Downloads"
 
 WORKING_DIRECTORY = Path(__file__).resolve().parent.parent
-TOOL_OUTPUT_DIRECTORY = get_downloads_directory() / "snapvox" / "developer_tools"
+TOOL_OUTPUT_DIRECTORY = get_downloads_directory() / "FreeSnip" / "developer_tools"
 os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
 os.environ['PYTHONPYCACHEPREFIX'] = str(TOOL_OUTPUT_DIRECTORY / "pycache")
 sys.pycache_prefix = os.environ['PYTHONPYCACHEPREFIX']

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -151,7 +151,6 @@ public class ShellLinkWriterTests : IDisposable
         }
         catch (UnauthorizedAccessException)
         {
-            // Expected in non-elevated unit test environments where Public Desktop is restricted
         }
         finally
         {
@@ -182,11 +181,9 @@ public class ShellLinkWriterTests : IDisposable
     [Fact]
     public void Create_SubMillisecondPerformance_ExecutesRapidly()
     {
-        // Warm up COM infrastructure once
         string warmupPath = Path.Combine(_tempDir, "warmup.lnk");
         ShellLinkWriter.Create(warmupPath, @"C:\Windows\System32\notepad.exe");
 
-        // Benchmark 20 iterations
         int iterations = 20;
         var sw = Stopwatch.StartNew();
         for (int i = 0; i < iterations; i++)
@@ -197,7 +194,6 @@ public class ShellLinkWriterTests : IDisposable
         sw.Stop();
 
         double avgMilliseconds = sw.Elapsed.TotalMilliseconds / iterations;
-        // Verify native COM execution is dramatically faster than PowerShell process execution (<5ms per shortcut vs 500-1500ms for powershell.exe)
         Assert.True(avgMilliseconds < 10.0, $"Average execution time {avgMilliseconds:F2}ms exceeds threshold.");
     }
 

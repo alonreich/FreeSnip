@@ -13,7 +13,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace freesnip.foundation.core
 {
-    [IniSection("Core", Description = "snapvox core configuration")]
+    [IniSection("Core", Description = "FreeSnip core configuration")]
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
     public class CoreConfiguration : IniSection, INotifyPropertyChanged
     {
@@ -61,7 +61,7 @@ namespace freesnip.foundation.core
         [IniProperty("ScreenCaptureMode", Description = "The capture mode used to capture a screen. (Auto, FullScreen, Fixed)", DefaultValue = "Auto")]
         public ScreenCaptureMode ScreenCaptureMode { get; set; }
 
-        [IniProperty("RunAsAdministratorOnStartup", Description = "Run snapvox elevated when it starts automatically.", DefaultValue = "false")]
+        [IniProperty("RunAsAdministratorOnStartup", Description = "Run FreeSnip elevated when it starts automatically.", DefaultValue = "false")]
         public bool RunAsAdministratorOnStartup { get; set; } = false;
 
         [IniProperty("OutputFileFormat", Description = "Default file type for writing screenshots. Options: png (lossless, default) or jpg (100% quality).", DefaultValue = "png")]
@@ -94,8 +94,8 @@ namespace freesnip.foundation.core
         [IniProperty("UserDownloadPath", Description = "Custom download path if default Downloads folder is missing.")]
         public string UserDownloadPath { get; set; }
 
-        [IniProperty("LastPixelateStrength", DefaultValue = "25")]
-        public int LastPixelateStrength { get; set; } = 25;
+        [IniProperty("LastPixelateStrength", DefaultValue = "10")]
+        public int LastPixelateStrength { get; set; } = 10;
 
         [IniProperty("LastCropMode", Description = "Crop shape last picked in the editor: Regular, KeepRatio, Square, Wide, Tall, VerticalStrip or HorizontalStrip.", DefaultValue = "Regular")]
         public string LastCropMode { get; set; } = "Regular";
@@ -180,8 +180,8 @@ namespace freesnip.foundation.core
         [IniProperty("DeleteObjectHotkey", DefaultValue = "Delete")]
         public string DeleteObjectHotkey { get; set; } = "Delete";
 
-        [IniProperty("ScrollCaptureDelimiterHotkey", DefaultValue = "Space")]
-        public string ScrollCaptureDelimiterHotkey { get; set; } = "Space";
+        [IniProperty("ScrollCaptureDelimiterHotkey", DefaultValue = "Enter")]
+        public string ScrollCaptureDelimiterHotkey { get; set; } = "Enter";
 
         [IniProperty("CustomColors", Description = "A comma separated list of custom colors.", DefaultValue = "#000000,#00FF00,#FF0000,#FFFF00,#0000FF,#FFFFFF")]
         public string CustomColors { get; set; } = "#000000,#00FF00,#FF0000,#FFFF00,#0000FF,#FFFFFF";
@@ -215,7 +215,6 @@ namespace freesnip.foundation.core
         public override void AfterLoad()
         {
             if (ClipboardFormats == null || ClipboardFormats.Count == 0) ClipboardFormats = new List<ClipboardFormat> { ClipboardFormat.DIB };
-            // Keep OutputFileFormat and OutputFileAllowPng in sync — PNG is the default lossless output.
             if (OutputFileFormat == OutputFormat.png)
                 OutputFileAllowPng = true;
             else if (OutputFileFormat == OutputFormat.jpg)
@@ -225,7 +224,6 @@ namespace freesnip.foundation.core
             else
                 OutputFileFormat = OutputFormat.jpg;
 
-            // Quality is strictly maximum (100%) — never expose or allow sub-100 lossy output.
             OutputFileJpegQuality = 100;
         }
     }

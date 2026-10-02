@@ -18,7 +18,7 @@ namespace freesnip.editor.helpers
             if (owner == null) return;
 
             var dismissButton = BuildButton(owner, dismissText,
-                destructive ? "SnapVoxDestructiveBrush" : "SnapVoxAccentBrush",
+                destructive ? "FreeSnipDestructiveBrush" : "FreeSnipAccentBrush",
                 Brushes.Firebrick);
             dismissButton.IsCancel = true;
             dismissButton.IsDefault = true;
@@ -32,7 +32,7 @@ namespace freesnip.editor.helpers
                 ShowInTaskbar = false,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 FlowDirection = UiLayoutDirection.Current,
-                Background = Lookup<IBrush>(owner, "SnapVoxPanelDarkBrush", Brushes.Black),
+                Background = Lookup<IBrush>(owner, "FreeSnipPanelDarkBrush", Brushes.Black),
                 Content = new StackPanel
                 {
                     Spacing = 18,
@@ -46,13 +46,13 @@ namespace freesnip.editor.helpers
                             FontWeight = FontWeight.Bold,
                             FontSize = 18,
                             TextWrapping = TextWrapping.Wrap,
-                            Foreground = Lookup<IBrush>(owner, "SnapVoxPrimaryTextBrush", Brushes.White)
+                            Foreground = Lookup<IBrush>(owner, "FreeSnipPrimaryTextBrush", Brushes.White)
                         },
                         new TextBlock
                         {
                             Text = message,
                             TextWrapping = TextWrapping.Wrap,
-                            Foreground = Lookup<IBrush>(owner, "SnapVoxSecondaryTextBrush", Brushes.LightGray)
+                            Foreground = Lookup<IBrush>(owner, "FreeSnipSecondaryTextBrush", Brushes.LightGray)
                         },
                         new StackPanel
                         {
@@ -77,9 +77,9 @@ namespace freesnip.editor.helpers
             if (owner == null) return false;
 
             var confirmButton = BuildButton(owner, confirmText,
-                destructive ? "SnapVoxDestructiveBrush" : "SnapVoxAccentBrush",
+                destructive ? "FreeSnipDestructiveBrush" : "FreeSnipAccentBrush",
                 Brushes.Firebrick);
-            var cancelButton = BuildButton(owner, cancelText, "SnapVoxSecondaryButtonBrush", Brushes.DimGray);
+            var cancelButton = BuildButton(owner, cancelText, "FreeSnipSecondaryButtonBrush", Brushes.DimGray);
             cancelButton.IsCancel = true;
 
             var dialog = new Window
@@ -91,7 +91,7 @@ namespace freesnip.editor.helpers
                 ShowInTaskbar = false,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 FlowDirection = UiLayoutDirection.Current,
-                Background = Lookup<IBrush>(owner, "SnapVoxPanelDarkBrush", Brushes.Black),
+                Background = Lookup<IBrush>(owner, "FreeSnipPanelDarkBrush", Brushes.Black),
                 Content = new StackPanel
                 {
                     Spacing = 18,
@@ -105,13 +105,13 @@ namespace freesnip.editor.helpers
                             FontWeight = FontWeight.Bold,
                             FontSize = 18,
                             TextWrapping = TextWrapping.Wrap,
-                            Foreground = Lookup<IBrush>(owner, "SnapVoxPrimaryTextBrush", Brushes.White)
+                            Foreground = Lookup<IBrush>(owner, "FreeSnipPrimaryTextBrush", Brushes.White)
                         },
                         new TextBlock
                         {
                             Text = message,
                             TextWrapping = TextWrapping.Wrap,
-                            Foreground = Lookup<IBrush>(owner, "SnapVoxSecondaryTextBrush", Brushes.LightGray)
+                            Foreground = Lookup<IBrush>(owner, "FreeSnipSecondaryTextBrush", Brushes.LightGray)
                         },
                         new StackPanel
                         {
@@ -148,7 +148,7 @@ namespace freesnip.editor.helpers
                 CornerRadius = new CornerRadius(4),
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 Background = Lookup<IBrush>(owner, brushKey, fallback),
-                Foreground = Lookup<IBrush>(owner, "FreeSnipPrimaryTextBrush", Lookup<IBrush>(owner, "SnapVoxPrimaryTextBrush", Brushes.White))
+                Foreground = Lookup<IBrush>(owner, "FreeSnipPrimaryTextBrush", Brushes.White)
             };
             AutomationProperties.SetName(button, text);
             return button;

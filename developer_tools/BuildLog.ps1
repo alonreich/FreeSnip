@@ -173,7 +173,7 @@ function Write-LogHeader {
     $divider = ('=' * 78)
     @(
         $divider,
-        'SnapVox Build Log',
+        'FreeSnip Build Log',
         "Started : $stamp",
         "Machine : $env:COMPUTERNAME",
         "User    : $env:USERNAME",

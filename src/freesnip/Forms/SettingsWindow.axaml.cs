@@ -26,7 +26,6 @@ namespace freesnip.forms
         private bool _savedAndClosing;
         private bool _saveInProgress;
 
-        // Output format display labels — must stay in sync with OnSaveClick mapping.
         private const string FormatPng  = "PNG (Lossless, Transparency Preserved - Recommended)";
         private const string FormatJpeg = "JPEG (100% Quality)";
 
@@ -176,8 +175,8 @@ namespace freesnip.forms
                     if (ocrEmptyState.IsVisible && ocrEmptyText != null)
                     {
                         ocrEmptyText.Text = !hasProviders
-                            ? "No text-recognition engine is registered, so OCR is unavailable. Restart SnapVox; if it persists, reinstall the application."
-                            : "The installed engine is missing its English or Hebrew language pack, so OCR will fail. Add both languages in Windows Settings > Time & language > Language & region, then restart SnapVox.";
+                            ? "No text-recognition engine is registered, so OCR is unavailable. Restart FreeSnip; if it persists, reinstall the application."
+                            : "The installed engine is missing its English or Hebrew language pack, so OCR will fail. Add both languages in Windows Settings > Time & language > Language & region, then restart FreeSnip.";
                     }
                 }
             }
@@ -248,7 +247,7 @@ namespace freesnip.forms
             bool confirmed = await ConfirmDialog.ShowAsync(
                 this,
                 "Reset all hotkeys?",
-                "Every shortcut on this tab goes back to the SnapVox factory default. Any key combinations you set yourself are replaced and cannot be recovered.",
+                "Every shortcut on this tab goes back to the FreeSnip factory default. Any key combinations you set yourself are replaced and cannot be recovered.",
                 "Reset All Hotkeys",
                 "Keep My Hotkeys",
                 true).ConfigureAwait(true);
@@ -391,12 +390,12 @@ namespace freesnip.forms
                 if (isAdmin)
                 {
                     btn.Content = "Remove Administrator Permissions";
-                    btn.Background = this.TryFindResource("SnapVoxDestructiveBrush", out var destBrush) && destBrush is IBrush db ? db : new SolidColorBrush(Avalonia.Media.Color.Parse("#A51D2D"));
+                    btn.Background = this.TryFindResource("FreeSnipDestructiveBrush", out var destBrush) && destBrush is IBrush db ? db : new SolidColorBrush(Avalonia.Media.Color.Parse("#A51D2D"));
                 }
                 else
                 {
                     btn.Content = "Run This App As an Administrator (Highest Privileges)";
-                    btn.Background = this.TryFindResource("SnapVoxActionButtonBrush", out var actionBrush) && actionBrush is IBrush ab ? ab : new SolidColorBrush(Avalonia.Media.Color.Parse("#3E3E42"));
+                    btn.Background = this.TryFindResource("FreeSnipActionButtonBrush", out var actionBrush) && actionBrush is IBrush ab ? ab : new SolidColorBrush(Avalonia.Media.Color.Parse("#3E3E42"));
                 }
             }
 
@@ -488,7 +487,7 @@ namespace freesnip.forms
                     _config.OutputFileFormat      = isJpeg ? freesnip.foundation.core.Enums.OutputFormat.jpg
                                                            : freesnip.foundation.core.Enums.OutputFormat.png;
                     _config.OutputFileAllowPng    = !isJpeg;
-                    _config.OutputFileJpegQuality = 100; // Always maximum — no degradation allowed.
+                    _config.OutputFileJpegQuality = 100;
                 }
 
 #if USE_TESSERACT

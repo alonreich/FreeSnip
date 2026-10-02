@@ -40,8 +40,6 @@ namespace freesnip.forms
         private static List<CaptureWindow> _activeWindows = new List<CaptureWindow>();
         private static readonly object CaptureSessionLock = new object();
         private static bool _globalOcrMode;
-        private static bool _captureCompleted;
-        private static bool _captureTrayIconHeld;
 
         private const int MagneticThresholdPixels = 10;
         private static readonly long SnapProbeIntervalTicks = Stopwatch.Frequency / 60;
@@ -288,6 +286,7 @@ namespace freesnip.forms
         {
         }
 
+        private static bool _captureSessionActive = false;
         private static DateTime _captureSessionStartTime = DateTime.MinValue;
 
         public static bool BeginCaptureSession()
@@ -295,26 +294,24 @@ namespace freesnip.forms
             freesnip.foundation.core.ScreenTintBypass.InvalidateCache();
             lock (CaptureSessionLock)
             {
-                if (_captureTrayIconHeld)
+                if (_captureSessionActive)
                 {
                     bool hasActiveOverlays;
                     lock (_activeWindows) { hasActiveOverlays = _activeWindows.Count > 0; }
                     if (!hasActiveOverlays && (DateTime.UtcNow - _captureSessionStartTime).TotalSeconds > 3.0)
                     {
-                        _captureTrayIconHeld = false;
-                        _captureCompleted = false;
+                        _captureSessionActive = false;
                     }
                     else
                     {
                         return false;
                     }
                 }
-                _captureCompleted = false;
-                _captureTrayIconHeld = true;
+                _captureSessionActive = true;
                 _captureSessionStartTime = DateTime.UtcNow;
             }
 
-            App.ForceRedTrayIcon(true);
+            App.ForceRedTrayIcon(true, "CaptureSession");
             return true;
         }
 
@@ -322,11 +319,11 @@ namespace freesnip.forms
         {
             lock (CaptureSessionLock)
             {
-                if (!_captureTrayIconHeld) return;
-                _captureTrayIconHeld = false;
+                _captureSessionActive = false;
             }
 
-            App.ForceRedTrayIcon(false);
+            App.ForceRedTrayIcon(false, "CaptureSession");
+            App.ClearAllTrayHolds();
         }
 
         public CaptureWindow(PixelRect screenBounds, Avalonia.Media.Imaging.Bitmap background = null)
@@ -444,12 +441,10 @@ namespace freesnip.forms
 
                 if (isLastWindow)
                 {
-                    if (!_captureCompleted)
-                    {
-                        EndCaptureSession();
-                    }
+                    EndCaptureSession();
                     _globalOcrMode = false;
                     CaptureHelper.ClearFrozenSnapshot();
+                    App.ClearAllTrayHolds();
                 }
                 
                 if (_backgroundControl != null)
@@ -538,7 +533,7 @@ namespace freesnip.forms
                 overlay.Close();
             }
 
-            if (!_captureCompleted) EndCaptureSession();
+            EndCaptureSession();
         }
 
         private void LayoutInstructionBanner(Avalonia.Point? cursorPosition)
@@ -851,7 +846,15 @@ namespace freesnip.forms
         {
             Log.Debug($"CaptureWindow KeyDown: {e.Key}");
             FocusForKeyboardCapture();
-            if (e.Key == Key.Escape) { e.Handled = true; CloseAllCaptureOverlays(); return; }
+            if (e.Key == Key.Escape)
+            {
+                App.ForceRedTrayIcon(false, "RubberbandDrag");
+                App.ForceRedTrayIcon(false, "CaptureOcr");
+                App.ForceRedTrayIcon(false, "CaptureSession");
+                e.Handled = true;
+                CloseAllCaptureOverlays();
+                return;
+            }
             if (e.Key == Key.C) { e.Handled = true; CaptureAndCopyCurrentSelection(); return; }
             if (e.Key == Key.T || e.Key == Key.O)
             {
@@ -864,6 +867,14 @@ namespace freesnip.forms
         private static void SetGlobalOcrMode(bool enable)
         {
             _globalOcrMode = enable;
+            if (enable)
+            {
+                App.ForceRedTrayIcon(true, "CaptureOcr");
+            }
+            else
+            {
+                App.ForceRedTrayIcon(false, "CaptureOcr");
+            }
 
             List<CaptureWindow> windows;
             lock (_activeWindows) { windows = _activeWindows.ToList(); }
@@ -930,6 +941,7 @@ namespace freesnip.forms
         private void ExitOcrMode(TextBlock instructionText)
         {
             _isPainterMode = false;
+            App.ForceRedTrayIcon(false, "CaptureOcr");
             _ = StopLocalOcrAsync();
             CancelLocalPreemptiveOcr();
 
@@ -1032,12 +1044,19 @@ namespace freesnip.forms
         {
             if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
             {
+                App.ForceRedTrayIcon(false, "RubberbandDrag");
+                App.ForceRedTrayIcon(false, "CaptureOcr");
+                App.ForceRedTrayIcon(false, "CaptureSession");
                 CloseAllCaptureOverlays();
                 return;
             }
 
             _isDragging = true;
-            if (!_isPainterMode) Cursor = CrossCursor;
+            if (!_isPainterMode)
+            {
+                Cursor = CrossCursor;
+                App.ForceRedTrayIcon(true, "RubberbandDrag");
+            }
             if (_instructionBorder != null) _instructionBorder.IsVisible = false;
             var pos = e.GetPosition(this);
             double scaling = Scaling;
@@ -1329,6 +1348,7 @@ namespace freesnip.forms
             double deltaY = Math.Abs(endPoint.Y - _startPoint.Y);
             bool isIntentionalDrag = deltaX > 5 || deltaY > 5;
             _isDragging = false;
+            App.ForceRedTrayIcon(false, "RubberbandDrag");
             
             if (!_isPainterMode && _instructionBorder != null) _instructionBorder.IsVisible = true;
             if (_magnifierPanel != null) _magnifierPanel.IsVisible = false;
@@ -1442,7 +1462,8 @@ namespace freesnip.forms
 
         private static async Task CaptureAfterOverlaysHiddenAsync(RECT rect, IntPtr windowHandle = default)
         {
-            _captureCompleted = true;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log.Info($"[STEP:START] CaptureAfterOverlaysHiddenAsync - Rect: ({rect.X},{rect.Y},{rect.Width}x{rect.Height}), WindowHandle: {windowHandle}");
             ImageSharpImage owned = null;
             ImageSharpImage frozenCaptured = null;
             ImageSharpImage imageForEditor = null;
@@ -1474,6 +1495,8 @@ namespace freesnip.forms
                 {
                     frozenCaptured?.Dispose();
                     CaptureHelper.ClearFrozenSnapshot();
+                    sw.Stop();
+                    Log.Info($"[STEP:INFO] CaptureAfterOverlaysHiddenAsync ({sw.ElapsedMilliseconds}ms) - Selection rect was empty; capture cancelled.");
                     return;
                 }
 
@@ -1511,6 +1534,8 @@ namespace freesnip.forms
                 if (owned == null) 
                 {
                     CaptureHelper.ClearFrozenSnapshot();
+                    sw.Stop();
+                    Log.Error($"[STEP:FAIL] CaptureAfterOverlaysHiddenAsync ({sw.ElapsedMilliseconds}ms) - Failed to extract captured region image.");
                     return;
                 }
 
@@ -1526,7 +1551,10 @@ namespace freesnip.forms
                 }
                 try
                 {
+                    Log.Info($"[STEP:START] CaptureAfterOverlaysHiddenAsync - Launching editor for image ({imageForEditor.Width}x{imageForEditor.Height}).");
                     await Dispatcher.UIThread.InvokeAsync(() => ShowEditorForOwnedImageAsync(imageForEditor, rect, targetTitle));
+                    sw.Stop();
+                    Log.Info($"[STEP:SUCCESS] CaptureAfterOverlaysHiddenAsync ({sw.ElapsedMilliseconds}ms) - Editor window loaded successfully.");
                 }
                 finally
                 {
@@ -1539,7 +1567,8 @@ namespace freesnip.forms
                 imageForEditor?.Dispose();
                 owned?.Dispose();
                 CaptureHelper.ClearFrozenSnapshot();
-                Log.Fatal("CaptureAfterOverlaysHiddenAsync failed.", ex);
+                sw.Stop();
+                Log.Fatal($"[STEP:FAIL] CaptureAfterOverlaysHiddenAsync ({sw.ElapsedMilliseconds}ms) - Capture failed.", ex);
             }
             finally
             {
@@ -1558,9 +1587,11 @@ namespace freesnip.forms
                 await editor.SetImageAsync(imageForEditor, rect, targetTitle ?? CaptureHelper.LastActiveWindowTitle).ConfigureAwait(true);
                 imageForEditor = null;
                 editor.Show();
+                App.ClearAllTrayHolds();
             }
             catch (Exception ex)
             {
+                App.ClearAllTrayHolds();
                 imageForEditor?.Dispose();
                 editor?.Close();
                 Log.Fatal("ShowEditorForOwnedImage failed.", ex);

@@ -40,17 +40,17 @@ def get_group_name(file_path: Path, project_root: Path) -> str:
         return "00_Specifications_and_Architecture"
 
     # 01: Foundation, Core Abstractions, Data Types, and Native Interop
-    if "snapvox.foundation" in rel_path and "tests" not in rel_path:
+    if "freesnip.foundation" in rel_path and "tests" not in rel_path:
         if ext == '.cs':
             return "01_Foundation_and_Core"
 
     # 02: Editor Subsystem, Vector Snapping, Tools, and Canvas Engine
-    if "snapvox.editor" in rel_path and "tests" not in rel_path:
+    if "freesnip.editor" in rel_path and "tests" not in rel_path:
         if ext == '.cs':
             return "02_Editor_and_Annotation_Engine"
 
     # 03: Application Host, Window Controllers, Native OCR Providers, and System Lifecycle
-    if "src\\snapvox" in rel_path or "src/snapvox" in rel_path:
+    if "src\\freesnip" in rel_path or "src/freesnip" in rel_path:
         if "tests" not in rel_path and "editor" not in rel_path and "foundation" not in rel_path:
             if ext == '.cs':
                 return "03_App_and_Host_Services"
@@ -121,12 +121,12 @@ def generate_project_manifest(project_root: Path, groups: dict, total_files: int
     divider = "=" * 80
     lines = [
         divider,
-        "SNAPVOX ARCHITECTURAL MANIFEST & SYSTEM CONTEXT",
+        "FREESNIP ARCHITECTURAL MANIFEST & SYSTEM CONTEXT",
         divider,
         f"Project Root:        {project_root}",
         "Target Framework:    .NET 9 (net9.0-windows10.0.19041.0)",
         "Architecture Style:  Avalonia UI Desktop + Hardware-Accelerated Vector Graphics + OCR",
-        "Publish Profile:     Native AOT Compatible (Single Binary Mandate: SnapVox.exe / SnapVox_tesseract.exe)",
+        "Publish Profile:     Native AOT Compatible (Single Binary Mandate: FreeSnip.exe / FreeSnip_tesseract.exe)",
         "",
         "PRIMARY ARCHITECTURAL INVARIANTS (From README.md & System Contracts):",
         "  1. Single Binary Executable Mandate: Portable Native AOT build with zero loose companion dependencies.",
@@ -138,10 +138,10 @@ def generate_project_manifest(project_root: Path, groups: dict, total_files: int
         "  7. Release Quarantine & Footprint Hygiene: Single-release lifecycle with clean footprint verification.",
         "",
         "SUBSYSTEM MAP & DIRECTORY HIERARCHY:",
-        "  - src\\snapvox.foundation: Core abstractions, IniConfig parser, Avalonia shims, Win32 interop, OCR contracts.",
-        "  - src\\snapvox.editor:     Avalonia ImageEditorWindow, Drawing tools, VectorSnappingEngine, zoom & crop engines.",
-        "  - src\\snapvox:            Application bootstrap, CaptureWindow, ScrollCapture, hotkeys, native OCR providers.",
-        "  - src\\snapvox.tests:      Unit test suite, regression checks, atomic save verification, footprint tests.",
+        "  - src\\freesnip.foundation: Core abstractions, IniConfig parser, Avalonia shims, Win32 interop, OCR contracts.",
+        "  - src\\freesnip.editor:     Avalonia ImageEditorWindow, Drawing tools, VectorSnappingEngine, zoom & crop engines.",
+        "  - src\\freesnip:            Application bootstrap, CaptureWindow, ScrollCapture, hotkeys, native OCR providers.",
+        "  - src\\freesnip.tests:      Unit test suite, regression checks, atomic save verification, footprint tests.",
         "  - developer_tools\\:       Build automation, bytecode sentinels, and code aggregator tooling.",
         "  - icons\\, tessdata\\:     Vector SVG icons, PNG icons, and Tesseract language trained data.",
         "",
@@ -162,7 +162,7 @@ def generate_project_manifest(project_root: Path, groups: dict, total_files: int
 
 def run_aggregator():
     project_root = Path(__file__).resolve().parent.parent
-    download_dir = get_downloads_directory() / "snapvox"
+    download_dir = get_downloads_directory() / "FreeSnip"
 
     if not download_dir.exists():
         download_dir.mkdir(parents=True, exist_ok=True)
@@ -295,7 +295,7 @@ def run_aggregator():
         toc = "\n".join(f"  - {rel_path}" for rel_path, _ in part_items)
         banner = (
             f"{divider}\n"
-            f"SNAPVOX CODE EXPORT BUNDLE - PART {i} OF {count}\n"
+            f"FREESNIP CODE EXPORT BUNDLE - PART {i} OF {count}\n"
             f"Context Manifest: 00_PROJECT_MANIFEST.txt\n"
             f"Directory Tree:   00_file_structure.txt\n"
             f"Files in this bundle ({len(part_items)}):\n"

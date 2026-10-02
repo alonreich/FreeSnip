@@ -142,6 +142,16 @@ namespace freesnip.tests
             recorder.Resume();
             Assert.False(recorder.IsPaused);
         }
+
+        [Fact]
+        public async Task ScrollCaptureRecorder_FinishAsync_WhenNoFramesAccepted_ReturnsNull()
+        {
+            var targetRect = freesnip.native.foundation.RECT.FromXYWH(0, 0, 400, 300);
+            var recorder = new ScrollCaptureRecorder(targetRect);
+            var result = await recorder.FinishAsync();
+            Assert.Null(result);
+            await recorder.DisposeAsync();
+        }
     }
 }
 

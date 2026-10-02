@@ -8,6 +8,7 @@
         WindowState="Normal"
         WindowStartupLocation="Manual"
         ShowInTaskbar="False"
+        ShowActivated="False"
         IsHitTestVisible="False"
         SizeToContent="WidthAndHeight">
     <Panel Margin="30">

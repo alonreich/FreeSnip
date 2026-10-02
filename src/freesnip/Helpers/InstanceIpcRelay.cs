@@ -13,7 +13,6 @@ namespace freesnip.helpers
     public static class InstanceIpcRelay
     {
         public const string PipeName = @"Local\FreeSnip_Instance_IpcPipe";
-        public const string LegacyPipeName = @"Local\SnapVox_Instance_IpcPipe";
         public const string MessageActivate = "ACTIVATE";
         public const string MessageOpenFilePrefix = "OPEN_FILE:";
         public const string Acknowledgment = "ACK";

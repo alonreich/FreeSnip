@@ -42,11 +42,34 @@ namespace freesnip.foundation.core
         [DllImport("user32.dll")] private static extern IntPtr GetClipboardData(uint uFormat);
         [DllImport("user32.dll")] private static extern bool IsClipboardFormatAvailable(uint format);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern uint RegisterClipboardFormat(string lpszFormat);
+        [DllImport("user32.dll")] private static extern uint GetClipboardSequenceNumber();
 
-        private const uint CF_UNICODETEXT = 13;
-        private const uint CF_DIB = 8;
-        private const uint CF_HDROP = 15;
-        private const uint CF_DIBV5 = 17;
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MSG
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint time;
+            public int pt_x;
+            public int pt_y;
+            public uint lPrivate;
+        }
+
+        [DllImport("user32.dll")] private static extern sbyte GetMessage(out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax);
+        [DllImport("user32.dll")] private static extern bool TranslateMessage([In] ref MSG lpMsg);
+        [DllImport("user32.dll")] private static extern IntPtr DispatchMessage([In] ref MSG lpMsg);
+
+        public const uint CF_UNICODETEXT_FORMAT = 13;
+        public const uint CF_DIB_FORMAT = 8;
+        public const uint CF_HDROP_FORMAT = 15;
+        public const uint CF_DIBV5_FORMAT = 17;
+
+        private const uint CF_UNICODETEXT = CF_UNICODETEXT_FORMAT;
+        private const uint CF_DIB = CF_DIB_FORMAT;
+        private const uint CF_HDROP = CF_HDROP_FORMAT;
+        private const uint CF_DIBV5 = CF_DIBV5_FORMAT;
         private const uint GHND = 0x0042;
         private static readonly IntPtr HWND_MESSAGE = new IntPtr(-3);
         private static readonly object _ownerLock = new object();
@@ -54,15 +77,59 @@ namespace freesnip.foundation.core
         private static IntPtr _clipboardOwnerHwnd = IntPtr.Zero;
         private const int DefaultClipboardHistoryPromotionDelayMs = 0;
         public const string FreeSnipEditorImageFormat = "FreeSnip.ImageEditorSource";
-        public const string LegacySnapVoxEditorImageFormat = "SnapVox.ImageEditorSource";
         public const string FreeSnipAnnotationFormat = "FreeSnip.AnnotationObject";
-        public const string LegacySnapVoxAnnotationFormat = "SnapVox.AnnotationObject";
-        private const string SnapVoxEditorImageFormat = FreeSnipEditorImageFormat;
         private static readonly byte[] FreeSnipEditorImageBytes = { 1 };
-        private static readonly byte[] SnapVoxEditorImageBytes = FreeSnipEditorImageBytes;
-        private const string SnapVoxAnnotationFormat = FreeSnipAnnotationFormat;
         private static readonly byte[] FreeSnipAnnotationBytes = { 2 };
-        private static readonly byte[] SnapVoxAnnotationBytes = FreeSnipAnnotationBytes;
+
+        private static int _nonWindowsClipboardSequence;
+
+        public static uint GetCurrentSequenceNumber()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return GetClipboardSequenceNumber();
+            }
+            return (uint)Interlocked.Increment(ref _nonWindowsClipboardSequence);
+        }
+
+        public static bool ProbeClipboardFormat(uint format, int maxWaitMs = 100)
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return true;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds <= maxWaitMs)
+            {
+                if (IsClipboardFormatAvailable(format))
+                {
+                    return true;
+                }
+                Thread.Sleep(2);
+            }
+            return IsClipboardFormatAvailable(format);
+        }
+
+        public static bool HasNativeImage()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return false;
+            try
+            {
+                if (IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(CF_DIBV5))
+                {
+                    return true;
+                }
+
+                uint pngFormat = RegisterClipboardFormat("PNG");
+                if (pngFormat != 0 && IsClipboardFormatAvailable(pngFormat)) return true;
+
+                uint imagePngFormat = RegisterClipboardFormat("image/png");
+                if (imagePngFormat != 0 && IsClipboardFormatAvailable(imagePngFormat)) return true;
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         public static void Register(Func<string, Task> setTextAsync) => Register(null, setTextAsync);
 
@@ -107,6 +174,9 @@ namespace freesnip.foundation.core
         public static async Task SetTextAsync(string text)
         {
             if (string.IsNullOrEmpty(text)) return;
+            var log = LogHelper.GetLogger(typeof(UiClipboard));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            log.Info($"[STEP:START] SetTextAsync - Length: {text.Length}");
 
             Func<string, Task> handler;
             lock (_textHandlerLock)
@@ -122,11 +192,12 @@ namespace freesnip.foundation.core
                     {
                         await handler(text);
                     });
+                    log.Info($"[STEP:SUCCESS] SetTextAsync ({sw.ElapsedMilliseconds}ms) - Handled via registered window handler.");
                     return;
                 }
                 catch (Exception ex)
                 {
-                    LogHelper.GetLogger(typeof(UiClipboard)).Warn("Window clipboard handler failed; falling back to native.", ex);
+                    log.Warn("Window clipboard handler failed; falling back to native.", ex);
                 }
             }
 
@@ -139,6 +210,7 @@ namespace freesnip.foundation.core
                     {
                         await clipboard.SetTextAsync(text);
                     });
+                    log.Info($"[STEP:SUCCESS] SetTextAsync ({sw.ElapsedMilliseconds}ms) - Set via Avalonia IClipboard.");
                     return;
                 }
                 catch { }
@@ -148,11 +220,92 @@ namespace freesnip.foundation.core
             {
                 if (SetWin32ClipboardText(text))
                 {
+                    log.Info($"[STEP:SUCCESS] SetTextAsync ({sw.ElapsedMilliseconds}ms) - Set via Win32 SetWin32ClipboardText.");
                     return;
                 }
             }
 
+            log.Error($"[STEP:FAIL] SetTextAsync ({sw.ElapsedMilliseconds}ms) - Text could not be copied to clipboard.");
             throw new InvalidOperationException("Text could not be copied to the clipboard. Please try again.");
+        }
+
+        public static async Task<bool> SetPlainTextOnlyAsync(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            var log = LogHelper.GetLogger(typeof(UiClipboard));
+            log.Info($"[STEP:START] SetPlainTextOnlyAsync - Length: {text.Length}, Text: {text}");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            bool nativeSuccess = false;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                IntPtr hText = AllocateGlobalString(text);
+                if (hText != IntPtr.Zero)
+                {
+                    bool textSet = false;
+                    try
+                    {
+                        nativeSuccess = TryWriteNativeClipboard(() =>
+                        {
+                            if (SetClipboardData(CF_UNICODETEXT, hText) != IntPtr.Zero)
+                            {
+                                textSet = true;
+                                return true;
+                            }
+                            return false;
+                        }, maxRetries: 25);
+                    }
+                    finally
+                    {
+                        if (!textSet && hText != IntPtr.Zero) GlobalFree(hText);
+                    }
+                }
+            }
+
+            Func<string, Task> handler = null;
+            lock (_textHandlerLock)
+            {
+                if (_textHandlers.Count > 0)
+                {
+                    handler = _textHandlers[_textHandlers.Count - 1].SetTextAsync;
+                }
+            }
+            if (handler != null)
+            {
+                try
+                {
+                    await Dispatcher.UIThread.InvokeAsync(async () =>
+                    {
+                        await handler(text);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    log.Warn("Registered clipboard handler failed in SetPlainTextOnlyAsync", ex);
+                }
+            }
+
+            try
+            {
+                var clipboard = GetClipboard();
+                if (clipboard != null)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(async () =>
+                    {
+                        await clipboard.SetTextAsync(text);
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Warn("Avalonia clipboard text synchronization failed", ex);
+            }
+
+            sw.Stop();
+            bool probeOk = ProbeClipboardFormat(CF_UNICODETEXT_FORMAT, 150);
+            bool overallSuccess = nativeSuccess || probeOk;
+            log.Info($"[STEP:{(overallSuccess ? "SUCCESS" : "FAIL")}] SetPlainTextOnlyAsync ({sw.ElapsedMilliseconds}ms) - NativeSet={nativeSuccess}, ProbeOk={probeOk}");
+            return overallSuccess;
         }
 
         private static bool SetWin32ClipboardText(string text)
@@ -180,6 +333,8 @@ namespace freesnip.foundation.core
             }
         }
 
+        private static readonly ManualResetEventSlim _ownerWindowReady = new(false);
+
         public static IntPtr GetClipboardOwnerHwnd()
         {
             if (_clipboardOwnerHwnd != IntPtr.Zero && IsWindow(_clipboardOwnerHwnd))
@@ -194,8 +349,33 @@ namespace freesnip.foundation.core
                     return _clipboardOwnerHwnd;
                 }
 
-                _clipboardOwnerHwnd = CreateClipboardOwnerWindow();
+                _ownerWindowReady.Reset();
+                var pumpThread = new Thread(ClipboardPumpThreadProc)
+                {
+                    IsBackground = true,
+                    Name = "FreeSnip Clipboard Pump"
+                };
+                pumpThread.SetApartmentState(ApartmentState.STA);
+                pumpThread.Start();
+
+                if (!_ownerWindowReady.Wait(3000))
+                {
+                    _clipboardOwnerHwnd = CreateClipboardOwnerWindow();
+                }
+
                 return _clipboardOwnerHwnd;
+            }
+        }
+
+        private static void ClipboardPumpThreadProc()
+        {
+            _clipboardOwnerHwnd = CreateClipboardOwnerWindow();
+            _ownerWindowReady.Set();
+
+            while (GetMessage(out MSG msg, IntPtr.Zero, 0, 0) > 0)
+            {
+                TranslateMessage(ref msg);
+                DispatchMessage(ref msg);
             }
         }
 
@@ -208,7 +388,7 @@ namespace freesnip.foundation.core
         public static IntPtr GetCurrentClipboardOwner() => GetClipboardOwner();
         public static bool IsWindowHandle(IntPtr hWnd) => IsWindow(hWnd);
 
-        private static bool TryWriteNativeClipboard(Func<bool> write, int maxRetries = 10)
+        private static bool TryWriteNativeClipboard(Func<bool> write, int maxRetries = 25)
         {
             lock (_nativeClipboardLock)
             {
@@ -221,7 +401,10 @@ namespace freesnip.foundation.core
                     {
                         try
                         {
-                            if (!EmptyClipboard()) return false;
+                            if (!EmptyClipboard())
+                            {
+                                continue;
+                            }
                             return write();
                         }
                         finally
@@ -232,7 +415,7 @@ namespace freesnip.foundation.core
 
                     if (attempt < maxRetries - 1)
                     {
-                        Thread.Sleep(attempt == 0 ? 1 : 5);
+                        Thread.Sleep(attempt < 3 ? 1 : (attempt < 10 ? 2 : 5));
                     }
                 }
 
@@ -252,8 +435,12 @@ namespace freesnip.foundation.core
             return DefaultClipboardHistoryPromotionDelayMs;
         }
 
-        public static async Task SetFilePathThenImageAsync(string filePath, Image image, bool markSnapVoxEditorImage = false)
+        public static async Task SetFilePathThenImageAsync(string filePath, Image image, bool markFreeSnipEditorImage = false)
         {
+            var log = LogHelper.GetLogger(typeof(UiClipboard));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            log.Info($"[STEP:START] SetFilePathThenImageAsync - FilePath: '{filePath}', HasImage: {image != null}");
+
             if (image == null && string.IsNullOrWhiteSpace(filePath))
             {
                 return;
@@ -262,13 +449,15 @@ namespace freesnip.foundation.core
             if (image == null)
             {
                 await SetTextAsync(Path.GetFullPath(filePath)).ConfigureAwait(false);
+                log.Info($"[STEP:SUCCESS] SetFilePathThenImageAsync ({sw.ElapsedMilliseconds}ms) - Delegated to SetTextAsync.");
                 return;
             }
 
             string fullPath = !string.IsNullOrWhiteSpace(filePath) ? Path.GetFullPath(filePath) : null;
             if (string.IsNullOrWhiteSpace(fullPath))
             {
-                await SetImageAsync(image, markSnapVoxEditorImage).ConfigureAwait(false);
+                await SetImageAsync(image, markFreeSnipEditorImage).ConfigureAwait(false);
+                log.Info($"[STEP:SUCCESS] SetFilePathThenImageAsync ({sw.ElapsedMilliseconds}ms) - Delegated to SetImageAsync.");
                 return;
             }
 
@@ -282,7 +471,7 @@ namespace freesnip.foundation.core
             {
                 uint pngFormat = RegisterClipboardFormat("PNG");
                 uint imagePngFormat = RegisterClipboardFormat("image/png");
-                uint snapVoxFormat = markSnapVoxEditorImage ? RegisterClipboardFormat(SnapVoxEditorImageFormat) : 0;
+                uint freeSnipFormat = markFreeSnipEditorImage ? RegisterClipboardFormat(FreeSnipEditorImageFormat) : 0;
 
                 IntPtr hText = AllocateGlobalString(fullPath);
                 IntPtr hDib = AllocateGlobalBytes(dibBytes);
@@ -290,7 +479,7 @@ namespace freesnip.foundation.core
                 IntPtr hPng = AllocateGlobalBytes(pngBytes);
                 IntPtr hImagePng = AllocateGlobalBytes(pngBytes);
                 IntPtr hDropFiles = AllocateGlobalDropFiles(fullPath);
-                IntPtr hSnapVox = markSnapVoxEditorImage ? AllocateGlobalBytes(SnapVoxEditorImageBytes) : IntPtr.Zero;
+                IntPtr hFreeSnip = markFreeSnipEditorImage ? AllocateGlobalBytes(FreeSnipEditorImageBytes) : IntPtr.Zero;
 
                 bool textSet = false;
                 bool dibSet = false;
@@ -298,13 +487,12 @@ namespace freesnip.foundation.core
                 bool pngSet = false;
                 bool imagePngSet = false;
                 bool dropFilesSet = false;
-                bool snapVoxSet = false;
+                bool freeSnipSet = false;
 
                 try
                 {
                     bool success = TryWriteNativeClipboard(() =>
                     {
-                        // Commit image data FIRST
                         if (hDib != IntPtr.Zero && SetClipboardData(CF_DIB, hDib) != IntPtr.Zero)
                             dibSet = true;
 
@@ -320,17 +508,20 @@ namespace freesnip.foundation.core
                         if (hDropFiles != IntPtr.Zero && SetClipboardData(CF_HDROP, hDropFiles) != IntPtr.Zero)
                             dropFilesSet = true;
 
-                        // Commit CF_UNICODETEXT SECOND
                         if (hText != IntPtr.Zero && SetClipboardData(CF_UNICODETEXT, hText) != IntPtr.Zero)
                             textSet = true;
 
-                        if (snapVoxFormat != 0 && hSnapVox != IntPtr.Zero && SetClipboardData(snapVoxFormat, hSnapVox) != IntPtr.Zero)
-                            snapVoxSet = true;
+                        if (freeSnipFormat != 0 && hFreeSnip != IntPtr.Zero && SetClipboardData(freeSnipFormat, hFreeSnip) != IntPtr.Zero)
+                            freeSnipSet = true;
 
                         return dibSet || textSet;
                     });
 
-                    if (success) return;
+                    if (success)
+                    {
+                        log.Info($"[STEP:SUCCESS] SetFilePathThenImageAsync ({sw.ElapsedMilliseconds}ms) - Native batch formats written.");
+                        return;
+                    }
                 }
                 finally
                 {
@@ -340,7 +531,7 @@ namespace freesnip.foundation.core
                     if (!pngSet && hPng != IntPtr.Zero) GlobalFree(hPng);
                     if (!imagePngSet && hImagePng != IntPtr.Zero) GlobalFree(hImagePng);
                     if (!dropFilesSet && hDropFiles != IntPtr.Zero) GlobalFree(hDropFiles);
-                    if (!snapVoxSet && hSnapVox != IntPtr.Zero) GlobalFree(hSnapVox);
+                    if (!freeSnipSet && hFreeSnip != IntPtr.Zero) GlobalFree(hFreeSnip);
                 }
             }
 
@@ -352,29 +543,29 @@ namespace freesnip.foundation.core
                 dataObject.Set("PNG", pngBytes);
                 dataObject.Set("image/png", pngBytes);
                 dataObject.Set("Bitmap", bmpFullBytes);
-                if (markSnapVoxEditorImage)
+                if (markFreeSnipEditorImage)
                 {
-                    dataObject.Set(SnapVoxEditorImageFormat, SnapVoxEditorImageBytes);
+                    dataObject.Set(FreeSnipEditorImageFormat, FreeSnipEditorImageBytes);
                 }
                 await Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     await clipboard.SetDataObjectAsync(dataObject);
                 });
+                log.Info($"[STEP:SUCCESS] SetFilePathThenImageAsync ({sw.ElapsedMilliseconds}ms) - Avalonia DataObject batch set.");
                 return;
             }
 
-            await SetImageAsync(image, markSnapVoxEditorImage).ConfigureAwait(false);
+            await SetImageAsync(image, markFreeSnipEditorImage).ConfigureAwait(false);
             await SetTextAsync(fullPath).ConfigureAwait(false);
+            log.Info($"[STEP:SUCCESS] SetFilePathThenImageAsync ({sw.ElapsedMilliseconds}ms) - Sequential image and text set.");
         }
 
-        public static Task SetAtomicMultiFormatAsync(Image image, string filePath = null, bool markSnapVoxEditorImage = false)
+        public static Task SetAtomicMultiFormatAsync(Image image, string filePath = null, bool markFreeSnipEditorImage = false)
         {
-            return SetFilePathThenImageAsync(filePath, image, markSnapVoxEditorImage);
+            return SetFilePathThenImageAsync(filePath, image, markFreeSnipEditorImage);
         }
 
-        public static Task<bool> HasFreeSnipEditorImageAsync() => HasSnapVoxEditorImageAsync();
-
-        public static async Task<bool> HasSnapVoxEditorImageAsync()
+        public static async Task<bool> HasFreeSnipEditorImageAsync()
         {
             try
             {
@@ -384,7 +575,7 @@ namespace freesnip.foundation.core
                     bool hasAvaloniaFormat = await Dispatcher.UIThread.InvokeAsync(async () =>
                     {
                         var formats = await clipboard.GetFormatsAsync();
-                        return formats.Contains(FreeSnipEditorImageFormat) || formats.Contains(LegacySnapVoxEditorImageFormat);
+                        return formats.Contains(FreeSnipEditorImageFormat);
                     });
                     if (hasAvaloniaFormat)
                     {
@@ -396,27 +587,48 @@ namespace freesnip.foundation.core
                 {
                     uint format1 = RegisterClipboardFormat(FreeSnipEditorImageFormat);
                     if (format1 != 0 && IsClipboardFormatAvailable(format1)) return true;
-                    uint format2 = RegisterClipboardFormat(LegacySnapVoxEditorImageFormat);
-                    return format2 != 0 && IsClipboardFormatAvailable(format2);
                 }
             }
             catch (Exception ex)
             {
-                LogHelper.GetLogger(typeof(UiClipboard)).Error("Failed to inspect FreeSnip/SnapVox clipboard marker", ex);
+                LogHelper.GetLogger(typeof(UiClipboard)).Error("Failed to inspect FreeSnip clipboard marker", ex);
             }
 
             return false;
         }
 
+        private static bool _inMemoryAnnotationMarker;
+
+        private static bool CanAccessNativeClipboard()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return false;
+            if (OpenClipboard(IntPtr.Zero))
+            {
+                CloseClipboard();
+                return true;
+            }
+            int err = Marshal.GetLastWin32Error();
+            return err != 5;
+        }
+
+        public static void SetInMemoryAnnotationMarker(bool value)
+        {
+            _inMemoryAnnotationMarker = value;
+        }
+
         public static void SetAnnotationMarker(string textContent = null)
         {
+            _inMemoryAnnotationMarker = true;
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
+            var log = LogHelper.GetLogger(typeof(UiClipboard));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            log.Info($"[STEP:START] SetAnnotationMarker - HasText: {!string.IsNullOrEmpty(textContent)}");
             try
             {
-                uint format = RegisterClipboardFormat(SnapVoxAnnotationFormat);
+                uint format = RegisterClipboardFormat(FreeSnipAnnotationFormat);
                 if (format == 0) return;
 
-                byte[] markerBytes = SnapVoxAnnotationBytes;
+                byte[] markerBytes = FreeSnipAnnotationBytes;
                 IntPtr hMarker = AllocateGlobalBytes(markerBytes);
                 IntPtr hText = !string.IsNullOrEmpty(textContent) ? AllocateGlobalString(textContent) : IntPtr.Zero;
 
@@ -425,14 +637,15 @@ namespace freesnip.foundation.core
 
                 try
                 {
-                    TryWriteNativeClipboard(() =>
+                    bool success = TryWriteNativeClipboard(() =>
                     {
                         if (hMarker != IntPtr.Zero && SetClipboardData(format, hMarker) != IntPtr.Zero)
                             markerSet = true;
                         if (hText != IntPtr.Zero && SetClipboardData(CF_UNICODETEXT, hText) != IntPtr.Zero)
                             textSet = true;
                         return markerSet;
-                    });
+                    }, maxRetries: 5);
+                    log.Info($"[STEP:{(success ? "SUCCESS" : "WARN")}] SetAnnotationMarker ({sw.ElapsedMilliseconds}ms) - MarkerSet={markerSet}, TextSet={textSet}");
                 }
                 finally
                 {
@@ -442,29 +655,36 @@ namespace freesnip.foundation.core
             }
             catch (Exception ex)
             {
-                LogHelper.GetLogger(typeof(UiClipboard)).Error("Failed to set annotation clipboard marker", ex);
+                log.Error($"[STEP:FAIL] SetAnnotationMarker ({sw.ElapsedMilliseconds}ms) - Failed to set annotation clipboard marker", ex);
             }
         }
 
         public static bool HasAnnotationMarker()
         {
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return false;
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return _inMemoryAnnotationMarker;
             try
             {
                 uint format = RegisterClipboardFormat(FreeSnipAnnotationFormat);
                 if (format != 0 && IsClipboardFormatAvailable(format)) return true;
-                uint legacyFormat = RegisterClipboardFormat(LegacySnapVoxAnnotationFormat);
-                return legacyFormat != 0 && IsClipboardFormatAvailable(legacyFormat);
+
+                if (!CanAccessNativeClipboard())
+                {
+                    return _inMemoryAnnotationMarker;
+                }
+                return false;
             }
             catch (Exception ex)
             {
                 LogHelper.GetLogger(typeof(UiClipboard)).Error("Failed to inspect annotation clipboard marker", ex);
-                return false;
+                return _inMemoryAnnotationMarker;
             }
         }
 
         public static async Task<Image> GetImageAsync()
         {
+            var log = LogHelper.GetLogger(typeof(UiClipboard));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            log.Info("[STEP:START] GetImageAsync - Inspecting clipboard for image data.");
             try
             {
                 var clipboard = GetClipboard();
@@ -473,18 +693,25 @@ namespace freesnip.foundation.core
                     var avaloniaImage = await TryGetAvaloniaClipboardImageAsync(clipboard).ConfigureAwait(false);
                     if (avaloniaImage != null)
                     {
+                        log.Info($"[STEP:SUCCESS] GetImageAsync ({sw.ElapsedMilliseconds}ms) - Retrieved image via Avalonia ({avaloniaImage.Width}x{avaloniaImage.Height}).");
                         return avaloniaImage;
                     }
                 }
 
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    return await Task.Run(() => TryGetWin32ClipboardImage()).ConfigureAwait(false);
+                    var win32Image = await Task.Run(() => TryGetWin32ClipboardImage()).ConfigureAwait(false);
+                    if (win32Image != null)
+                    {
+                        log.Info($"[STEP:SUCCESS] GetImageAsync ({sw.ElapsedMilliseconds}ms) - Retrieved image via Win32 ({win32Image.Width}x{win32Image.Height}).");
+                        return win32Image;
+                    }
                 }
+                log.Info($"[STEP:INFO] GetImageAsync ({sw.ElapsedMilliseconds}ms) - No image found on clipboard.");
             }
             catch (Exception ex)
             {
-                LogHelper.GetLogger(typeof(UiClipboard)).Error("Failed to get image from clipboard", ex);
+                log.Error($"[STEP:FAIL] GetImageAsync ({sw.ElapsedMilliseconds}ms) - Failed to get image from clipboard", ex);
             }
             return null;
         }
@@ -800,13 +1027,12 @@ namespace freesnip.foundation.core
             {
                 string fullPath = Path.GetFullPath(filePath);
                 byte[] pathBytes = Encoding.Unicode.GetBytes(fullPath);
-                // DROPFILES header: 20 bytes (pFiles: 4, ptX: 4, ptY: 4, fNC: 4, fWide: 4)
                 const int headerSize = 20;
                 int totalBytes = headerSize + pathBytes.Length + 4;
                 byte[] buffer = new byte[totalBytes];
 
                 BitConverter.GetBytes((uint)headerSize).CopyTo(buffer, 0);
-                BitConverter.GetBytes(1).CopyTo(buffer, 16); // fWide = 1 (Unicode)
+                BitConverter.GetBytes(1).CopyTo(buffer, 16);
 
                 Buffer.BlockCopy(pathBytes, 0, buffer, headerSize, pathBytes.Length);
                 return AllocateGlobalBytes(buffer);
@@ -833,9 +1059,12 @@ namespace freesnip.foundation.core
             return false;
         }
 
-        public static async Task SetImageAsync(Image image, bool markSnapVoxEditorImage = false)
+        public static async Task SetImageAsync(Image image, bool markFreeSnipEditorImage = false)
         {
             ArgumentNullException.ThrowIfNull(image);
+            var log = LogHelper.GetLogger(typeof(UiClipboard));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            log.Info($"[STEP:START] SetImageAsync - Dimensions: ({image.Width}x{image.Height}), MarkEditorImage: {markFreeSnipEditorImage}");
 
             try
             {
@@ -850,19 +1079,19 @@ namespace freesnip.foundation.core
                     bool success = false;
                     uint pngFormat = RegisterClipboardFormat("PNG");
                     uint imagePngFormat = RegisterClipboardFormat("image/png");
-                    uint snapVoxFormat = markSnapVoxEditorImage ? RegisterClipboardFormat(SnapVoxEditorImageFormat) : 0;
+                    uint freeSnipFormat = markFreeSnipEditorImage ? RegisterClipboardFormat(FreeSnipEditorImageFormat) : 0;
 
                     IntPtr hDib = AllocateGlobalBytes(dibBytes);
                     IntPtr hDibV5 = AllocateGlobalBytes(dibV5Bytes);
                     IntPtr hPng = AllocateGlobalBytes(pngBytes);
                     IntPtr hImagePng = AllocateGlobalBytes(pngBytes);
-                    IntPtr hSnapVox = markSnapVoxEditorImage ? AllocateGlobalBytes(SnapVoxEditorImageBytes) : IntPtr.Zero;
+                    IntPtr hFreeSnip = markFreeSnipEditorImage ? AllocateGlobalBytes(FreeSnipEditorImageBytes) : IntPtr.Zero;
 
                     bool dibSet = false;
                     bool dibV5Set = false;
                     bool pngSet = false;
                     bool imagePngSet = false;
-                    bool snapVoxSet = false;
+                    bool freeSnipSet = false;
 
                     try
                     {
@@ -882,8 +1111,8 @@ namespace freesnip.foundation.core
                             if (imagePngFormat != 0 && hImagePng != IntPtr.Zero && SetClipboardData(imagePngFormat, hImagePng) != IntPtr.Zero)
                                 imagePngSet = true;
 
-                            if (snapVoxFormat != 0 && hSnapVox != IntPtr.Zero && SetClipboardData(snapVoxFormat, hSnapVox) != IntPtr.Zero)
-                                snapVoxSet = true;
+                            if (freeSnipFormat != 0 && hFreeSnip != IntPtr.Zero && SetClipboardData(freeSnipFormat, hFreeSnip) != IntPtr.Zero)
+                                freeSnipSet = true;
 
                             return dibSet;
                         });
@@ -894,10 +1123,14 @@ namespace freesnip.foundation.core
                         if (!dibV5Set && hDibV5 != IntPtr.Zero) GlobalFree(hDibV5);
                         if (!pngSet && hPng != IntPtr.Zero) GlobalFree(hPng);
                         if (!imagePngSet && hImagePng != IntPtr.Zero) GlobalFree(hImagePng);
-                        if (!snapVoxSet && hSnapVox != IntPtr.Zero) GlobalFree(hSnapVox);
+                        if (!freeSnipSet && hFreeSnip != IntPtr.Zero) GlobalFree(hFreeSnip);
                     }
 
-                    if (success) return;
+                    if (success)
+                    {
+                        log.Info($"[STEP:SUCCESS] SetImageAsync ({sw.ElapsedMilliseconds}ms) - CF_DIB and native image formats written.");
+                        return;
+                    }
                 }
 
                 var clipboard = GetClipboard();
@@ -907,21 +1140,23 @@ namespace freesnip.foundation.core
                     dataObject.Set("PNG", pngBytes);
                     dataObject.Set("image/png", pngBytes);
                     dataObject.Set("Bitmap", bmpFullBytes);
-                    if (markSnapVoxEditorImage)
+                    if (markFreeSnipEditorImage)
                     {
-                        dataObject.Set(SnapVoxEditorImageFormat, SnapVoxEditorImageBytes);
+                        dataObject.Set(FreeSnipEditorImageFormat, FreeSnipEditorImageBytes);
                     }
                     await Dispatcher.UIThread.InvokeAsync(async () =>
                     {
                         await clipboard.SetDataObjectAsync(dataObject);
                     });
+                    log.Info($"[STEP:SUCCESS] SetImageAsync ({sw.ElapsedMilliseconds}ms) - Avalonia DataObject set.");
                     return;
                 }
+                log.Error($"[STEP:FAIL] SetImageAsync ({sw.ElapsedMilliseconds}ms) - No clipboard available.");
                 throw new InvalidOperationException("The picture could not be copied to the clipboard. Please try again.");
             }
             catch (Exception ex)
             {
-                LogHelper.GetLogger(typeof(UiClipboard)).Error("Failed to set image to clipboard", ex);
+                log.Error($"[STEP:FAIL] SetImageAsync ({sw.ElapsedMilliseconds}ms) - Failed to set image to clipboard", ex);
                 throw;
             }
         }

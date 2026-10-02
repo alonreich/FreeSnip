@@ -7,7 +7,7 @@ namespace freesnip.foundation.core
     /// <summary>
     /// Resolves Windows known folders through the shell rather than guessing them from the
     /// user profile path. Downloads in particular is routinely redirected (OneDrive, a second
-    /// drive, a network share); assuming %USERPROFILE%\Downloads makes SnapVox believe the
+    /// drive, a network share); assuming %USERPROFILE%\Downloads makes FreeSnip believe the
     /// folder is missing and prompt the user for one it already has.
     /// </summary>
     public static class KnownFolders

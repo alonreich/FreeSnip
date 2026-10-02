@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -194,18 +194,15 @@ namespace freesnip.tests
                 await editor.SetImageAsync(initialImage, RECT.FromXYWH(0, 0, w, h));
                 var canvas = Field<Canvas>(editor, "_canvas");
 
-                // In-bounds standard shape
                 var rect = new Avalonia.Controls.Shapes.Rectangle { Width = 40, Height = 40, Fill = Brushes.Blue };
                 Canvas.SetLeft(rect, 60);
                 Canvas.SetTop(rect, 60);
                 Call(editor, "AddAnnotation", rect);
 
-                // In-bounds vector line
                 var line = new Avalonia.Controls.Shapes.Line { Stroke = Brushes.Green, StrokeThickness = 2 };
                 Call(editor, "SetVectorAbsolutePoints", line, new AvaloniaPoint(40, 40), new AvaloniaPoint(120, 120));
                 Call(editor, "AddAnnotation", line);
 
-                // In-bounds arrow
                 var arrow = new Canvas
                 {
                     Tag = new ImageEditorWindow.ArrowProperties { Start = new AvaloniaPoint(50, 50), End = new AvaloniaPoint(140, 140) }
@@ -215,7 +212,6 @@ namespace freesnip.tests
                 Call(editor, "UpdateArrowVisuals", arrow, new AvaloniaPoint(50, 50), new AvaloniaPoint(140, 140));
                 Call(editor, "AddAnnotation", arrow);
 
-                // In-bounds polyline
                 var poly = new Avalonia.Controls.Shapes.Polyline
                 {
                     Stroke = Brushes.Yellow,
@@ -226,7 +222,6 @@ namespace freesnip.tests
                 Canvas.SetTop(poly, 50);
                 Call(editor, "AddAnnotation", poly);
 
-                // In-bounds counter
                 var counter = new Border
                 {
                     Width = 30,
@@ -238,7 +233,6 @@ namespace freesnip.tests
                 Canvas.SetTop(counter, 70);
                 Call(editor, "AddAnnotation", counter);
 
-                // In-bounds text box
                 var textBoxBorder = new Border
                 {
                     Width = 50,
@@ -249,7 +243,6 @@ namespace freesnip.tests
                 Canvas.SetTop(textBoxBorder, 80);
                 Call(editor, "AddAnnotation", textBoxBorder);
 
-                // Out-of-bounds shape
                 var oobRect = new Avalonia.Controls.Shapes.Rectangle { Width = 15, Height = 15, Fill = Brushes.Gray };
                 Canvas.SetLeft(oobRect, 10);
                 Canvas.SetTop(oobRect, 10);
@@ -257,7 +250,6 @@ namespace freesnip.tests
 
                 Assert.Equal(7, editor.GetUserAnnotations().Count);
 
-                // Apply crop: [30, 30, 120, 120]
                 await editor.ApplyCropRect(new Rect(30, 30, 120, 120));
 
                 var doc = Field<EditorDocument>(editor, "_document");
@@ -266,45 +258,37 @@ namespace freesnip.tests
                 Assert.Equal(120.0, canvas.Width);
                 Assert.Equal(120.0, canvas.Height);
 
-                // Out-of-bounds shape removed from canvas
                 Assert.DoesNotContain(oobRect, canvas.Children);
                 Assert.Equal(6, editor.GetUserAnnotations().Count);
 
-                // In-bounds shapes shifted by (-30, -30)
                 Assert.Contains(rect, canvas.Children);
                 Assert.Equal(30.0, Canvas.GetLeft(rect));
                 Assert.Equal(30.0, Canvas.GetTop(rect));
 
-                // Line shifted
                 Assert.Contains(line, canvas.Children);
                 Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(line, out var lStart, out var lEnd));
                 Assert.Equal(new AvaloniaPoint(10, 10), lStart);
                 Assert.Equal(new AvaloniaPoint(90, 90), lEnd);
 
-                // Arrow shifted
                 Assert.Contains(arrow, canvas.Children);
                 Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(arrow, out var aStart, out var aEnd));
                 Assert.Equal(new AvaloniaPoint(20, 20), aStart);
                 Assert.Equal(new AvaloniaPoint(110, 110), aEnd);
 
-                // Polyline shifted without re-projecting individual points
                 Assert.Contains(poly, canvas.Children);
                 Assert.Equal(20.0, Canvas.GetLeft(poly));
                 Assert.Equal(20.0, Canvas.GetTop(poly));
                 Assert.Equal(new AvaloniaPoint(0, 0), poly.Points[0]);
                 Assert.Equal(new AvaloniaPoint(20, 20), poly.Points[1]);
 
-                // Counter shifted
                 Assert.Contains(counter, canvas.Children);
                 Assert.Equal(40.0, Canvas.GetLeft(counter));
                 Assert.Equal(40.0, Canvas.GetTop(counter));
 
-                // Text box shifted
                 Assert.Contains(textBoxBorder, canvas.Children);
                 Assert.Equal(50.0, Canvas.GetLeft(textBoxBorder));
                 Assert.Equal(50.0, Canvas.GetTop(textBoxBorder));
 
-                // Undo
                 bool undone = await editor.PerformUndoAsync();
                 Assert.True(undone);
 
@@ -313,7 +297,6 @@ namespace freesnip.tests
                 Assert.Equal(200.0, canvas.Width);
                 Assert.Equal(200.0, canvas.Height);
 
-                // Out-of-bounds shape restored
                 Assert.Equal(7, editor.GetUserAnnotations().Count);
                 var restoredOob = Assert.Single(canvas.Children.OfType<Avalonia.Controls.Shapes.Rectangle>(), r => r.Fill == Brushes.Gray);
                 Assert.Equal(10.0, Canvas.GetLeft(restoredOob));
@@ -356,36 +339,30 @@ namespace freesnip.tests
                 await editor.SetImageAsync(initialImage, RECT.FromXYWH(0, 0, w, h));
                 var canvas = Field<Canvas>(editor, "_canvas");
 
-                // 1. Strictly to the left (Right = 50 <= 100)
                 var leftRect = new Avalonia.Controls.Shapes.Rectangle { Width = 30, Height = 30, Fill = Brushes.Blue };
                 Canvas.SetLeft(leftRect, 20);
                 Canvas.SetTop(leftRect, 50);
                 Call(editor, "AddAnnotation", leftRect);
 
-                // 2. Strictly to the right (Left = 200 >= 150)
                 var rightRect = new Avalonia.Controls.Shapes.Rectangle { Width = 30, Height = 30, Fill = Brushes.Red };
                 Canvas.SetLeft(rightRect, 200);
                 Canvas.SetTop(rightRect, 50);
                 Call(editor, "AddAnnotation", rightRect);
 
-                // 3. Completely inside the cut [100, 150] (Left = 110, Right = 130)
                 var insideRect = new Avalonia.Controls.Shapes.Rectangle { Width = 20, Height = 30, Fill = Brushes.Green };
                 Canvas.SetLeft(insideRect, 110);
                 Canvas.SetTop(insideRect, 50);
                 Call(editor, "AddAnnotation", insideRect);
 
-                // 4. Spanning across the cut (Left = 80, Width = 100 -> Right = 180)
                 var spanningRect = new Avalonia.Controls.Shapes.Rectangle { Width = 100, Height = 30, Fill = Brushes.Purple };
                 Canvas.SetLeft(spanningRect, 80);
                 Canvas.SetTop(spanningRect, 50);
                 Call(editor, "AddAnnotation", spanningRect);
 
-                // 5. Spanning vector line (Start = 50, End = 200)
                 var line = new Avalonia.Controls.Shapes.Line { Stroke = Brushes.Black, StrokeThickness = 3 };
                 Call(editor, "SetVectorAbsolutePoints", line, new AvaloniaPoint(50, 60), new AvaloniaPoint(200, 60));
                 Call(editor, "AddAnnotation", line);
 
-                // 6. Spanning arrow (Start = 60, End = 220)
                 var arrow = new Canvas
                 {
                     Tag = new ImageEditorWindow.ArrowProperties { Start = new AvaloniaPoint(60, 70), End = new AvaloniaPoint(220, 70) }
@@ -397,7 +374,6 @@ namespace freesnip.tests
 
                 Assert.Equal(6, editor.GetUserAnnotations().Count);
 
-                // Vertical cut: x = 100, width = 50
                 await editor.ApplyCutOutSlice(new Rect(100, 0, 50, 200), true);
 
                 var doc = Field<EditorDocument>(editor, "_document");
@@ -406,38 +382,31 @@ namespace freesnip.tests
                 Assert.Equal(250.0, canvas.Width);
                 Assert.Equal(200.0, canvas.Height);
 
-                // Inside rect deleted from canvas
                 Assert.DoesNotContain(insideRect, canvas.Children);
                 Assert.Equal(5, editor.GetUserAnnotations().Count);
 
-                // Left rect unchanged
                 Assert.Contains(leftRect, canvas.Children);
                 Assert.Equal(20.0, Canvas.GetLeft(leftRect));
                 Assert.Equal(30.0, leftRect.Width);
 
-                // Right rect shifted by -50
                 Assert.Contains(rightRect, canvas.Children);
                 Assert.Equal(150.0, Canvas.GetLeft(rightRect));
                 Assert.Equal(30.0, rightRect.Width);
 
-                // Spanning rect clamped: width = 100 - 50 = 50
                 Assert.Contains(spanningRect, canvas.Children);
                 Assert.Equal(80.0, Canvas.GetLeft(spanningRect));
                 Assert.Equal(50.0, spanningRect.Width);
 
-                // Spanning line endpoints adjusted across seam
                 Assert.Contains(line, canvas.Children);
                 Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(line, out var lStart, out var lEnd));
                 Assert.Equal(new AvaloniaPoint(50, 60), lStart);
                 Assert.Equal(new AvaloniaPoint(150, 60), lEnd);
 
-                // Spanning arrow endpoints adjusted across seam
                 Assert.Contains(arrow, canvas.Children);
                 Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(arrow, out var aStart, out var aEnd));
                 Assert.Equal(new AvaloniaPoint(60, 70), aStart);
                 Assert.Equal(new AvaloniaPoint(170, 70), aEnd);
 
-                // Undo
                 bool undone = await editor.PerformUndoAsync();
                 Assert.True(undone);
 
@@ -446,7 +415,6 @@ namespace freesnip.tests
                 Assert.Equal(300.0, canvas.Width);
                 Assert.Equal(200.0, canvas.Height);
 
-                // Inside rect restored
                 Assert.Equal(6, editor.GetUserAnnotations().Count);
                 var restoredInside = Assert.Single(canvas.Children.OfType<Avalonia.Controls.Shapes.Rectangle>(), r => r.Fill == Brushes.Green);
                 Assert.Equal(110.0, Canvas.GetLeft(restoredInside));
@@ -492,36 +460,30 @@ namespace freesnip.tests
                 await editor.SetImageAsync(initialImage, RECT.FromXYWH(0, 0, w, h));
                 var canvas = Field<Canvas>(editor, "_canvas");
 
-                // 1. Strictly above (Bottom = 50 <= 100)
                 var topRect = new Avalonia.Controls.Shapes.Rectangle { Width = 30, Height = 30, Fill = Brushes.Blue };
                 Canvas.SetLeft(topRect, 50);
                 Canvas.SetTop(topRect, 20);
                 Call(editor, "AddAnnotation", topRect);
 
-                // 2. Strictly below (Top = 200 >= 150)
                 var bottomRect = new Avalonia.Controls.Shapes.Rectangle { Width = 30, Height = 30, Fill = Brushes.Red };
                 Canvas.SetLeft(bottomRect, 50);
                 Canvas.SetTop(bottomRect, 200);
                 Call(editor, "AddAnnotation", bottomRect);
 
-                // 3. Completely inside the cut [100, 150] (Top = 110, Bottom = 130)
                 var insideRect = new Avalonia.Controls.Shapes.Rectangle { Width = 30, Height = 20, Fill = Brushes.Green };
                 Canvas.SetLeft(insideRect, 50);
                 Canvas.SetTop(insideRect, 110);
                 Call(editor, "AddAnnotation", insideRect);
 
-                // 4. Spanning across the cut (Top = 80, Height = 100 -> Bottom = 180)
                 var spanningRect = new Avalonia.Controls.Shapes.Rectangle { Width = 30, Height = 100, Fill = Brushes.Purple };
                 Canvas.SetLeft(spanningRect, 50);
                 Canvas.SetTop(spanningRect, 80);
                 Call(editor, "AddAnnotation", spanningRect);
 
-                // 5. Spanning vector line (Start = 50, End = 200)
                 var line = new Avalonia.Controls.Shapes.Line { Stroke = Brushes.Black, StrokeThickness = 3 };
                 Call(editor, "SetVectorAbsolutePoints", line, new AvaloniaPoint(60, 50), new AvaloniaPoint(60, 200));
                 Call(editor, "AddAnnotation", line);
 
-                // 6. Spanning arrow (Start = 60, End = 220)
                 var arrow = new Canvas
                 {
                     Tag = new ImageEditorWindow.ArrowProperties { Start = new AvaloniaPoint(70, 60), End = new AvaloniaPoint(70, 220) }
@@ -533,7 +495,6 @@ namespace freesnip.tests
 
                 Assert.Equal(6, editor.GetUserAnnotations().Count);
 
-                // Horizontal cut: y = 100, height = 50
                 await editor.ApplyCutOutSlice(new Rect(0, 100, 200, 50), false);
 
                 var doc = Field<EditorDocument>(editor, "_document");
@@ -542,38 +503,31 @@ namespace freesnip.tests
                 Assert.Equal(200.0, canvas.Width);
                 Assert.Equal(250.0, canvas.Height);
 
-                // Inside rect deleted from canvas
                 Assert.DoesNotContain(insideRect, canvas.Children);
                 Assert.Equal(5, editor.GetUserAnnotations().Count);
 
-                // Top rect unchanged
                 Assert.Contains(topRect, canvas.Children);
                 Assert.Equal(20.0, Canvas.GetTop(topRect));
                 Assert.Equal(30.0, topRect.Height);
 
-                // Bottom rect shifted by -50
                 Assert.Contains(bottomRect, canvas.Children);
                 Assert.Equal(150.0, Canvas.GetTop(bottomRect));
                 Assert.Equal(30.0, bottomRect.Height);
 
-                // Spanning rect clamped: height = 100 - 50 = 50
                 Assert.Contains(spanningRect, canvas.Children);
                 Assert.Equal(80.0, Canvas.GetTop(spanningRect));
                 Assert.Equal(50.0, spanningRect.Height);
 
-                // Spanning line endpoints adjusted across seam
                 Assert.Contains(line, canvas.Children);
                 Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(line, out var lStart, out var lEnd));
                 Assert.Equal(new AvaloniaPoint(60, 50), lStart);
                 Assert.Equal(new AvaloniaPoint(60, 150), lEnd);
 
-                // Spanning arrow endpoints adjusted across seam
                 Assert.Contains(arrow, canvas.Children);
                 Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(arrow, out var aStart, out var aEnd));
                 Assert.Equal(new AvaloniaPoint(70, 60), aStart);
                 Assert.Equal(new AvaloniaPoint(70, 170), aEnd);
 
-                // Undo
                 bool undone = await editor.PerformUndoAsync();
                 Assert.True(undone);
 
@@ -582,7 +536,6 @@ namespace freesnip.tests
                 Assert.Equal(200.0, canvas.Width);
                 Assert.Equal(300.0, canvas.Height);
 
-                // Inside rect restored
                 Assert.Equal(6, editor.GetUserAnnotations().Count);
                 var restoredInside = Assert.Single(canvas.Children.OfType<Avalonia.Controls.Shapes.Rectangle>(), r => r.Fill == Brushes.Green);
                 Assert.Equal(110.0, Canvas.GetTop(restoredInside));
@@ -628,18 +581,15 @@ namespace freesnip.tests
                 await editor.SetImageAsync(initialImage, RECT.FromXYWH(0, 0, w, h));
                 var canvas = Field<Canvas>(editor, "_canvas");
 
-                // 1. Standard rectangle: [60, 60, 40, 40]
                 var rect = new Avalonia.Controls.Shapes.Rectangle { Width = 40, Height = 40, Fill = Brushes.Blue };
                 Canvas.SetLeft(rect, 60);
                 Canvas.SetTop(rect, 60);
                 Call(editor, "AddAnnotation", rect);
 
-                // 2. Vector line: (40, 40) -> (120, 120)
                 var line = new Avalonia.Controls.Shapes.Line { Stroke = Brushes.Green, StrokeThickness = 2 };
                 Call(editor, "SetVectorAbsolutePoints", line, new AvaloniaPoint(40, 40), new AvaloniaPoint(120, 120));
                 Call(editor, "AddAnnotation", line);
 
-                // 3. Arrow: (50, 50) -> (140, 140)
                 var arrow = new Canvas
                 {
                     Tag = new ImageEditorWindow.ArrowProperties { Start = new AvaloniaPoint(50, 50), End = new AvaloniaPoint(140, 140) }
@@ -649,7 +599,6 @@ namespace freesnip.tests
                 Call(editor, "UpdateArrowVisuals", arrow, new AvaloniaPoint(50, 50), new AvaloniaPoint(140, 140));
                 Call(editor, "AddAnnotation", arrow);
 
-                // 4. Polyline: Left = 50, Top = 50, Points = [(0, 0), (20, 20)]
                 var poly = new Avalonia.Controls.Shapes.Polyline
                 {
                     Stroke = Brushes.Yellow,
@@ -660,7 +609,6 @@ namespace freesnip.tests
                 Canvas.SetTop(poly, 50);
                 Call(editor, "AddAnnotation", poly);
 
-                // 5. Counter: Left = 70, Top = 70, Width = 30, Height = 30
                 var counter = new Border
                 {
                     Width = 30,
@@ -672,7 +620,6 @@ namespace freesnip.tests
                 Canvas.SetTop(counter, 70);
                 Call(editor, "AddAnnotation", counter);
 
-                // 6. Text box: Left = 80, Top = 80, Width = 50, Height = 30
                 var textBoxBorder = new Border
                 {
                     Width = 50,
@@ -683,7 +630,6 @@ namespace freesnip.tests
                 Canvas.SetTop(textBoxBorder, 80);
                 Call(editor, "AddAnnotation", textBoxBorder);
 
-                // 7. Emoji: Left = 90, Top = 90, FontSize = 40
                 var emoji = new TextBlock
                 {
                     Text = "😊",
@@ -697,7 +643,6 @@ namespace freesnip.tests
 
                 Assert.Equal(7, editor.GetUserAnnotations().Count);
 
-                // Resize from 200x200 to 400x300 (scaleX = 2.0, scaleY = 1.5)
                 await editor.ApplyResize(400, 300);
 
                 var doc = Field<EditorDocument>(editor, "_document");
@@ -706,56 +651,47 @@ namespace freesnip.tests
                 Assert.Equal(400.0, canvas.Width);
                 Assert.Equal(300.0, canvas.Height);
 
-                // All 7 controls must be preserved as editable vector controls (NOT flattened)
                 Assert.Equal(7, editor.GetUserAnnotations().Count);
 
-                // 1. Rectangle scaled: Left = 60 * 2.0 = 120, Top = 60 * 1.5 = 90, Width = 40 * 2.0 = 80, Height = 40 * 1.5 = 60
                 Assert.Contains(rect, canvas.Children);
                 Assert.Equal(120.0, Canvas.GetLeft(rect));
                 Assert.Equal(90.0, Canvas.GetTop(rect));
                 Assert.Equal(80.0, rect.Width);
                 Assert.Equal(60.0, rect.Height);
 
-                // 2. Line scaled: (40 * 2, 40 * 1.5) -> (120 * 2, 120 * 1.5) = (80, 60) -> (240, 180)
                 Assert.Contains(line, canvas.Children);
                 Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(line, out var lStart, out var lEnd));
                 Assert.Equal(new AvaloniaPoint(80, 60), lStart);
                 Assert.Equal(new AvaloniaPoint(240, 180), lEnd);
 
-                // 3. Arrow scaled: (50 * 2, 50 * 1.5) -> (140 * 2, 140 * 1.5) = (100, 75) -> (280, 210)
                 Assert.Contains(arrow, canvas.Children);
                 Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(arrow, out var aStart, out var aEnd));
                 Assert.Equal(new AvaloniaPoint(100, 75), aStart);
                 Assert.Equal(new AvaloniaPoint(280, 210), aEnd);
 
-                // 4. Polyline scaled: Left = 50 * 2 = 100, Top = 50 * 1.5 = 75, Points = [(0, 0), (40, 30)]
                 Assert.Contains(poly, canvas.Children);
                 Assert.Equal(100.0, Canvas.GetLeft(poly));
                 Assert.Equal(75.0, Canvas.GetTop(poly));
                 Assert.Equal(new AvaloniaPoint(0, 0), poly.Points[0]);
                 Assert.Equal(new AvaloniaPoint(40, 30), poly.Points[1]);
 
-                // 5. Counter scaled: Left = 70 * 2 = 140, Top = 70 * 1.5 = 105, Width = 30 * 2 = 60, Height = 30 * 1.5 = 45
                 Assert.Contains(counter, canvas.Children);
                 Assert.Equal(140.0, Canvas.GetLeft(counter));
                 Assert.Equal(105.0, Canvas.GetTop(counter));
                 Assert.Equal(60.0, counter.Width);
                 Assert.Equal(45.0, counter.Height);
 
-                // 6. Text box scaled: Left = 80 * 2 = 160, Top = 80 * 1.5 = 120, Width = 50 * 2 = 100, Height = 30 * 1.5 = 45
                 Assert.Contains(textBoxBorder, canvas.Children);
                 Assert.Equal(160.0, Canvas.GetLeft(textBoxBorder));
                 Assert.Equal(120.0, Canvas.GetTop(textBoxBorder));
                 Assert.Equal(100.0, textBoxBorder.Width);
                 Assert.Equal(45.0, textBoxBorder.Height);
 
-                // 7. Emoji scaled: Left = 90 * 2 = 180, Top = 90 * 1.5 = 135
                 Assert.Contains(emoji, canvas.Children);
                 Assert.Equal(180.0, Canvas.GetLeft(emoji));
                 Assert.Equal(135.0, Canvas.GetTop(emoji));
                 Assert.Equal(70.0, emoji.FontSize);
 
-                // Undo
                 bool undone = await editor.PerformUndoAsync();
                 Assert.True(undone);
 
@@ -764,7 +700,6 @@ namespace freesnip.tests
                 Assert.Equal(200.0, canvas.Width);
                 Assert.Equal(200.0, canvas.Height);
 
-                // All 7 controls restored to exact pre-resize positions and sizes
                 Assert.Equal(7, editor.GetUserAnnotations().Count);
 
                 var restoredRect = Assert.Single(canvas.Children.OfType<Avalonia.Controls.Shapes.Rectangle>(), r => r.Fill == Brushes.Blue);

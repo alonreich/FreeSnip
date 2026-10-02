@@ -224,7 +224,7 @@ if exist "%STAGING_DIR%" rd /s /q "%STAGING_DIR%"
 
 if exist "%FINAL_DIR%" rd /s /q "%FINAL_DIR%"
 
-if exist "src\SnapVox\payload.zip" del /f /q "src\SnapVox\payload.zip"
+if exist "src\freesnip\payload.zip" del /f /q "src\freesnip\payload.zip"
 
 
 
@@ -369,9 +369,6 @@ exit /b 0
 taskkill /F /IM FreeSnip.exe /T 2>nul
 taskkill /F /IM FreeSnip_tesseract.exe /T 2>nul
 taskkill /F /IM FreeSnip_Cleanup.exe /T 2>nul
-taskkill /F /IM SnapVox.exe /T 2>nul
-taskkill /F /IM SnapVox_tesseract.exe /T 2>nul
-taskkill /F /IM SnapVox_Cleanup.exe /T 2>nul
 dotnet build-server shutdown 2>nul
 exit /b 0
 

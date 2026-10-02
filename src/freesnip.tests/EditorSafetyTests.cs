@@ -221,22 +221,184 @@ public class EditorSafetyTests
             var focused = editor.FocusManager?.GetFocusedElement();
             Assert.Same(Field<Control>(editor, "_canvas"), focused);
 
-            // Press C (Crop)
             Call(editor, "OnWindowKeyDown", editor, new Avalonia.Input.KeyEventArgs { Key = Avalonia.Input.Key.C, RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent });
             Assert.Equal(EditorTool.Crop, Field<EditorTool>(editor, "_currentTool"));
             var cropPopup = Field<Avalonia.Controls.Primitives.Popup>(editor, "_cropModePopup");
             Assert.True(cropPopup.IsOpen);
 
-            // Press L (Line) while crop popup is open - routes via OnPopupKeyDown
             Call(editor, "OnPopupKeyDown", cropPopup, new Avalonia.Input.KeyEventArgs { Key = Avalonia.Input.Key.L, RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent });
             Assert.False(cropPopup.IsOpen);
             Assert.Equal(EditorTool.Line, Field<EditorTool>(editor, "_currentTool"));
 
-            // Press A (Arrow)
             Call(editor, "OnWindowKeyDown", editor, new Avalonia.Input.KeyEventArgs { Key = Avalonia.Input.Key.A, RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent });
             Assert.Equal(EditorTool.Arrow, Field<EditorTool>(editor, "_currentTool"));
         }
         finally { editor.Close(); }
+    }
+
+    [Fact]
+    public void CoreConfiguration_WarnBeforeClosingEditor_DefaultsToFalse()
+    {
+        var config = new CoreConfiguration();
+        Assert.False(config.WarnBeforeClosingEditor);
+    }
+
+    [Fact]
+    public void CoreConfiguration_LastPixelateStrength_DefaultsToTen()
+    {
+        var config = new CoreConfiguration();
+        Assert.Equal(10, config.LastPixelateStrength);
+    }
+
+    [Fact]
+    public void ImageEditorWindow_PixelateStrength_ThirtyPercentMath()
+    {
+        const int min = 2;
+        const int max = 29;
+        const int val = 10;
+        double pct = (double)(val - min) / (max - min);
+        int displayPercent = (int)Math.Round(pct * 100);
+        Assert.Equal(30, displayPercent);
+    }
+
+    [AvaloniaFact]
+    public async Task ImageEditorWindow_HandleContextualCopy_WithNoSelection_DoesNotCopy()
+    {
+        var editor = await CreateEditor();
+        try
+        {
+            typeof(ImageEditorWindow).GetField("_annotationClipboard", BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, null);
+            typeof(ImageEditorWindow).GetField("_selectedControl", Private)!.SetValue(editor, null);
+
+            Call(editor, "HandleContextualCopy", false);
+
+            var clipboardModel = typeof(ImageEditorWindow).GetField("_annotationClipboard", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null);
+            Assert.Null(clipboardModel);
+        }
+        finally { editor.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task MultiSelectGroup_VectorCoordinateRetention_UngroupsWithoutPointDrift()
+    {
+        var editor = await CreateEditor();
+        try
+        {
+            var line = new Avalonia.Controls.Shapes.Line
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(50, 50),
+                StrokeThickness = 2
+            };
+            Canvas.SetLeft(line, 100);
+            Canvas.SetTop(line, 100);
+            Call(editor, "AddAnnotation", line);
+
+            Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(line, out var initialStart, out var initialEnd));
+            Assert.Equal(new Point(100, 100), initialStart);
+            Assert.Equal(new Point(150, 150), initialEnd);
+
+            // Create a multi-select group containing the line
+            var group = new Canvas { Tag = "MultiSelectGroup", Width = 100, Height = 100 };
+            Canvas.SetLeft(group, 50);
+            Canvas.SetTop(group, 50);
+
+            var canvas = Field<Canvas>(editor, "_canvas");
+            canvas.Children.Remove(line);
+
+            // Coordinate adjustment into group
+            Call(editor, "SetVectorAbsolutePoints", line, new Point(initialStart.X - 50, initialStart.Y - 50), new Point(initialEnd.X - 50, initialEnd.Y - 50));
+            group.Children.Add(line);
+            canvas.Children.Add(group);
+
+            // Now ungroup
+            Call(editor, "UngroupMultiSelectGroup", group);
+
+            Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(line, out var finalStart, out var finalEnd));
+            Assert.Equal(initialStart.X, finalStart.X, 0.001);
+            Assert.Equal(initialStart.Y, finalStart.Y, 0.001);
+            Assert.Equal(initialEnd.X, finalEnd.X, 0.001);
+            Assert.Equal(initialEnd.Y, finalEnd.Y, 0.001);
+        }
+        finally { editor.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task SelectionIndicators_ClearWithoutNullPoints_DoesNotCrashAvaloniaMeasureOrRender()
+    {
+        var editor = await CreateEditor();
+        try
+        {
+            // Initial state: no selection
+            Call(editor, "UpdateSelectionIndicator");
+
+            var lineInd = Field<Avalonia.Controls.Shapes.Polygon>(editor, "_lineSelectionIndicator");
+            var arrowInd = Field<Avalonia.Controls.Shapes.Polygon>(editor, "_arrowSelectionIndicator");
+            var lineHov = Field<Avalonia.Controls.Shapes.Polygon>(editor, "_lineHoverIndicator");
+            var arrowHov = Field<Avalonia.Controls.Shapes.Polygon>(editor, "_arrowHoverIndicator");
+
+            Assert.NotNull(lineInd.Points);
+            Assert.NotNull(arrowInd.Points);
+            Assert.NotNull(lineHov.Points);
+            Assert.NotNull(arrowHov.Points);
+
+            // Measuring or arranging should not throw NullReferenceException
+            lineInd.Measure(new Size(100, 100));
+            lineInd.Arrange(new Rect(0, 0, 100, 100));
+            arrowInd.Measure(new Size(100, 100));
+            arrowInd.Arrange(new Rect(0, 0, 100, 100));
+
+            // Select a line then clear selection
+            var line = new Avalonia.Controls.Shapes.Line
+            {
+                StartPoint = new Point(10, 10),
+                EndPoint = new Point(40, 40),
+                StrokeThickness = 2
+            };
+            Canvas.SetLeft(line, 0);
+            Canvas.SetTop(line, 0);
+            Call(editor, "AddAnnotation", line);
+
+            typeof(ImageEditorWindow).GetField("_selectedControl", Private)!.SetValue(editor, line);
+            Call(editor, "UpdateSelectionIndicator");
+
+            Assert.NotNull(lineInd.Points);
+            Assert.NotEmpty(lineInd.Points);
+
+            // Clear selection
+            typeof(ImageEditorWindow).GetField("_selectedControl", Private)!.SetValue(editor, null);
+            Call(editor, "UpdateSelectionIndicator");
+
+            Assert.NotNull(lineInd.Points);
+            Assert.Empty(lineInd.Points);
+            Assert.NotNull(arrowInd.Points);
+            Assert.Empty(arrowInd.Points);
+
+            // Verify Avalonia layout pass does not throw NullReferenceException
+            lineInd.Measure(new Size(100, 100));
+            lineInd.Arrange(new Rect(0, 0, 100, 100));
+        }
+        finally { editor.Close(); }
+    }
+
+    [Fact]
+    public async Task LogInstallationElevationState_ConcurrentAccess_DoesNotThrowSharingViolation()
+    {
+        var tasks = new List<Task>();
+        for (int i = 0; i < 10; i++)
+        {
+            int threadId = i;
+            tasks.Add(Task.Run(() =>
+            {
+                for (int j = 0; j < 5; j++)
+                {
+                    freesnip.helpers.StartupTaskHelper.LogInstallationElevationState($"Thread {threadId} iteration {j}");
+                }
+            }));
+        }
+
+        // Must complete without unhandled sharing violation IOException
+        await Task.WhenAll(tasks);
     }
 
     private sealed class BrokenRender : Control
@@ -244,5 +406,6 @@ public class EditorSafetyTests
         public override void Render(DrawingContext context) => throw new InvalidOperationException("Injected renderer failure");
     }
 }
+
 
 

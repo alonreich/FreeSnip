@@ -11,11 +11,6 @@ namespace freesnip.helpers
     public static class RetentionHelper
     {
         private static readonly string TempStorage = Path.Combine(Path.GetTempPath(), "FreeSnip");
-        private static readonly string[] LegacyTempStorages = new[]
-        {
-            Path.Combine(Path.GetTempPath(), "SnapVox"),
-            Path.Combine(Path.GetTempPath(), "snapvox")
-        };
         private static readonly object SyncRoot = new object();
         private static Timer _cleanupTimer;
         private static int _cleanupRunning;
@@ -49,7 +44,7 @@ namespace freesnip.helpers
                 return;
             }
 
-            if (!Directory.Exists(TempStorage) && !LegacyTempStorages.Any(Directory.Exists))
+            if (!Directory.Exists(TempStorage))
             {
                 Interlocked.Exchange(ref _cleanupRunning, 0);
                 return;
@@ -58,14 +53,7 @@ namespace freesnip.helpers
             try
             {
                 var now = DateTime.Now;
-                var targets = new List<string> { TempStorage };
-                targets.AddRange(LegacyTempStorages);
-
-                foreach (string storage in targets.Distinct(StringComparer.OrdinalIgnoreCase))
-                {
-                    if (!Directory.Exists(storage)) continue;
-                    CleanStorageRoot(storage, now);
-                }
+                CleanStorageRoot(TempStorage, now);
             }
             catch (Exception ex)
             {

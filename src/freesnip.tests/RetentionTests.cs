@@ -32,24 +32,5 @@ namespace freesnip.tests
 
             Assert.False(File.Exists(testFile), "Files older than 24 hours must be purged from the temporary directory.");
         }
-
-        [Fact]
-        public void RetentionCycle_MustPurgeLegacySnapVoxTempFiles()
-        {
-            string legacyPath = Path.Combine(Path.GetTempPath(), "SnapVox");
-            Directory.CreateDirectory(legacyPath);
-
-            string testFile = Path.Combine(legacyPath, "test_legacy_purge.jpg");
-            File.WriteAllText(testFile, "legacy test data");
-
-            File.SetCreationTime(testFile, DateTime.Now.AddHours(-25));
-            File.SetLastWriteTime(testFile, DateTime.Now.AddHours(-25));
-
-            RetentionHelper.RunCleanup();
-
-            Assert.False(File.Exists(testFile), "Legacy SnapVox files older than 24 hours must be purged.");
-        }
-
     }
 }
-

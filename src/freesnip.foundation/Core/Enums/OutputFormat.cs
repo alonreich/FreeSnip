@@ -10,7 +10,7 @@ public enum OutputFormat
     png,
     tiff,
     jxr,
-    snapvox,
+    freesnip,
     ico
 
 }

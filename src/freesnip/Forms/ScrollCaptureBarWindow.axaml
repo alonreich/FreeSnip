@@ -44,7 +44,7 @@
             <!-- Status Indicator & User Guidance -->
             <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,14,0">
                 <TextBlock Name="ScreensBadge" Text="Recording started. Scroll down now using your mouse wheel." FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Name="SubtextHint" Text="Space / Enter finishes · Esc cancels" FontSize="10.5" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Name="SubtextHint" Text="Enter finishes · Esc cancels" FontSize="10.5" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
             <!-- Green On-Screen Finish Button -->

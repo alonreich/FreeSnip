@@ -15,7 +15,9 @@ internal static class InstallHostContext
         {
             string path = DeploymentFootprint.TempInstallationLogPath;
             Directory.CreateDirectory(Path.GetDirectoryName(path) ?? DeploymentFootprint.TempAppFolder);
-            File.AppendAllText(path, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [EARLY] {message}{Environment.NewLine}");
+            using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            using var writer = new StreamWriter(stream, System.Text.Encoding.UTF8);
+            writer.Write($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [EARLY] {message}{Environment.NewLine}");
         }
         catch
         {

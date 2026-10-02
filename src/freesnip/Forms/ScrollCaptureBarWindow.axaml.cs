@@ -73,29 +73,38 @@ namespace freesnip.forms
 
         public void UpdateHudState(ScrollHudState state, double screens = 1.0, int heightPx = 0)
         {
-            Dispatcher.UIThread.Post(() =>
+            Action update = () =>
             {
                 if (_screensBadge == null || _subtextHint == null) return;
                 switch (state)
                 {
                     case ScrollHudState.Initial:
                         _screensBadge.Text = "Recording started. Scroll down now using your mouse wheel.";
-                        _subtextHint.Text = "Space / Enter finishes · Esc cancels";
+                        _subtextHint.Text = "Enter finishes · Esc cancels";
                         break;
                     case ScrollHudState.Active:
                         _screensBadge.Text = $"Scrolling detected: {screens:0.0} screens captured ({heightPx} px)";
-                        _subtextHint.Text = "Space / Enter finishes · Esc cancels";
+                        _subtextHint.Text = "Enter finishes · Esc cancels";
                         break;
                     case ScrollHudState.Idle:
                         _screensBadge.Text = "Waiting for scroll input...";
-                        _subtextHint.Text = $"{screens:0.0} screens captured ({heightPx} px) · Finish to save";
+                        _subtextHint.Text = $"{screens:0.0} screens captured ({heightPx} px) · Enter to finish";
                         break;
                     case ScrollHudState.LimitReached:
                         _screensBadge.Text = "Memory limit reached (180 MP).";
-                        _subtextHint.Text = "Click Finish & Open Editor or press Space/Enter to save.";
+                        _subtextHint.Text = "Click Finish & Open Editor or press Enter to save.";
                         break;
                 }
-            });
+            };
+
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                update();
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(update);
+            }
         }
 
         public void UpdateStats(double screens, int frames)

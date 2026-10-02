@@ -1,27 +1,27 @@
 <p align="center">
-  <img src="src/snapvox/SnapVox.ico" width="128" height="128" alt="SnapVox Icon">
+  <img src="src/freesnip/FreeSnip.ico" width="128" height="128" alt="FreeSnip Icon">
 </p>
 
-<h1 align="center">SnapVox 📸🗣️</h1>
+<h1 align="center">FreeSnip 📸🗣️</h1>
 
 <h3 align="center">A modern, premium, lightning-fast screen capture &amp; annotation utility for Windows —<br>built from the ground up with <b>Avalonia UI</b> and <b>.NET 9</b>.</h3>
 
 <p align="center">
   <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET_9-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 9" /></a>
   <a href="https://avaloniaui.net/"><img src="https://img.shields.io/badge/Avalonia_UI-11.x-purple?style=for-the-badge" alt="Avalonia UI" /></a>
-  <a href="https://github.com/alonreich/SnapVox/releases/latest"><img src="https://img.shields.io/badge/Compiled-NativeAOT-black?style=for-the-badge" alt="NativeAOT" /></a>
+  <a href="https://github.com/alonreich/FreeSnip/releases/latest"><img src="https://img.shields.io/badge/Compiled-NativeAOT-black?style=for-the-badge" alt="NativeAOT" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge" alt="GPLv3" /></a>
 </p>
 
 <h2 align="center">
-  <a href="https://github.com/alonreich/SnapVox/releases/latest/download/SnapVox.exe">⬇️ DOWNLOAD LATEST — SnapVox.exe ⬇️</a>
+  <a href="https://github.com/alonreich/FreeSnip/releases/latest/download/FreeSnip.exe">⬇️ DOWNLOAD LATEST — FreeSnip.exe ⬇️</a>
 </h2>
 
 <p align="center">
-  <sub>Need built-in OCR? Grab <a href="https://github.com/alonreich/SnapVox/releases/latest/download/SnapVox_tesseract.exe"><b>SnapVox_tesseract.exe</b></a> instead.</sub>
+  <sub>Need built-in OCR? Grab <a href="https://github.com/alonreich/FreeSnip/releases/latest/download/FreeSnip_tesseract.exe"><b>FreeSnip_tesseract.exe</b></a> instead.</sub>
 </p>
 
-> **🔗 These links never go stale.** They are GitHub *latest-release* permalinks — they always resolve to the most recently published build, so whenever you click them you get the newest version. SnapVox deliberately keeps **exactly one release alive at any time**: every publish deletes all previous releases and their tags, no exceptions.
+> **🔗 These links never go stale.** They are GitHub *latest-release* permalinks — they always resolve to the most recently published build, so whenever you click them you get the newest version. FreeSnip deliberately keeps **exactly one release alive at any time**: every publish deletes all previous releases and their tags, no exceptions.
 
 ---
 
@@ -38,10 +38,10 @@
 
 ## 📦 Installation & Releases
 
-SnapVox ships as **standalone executables** — download and run, no installer wizard required. Two builds are published with every release:
+FreeSnip ships as **standalone executables** — download and run, no installer wizard required. Two builds are published with every release:
 
-1. **[SnapVox.exe](https://github.com/alonreich/SnapVox/releases/latest/download/SnapVox.exe)** — the core, blazing-fast Native AOT compiled executable.
-2. **[SnapVox_tesseract.exe](https://github.com/alonreich/SnapVox/releases/latest/download/SnapVox_tesseract.exe)** — the standard deployment executable bundled with OCR capabilities.
+1. **[FreeSnip.exe](https://github.com/alonreich/FreeSnip/releases/latest/download/FreeSnip.exe)** — the core, blazing-fast Native AOT compiled executable.
+2. **[FreeSnip_tesseract.exe](https://github.com/alonreich/FreeSnip/releases/latest/download/FreeSnip_tesseract.exe)** — the standard deployment executable bundled with OCR capabilities.
 
 Both links are *latest-release* permalinks and always download the newest build. There is never more than one release in this repository: each publish replaces everything that came before it.
 
@@ -55,12 +55,12 @@ Requirements:
 Clone the repository and run the build script to generate the binaries in the `.\compiled\` directory:
 
 ```powershell
-git clone https://github.com/alonreich/SnapVox.git
-cd SnapVox
+git clone https://github.com/alonreich/FreeSnip.git
+cd FreeSnip
 .\Build.cmd
 ```
 
-The script compiles both binaries, stamps them with a `vYYYY.MM.DD.HHmm` version, then **replaces the one-and-only GitHub release**: every pre-existing release and tag — local and remote — is deleted first (no exceptions), a fresh release is published with `SnapVox.exe`, `SnapVox_tesseract.exe` and `LICENSE.txt` as assets, and the upload is verified by SHA256 digest.
+The script compiles both binaries, stamps them with a `vYYYY.MM.DD.HHmm` version, then **replaces the one-and-only GitHub release**: every pre-existing release and tag — local and remote — is deleted first (no exceptions), a fresh release is published with `FreeSnip.exe`, `FreeSnip_tesseract.exe` and `LICENSE.txt` as assets, and the upload is verified by SHA256 digest.
 
 To build without touching GitHub at all:
 
@@ -70,13 +70,13 @@ To build without touching GitHub at all:
 
 ## ⚖️ License & Open Source Compliance
 
-SnapVox is proudly open-source and is licensed under the **GNU General Public License v3.0 (GPLv3)**.
+FreeSnip is proudly open-source and is licensed under the **GNU General Public License v3.0 (GPLv3)**.
 
 ### Why GPLv3?
-To provide you with the most reliable capture engine possible, portions of SnapVox’s low-level native capture logic, bounds calculations and highlight filter were adapted from **[Greenshot](https://getgreenshot.org/)**, an incredible open-source screenshot tool. Because Greenshot is licensed under the GPL, SnapVox inherits this license to ensure full compliance and respect for their hard work.
+To provide you with the most reliable capture engine possible, portions of FreeSnip’s low-level native capture logic, bounds calculations and highlight filter were adapted from **[Greenshot](https://getgreenshot.org/)**, an incredible open-source screenshot tool. Because Greenshot is licensed under the GPL, FreeSnip inherits this license to ensure full compliance and respect for their hard work.
 
 ### Third-Party Acknowledgements
-SnapVox stands on the shoulders of giants. We gratefully acknowledge the following open-source projects used in our software:
+FreeSnip stands on the shoulders of giants. We gratefully acknowledge the following open-source projects used in our software:
 
 - **[Avalonia UI](https://github.com/AvaloniaUI/Avalonia):** (MIT License) - The powerhouse driving our beautiful, cross-platform user interface.
 - **[SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp):** (Apache 2.0 via Split License) - Used for lightning-fast, cross-platform image processing, cropping, and rendering.

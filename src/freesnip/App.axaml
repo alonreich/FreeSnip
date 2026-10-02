@@ -37,7 +37,7 @@
                         <NativeMenuItem Header="Repeat Last Region" Click="OnCaptureLastRegionClick" Icon="avares://FreeSnip/icons/repeat.png" />
                         <NativeMenuItem Header="Capture Window (Alt+PrintScreen)" Click="OnCaptureWindowClick" Icon="avares://FreeSnip/icons/shape_square_add.png" />
                         <NativeMenuItem Header="Capture Fullscreen (Ctrl+PrintScreen)" Click="OnCaptureFullscreenClick" Icon="avares://FreeSnip/icons/fullscreen.png" />
-                        <NativeMenuItem Header="Scroll Capture (Space)" Click="OnScrollCaptureClick" Icon="avares://FreeSnip/icons/scroll-capture.png" />
+                        <NativeMenuItem Header="Scroll Capture" Click="OnScrollCaptureClick" Icon="avares://FreeSnip/icons/scroll-capture.png" />
                         <NativeMenuItemSeparator />
                         <NativeMenuItem Header="Open From Clipboard" Click="OnOpenFromClipboardClick" Icon="avares://FreeSnip/icons/clipboard.png" />
                         <NativeMenuItem Header="Show Capture History" Click="OnShowHistoryClick" Icon="avares://FreeSnip/icons/folder_explore.png" />
