@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -6283,19 +6283,15 @@ namespace freesnip.editor.forms
 
                 await EditorExportService.SaveToHistoryBackupAsync(fileName, tempImage, config.KeepBackup, config.OutputFileAllowPng, config.OutputFileJpegQuality).ConfigureAwait(true);
 
-                // --- DOUBLE CLIPBOARD SEQUENCE (Issue 2) ---
-                // 1. Stage CF_DIB of image into clipboard first
                 Log.Info($"[STEP:START] SaveToDownloadsAsync.Clipboard - Staging CF_DIB image into clipboard for '{downloadedFilePath}'.");
                 var dibSw = System.Diagnostics.Stopwatch.StartNew();
                 await UiClipboard.SetImageAsync(tempImage, markFreeSnipEditorImage: true).ConfigureAwait(true);
                 dibSw.Stop();
                 Log.Info($"[STEP:SUCCESS] SaveToDownloadsAsync.Clipboard ({dibSw.ElapsedMilliseconds}ms) - CF_DIB image staged onto clipboard.");
 
-                // 2. Probe CF_DIB format available on clipboard to prevent race conditions
                 bool dibProbed = UiClipboard.ProbeClipboardFormat(UiClipboard.CF_DIB_FORMAT, 150);
                 Log.Info($"[STEP:{(dibProbed ? "SUCCESS" : "FAIL")}] SaveToDownloadsAsync.Clipboard - Probed CF_DIB format available: {dibProbed}.");
 
-                // 3. Immediately insert plain text ONLY wrapped with two " marks from its side of the full path
                 string quotedPath = $"\"{downloadedFilePath}\"";
                 Log.Info($"[STEP:START] SaveToDownloadsAsync.Clipboard - Setting plain text only quoted path: {quotedPath}");
                 var textSw = System.Diagnostics.Stopwatch.StartNew();
@@ -6537,7 +6533,6 @@ namespace freesnip.editor.forms
                 }
             }
 
-            // Nothing selected: Ctrl+C does nothing. Do not implicitly copy flattened image.
             sw.Stop();
             Log.Info($"[STEP:INFO] ContextualCopy ({sw.ElapsedMilliseconds}ms) - No object selected; clipboard unchanged.");
         }

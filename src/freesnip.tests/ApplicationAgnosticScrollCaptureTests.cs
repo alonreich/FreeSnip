@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using freesnip.helpers;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -19,7 +19,6 @@ namespace freesnip.tests
         {
             var frame = new Image<Bgra32>(width, height);
 
-            // Draw scrolling pattern inside viewport
             frame.ProcessPixelRows(accessor =>
             {
                 for (int y = viewport.Top; y < viewport.Bottom; y++)
@@ -29,7 +28,6 @@ namespace freesnip.tests
                     for (int x = viewport.Left; x < viewport.Right; x++)
                     {
                         int worldX = x + scrollOffsetX;
-                        // High-contrast textured pattern
                         byte r = (byte)((worldY * 13 + worldX * 7) % 256);
                         byte g = (byte)((worldY * 5 + worldX * 17) % 256);
                         byte b = (byte)((worldY * 23 + worldX * 11) % 256);
@@ -38,7 +36,6 @@ namespace freesnip.tests
                 }
             });
 
-            // Draw stationary chrome (headers, footers, sidebars)
             drawStationaryChrome?.Invoke(frame);
 
             return frame;
@@ -57,22 +54,20 @@ namespace freesnip.tests
             {
                 img.ProcessPixelRows(accessor =>
                 {
-                    // Fixed Ribbon (top 60px)
                     for (int y = 0; y < ribbonHeight; y++)
                     {
                         var row = accessor.GetRowSpan(y);
                         for (int x = 0; x < width; x++)
                         {
-                            row[x] = new Bgra32(43, 87, 154, 255); // Word blue
+                            row[x] = new Bgra32(43, 87, 154, 255);
                         }
                     }
-                    // Fixed Status bar (bottom 30px)
                     for (int y = height - statusHeight; y < height; y++)
                     {
                         var row = accessor.GetRowSpan(y);
                         for (int x = 0; x < width; x++)
                         {
-                            row[x] = new Bgra32(230, 230, 230, 255); // Status gray
+                            row[x] = new Bgra32(230, 230, 230, 255);
                         }
                     }
                 });
@@ -80,7 +75,6 @@ namespace freesnip.tests
 
             using var stitcher = new ScrollFrameStitcher();
 
-            // Feed 8 frames scrolling vertically by 15px each
             for (int i = 0; i < 8; i++)
             {
                 using var frame = CreateSyntheticFrame(width, height, viewport, i * 15, 0, DrawWordChrome);
@@ -94,7 +88,6 @@ namespace freesnip.tests
             using var result = stitcher.BuildImage();
             Assert.NotNull(result);
             Assert.Equal(width, result.Width);
-            // Result height = ribbonHeight + statusHeight + initial viewport + 7 * 15px
             int expectedHeight = height + 7 * 15;
             Assert.Equal(expectedHeight, result.Height);
         }
@@ -112,22 +105,20 @@ namespace freesnip.tests
             {
                 img.ProcessPixelRows(accessor =>
                 {
-                    // Ribbon (top 50px)
                     for (int y = 0; y < ribbonHeight; y++)
                     {
                         var row = accessor.GetRowSpan(y);
                         for (int x = 0; x < width; x++)
                         {
-                            row[x] = new Bgra32(16, 124, 65, 255); // Excel green
+                            row[x] = new Bgra32(16, 124, 65, 255);
                         }
                     }
-                    // Fixed row header on left (below ribbon)
                     for (int y = ribbonHeight; y < height; y++)
                     {
                         var row = accessor.GetRowSpan(y);
                         for (int x = 0; x < rowHeaderWidth; x++)
                         {
-                            row[x] = new Bgra32(240, 240, 240, 255); // Row header gray
+                            row[x] = new Bgra32(240, 240, 240, 255);
                         }
                     }
                 });
@@ -256,7 +247,7 @@ namespace freesnip.tests
                         var row = accessor.GetRowSpan(y);
                         for (int x = 0; x < sidebarWidth; x++)
                         {
-                            row[x] = new Bgra32(37, 37, 38, 255); // VS Code dark sidebar
+                            row[x] = new Bgra32(37, 37, 38, 255);
                         }
                     }
                 });
@@ -288,7 +279,6 @@ namespace freesnip.tests
 
             using var stitcher = new ScrollFrameStitcher();
 
-            // Small 4px increments
             for (int i = 0; i < 10; i++)
             {
                 using var frame = CreateSyntheticFrame(width, height, viewport, i * 4, 0, null);
@@ -310,7 +300,6 @@ namespace freesnip.tests
             const int width = 350;
             const int height = 350;
             const int margin = 50;
-            // Center content with blank white margins around it
             var viewport = new Rectangle(margin, 0, width - 2 * margin, height);
 
             void DrawBlankMargins(Image<Bgra32> img)
@@ -322,11 +311,11 @@ namespace freesnip.tests
                         var row = accessor.GetRowSpan(y);
                         for (int x = 0; x < margin; x++)
                         {
-                            row[x] = new Bgra32(255, 255, 255, 255); // Blank left
+                            row[x] = new Bgra32(255, 255, 255, 255);
                         }
                         for (int x = width - margin; x < width; x++)
                         {
-                            row[x] = new Bgra32(255, 255, 255, 255); // Blank right
+                            row[x] = new Bgra32(255, 255, 255, 255);
                         }
                     }
                 });
@@ -357,15 +346,12 @@ namespace freesnip.tests
 
             using var stitcher = new ScrollFrameStitcher();
 
-            // Frame 0: anchor
             using var frame0 = CreateSyntheticFrame(width, height, viewport, 0, 0, null);
             Assert.Equal(ScrollFrameStatus.Accepted, stitcher.AddFrame(frame0));
 
-            // Frame 1: shifted by 15px
             using var frame1 = CreateSyntheticFrame(width, height, viewport, 15, 0, null);
             Assert.Equal(ScrollFrameStatus.Accepted, stitcher.AddFrame(frame1));
 
-            // Frame 2: corrupted/random glitch frame -> should be rejected
             using var glitchFrame = new Image<Bgra32>(width, height);
             glitchFrame.ProcessPixelRows(accessor =>
             {
@@ -383,8 +369,6 @@ namespace freesnip.tests
             Assert.Equal(ScrollFrameStatus.Rejected, glitchStatus);
             Assert.True(stitcher.IsTrackingLost);
 
-            // Frame 3: valid frame shifted by 30px from frame 0 (15px from frame 1)
-            // Re-acquisition should recover against recent frame 1
             using var frame3 = CreateSyntheticFrame(width, height, viewport, 30, 0, null);
             var recoveredStatus = stitcher.AddFrame(frame3);
             Assert.Equal(ScrollFrameStatus.Accepted, recoveredStatus);
@@ -410,7 +394,6 @@ namespace freesnip.tests
             using var frame1 = CreateSyntheticFrame(width, height, viewport, 15, 0, null);
             Assert.Equal(ScrollFrameStatus.Accepted, stitcher.AddFrame(frame1));
 
-            // Duplicate of frame 1
             using var frame1Dup = CreateSyntheticFrame(width, height, viewport, 15, 0, null);
             Assert.Equal(ScrollFrameStatus.Duplicate, stitcher.AddFrame(frame1Dup));
 
@@ -488,14 +471,13 @@ namespace freesnip.tests
         {
             const int width = 500;
             const int height = 400;
-            const int sidebarWidth = 180; // 36% of width
+            const int sidebarWidth = 180;
             var viewport = new Rectangle(sidebarWidth, 0, width - sidebarWidth, height);
 
             void DrawChatGptChrome(Image<Bgra32> img)
             {
                 img.ProcessPixelRows(accessor =>
                 {
-                    // Sidebar background: dark gray (33, 33, 33)
                     for (int y = 0; y < height; y++)
                     {
                         var row = accessor.GetRowSpan(y);
@@ -505,13 +487,12 @@ namespace freesnip.tests
                         }
                     }
 
-                    // Draw a distinctive button / avatar at y = 60..80 in the sidebar
                     for (int y = 60; y < 80; y++)
                     {
                         var row = accessor.GetRowSpan(y);
                         for (int x = 20; x < 60; x++)
                         {
-                            row[x] = new Bgra32(255, 100, 100, 255); // Distinct red button
+                            row[x] = new Bgra32(255, 100, 100, 255);
                         }
                     }
                 });
@@ -519,7 +500,6 @@ namespace freesnip.tests
 
             using var stitcher = new ScrollFrameStitcher();
 
-            // Feed 5 frames scrolling vertically by 25px each
             for (int i = 0; i < 5; i++)
             {
                 using var frame = CreateSyntheticFrame(width, height, viewport, i * 25, 0, DrawChatGptChrome);
@@ -536,14 +516,11 @@ namespace freesnip.tests
             Assert.Equal(width, result.Width);
             Assert.Equal(height + 4 * 25, result.Height);
 
-            // Verify that the red button in the sidebar appears at y = 70, but does NOT repeat below the original height
             result.ProcessPixelRows(accessor =>
             {
                 var originalRow = accessor.GetRowSpan(70);
                 Assert.Equal(new Bgra32(255, 100, 100, 255), originalRow[30]);
 
-                // At y = 70 + height = 470, the old tiling behavior would have stamped the red button again.
-                // With single-render sidebar, this pixel must be the stretched background (33, 33, 33), NOT the red button!
                 var belowRow = accessor.GetRowSpan(470);
                 Assert.Equal(new Bgra32(33, 33, 33, 255), belowRow[30]);
             });

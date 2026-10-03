@@ -25,6 +25,7 @@ public static class StartupTaskHelper
     public const string ScheduledTaskName = "FreeSnip";
     private const string ConfigureAdminStartupArgument = "--configure-admin-startup";
     private const string RemoveAdminStartupArgument = "--remove-admin-startup";
+    private const string StartupUserSidArgument = "--startup-user-sid";
 
     public static string InstallFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "FreeSnip");
     public static string ConfigurationFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FreeSnip");
@@ -146,7 +147,7 @@ public static class StartupTaskHelper
 
         if (args.Any(arg => arg.Equals(ConfigureAdminStartupArgument, StringComparison.OrdinalIgnoreCase)))
         {
-            return await ConfigureElevatedStartupTaskInCurrentProcessAsync(null).ConfigureAwait(false) ? 0 : 1;
+            return await ConfigureElevatedStartupTaskInCurrentProcessAsync(null, GetStartupUserSidArgument(args)).ConfigureAwait(false) ? 0 : 1;
         }
 
         if (args.Any(arg => arg.Equals(RemoveAdminStartupArgument, StringComparison.OrdinalIgnoreCase)))
@@ -157,13 +158,53 @@ public static class StartupTaskHelper
         return 1;
     }
 
-    private static async Task<bool> CreateElevatedStartupTaskAsync(string executablePath, bool elevated = true)
+    private static string GetStartupUserSidArgument(string[] args)
+    {
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals(StartupUserSidArgument, StringComparison.OrdinalIgnoreCase) && UpgradeUserContext.IsValidSid(args[i + 1]))
+                return args[i + 1];
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the SID that owns the FreeSnip startup task. An explicitly supplied SID (the original upgrade user captured
+    /// before UAC) always wins; the current process identity is used only for normal non-upgrade Settings UI operations.
+    /// </summary>
+    internal static string ResolveStartupTaskSid(string explicitUserSid)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitUserSid))
+        {
+            if (!UpgradeUserContext.IsValidSid(explicitUserSid)) throw new ArgumentException("Invalid startup user SID.", nameof(explicitUserSid));
+            return explicitUserSid;
+        }
+
+        using var identity = WindowsIdentity.GetCurrent();
+        return identity.User?.Value ?? throw new InvalidOperationException("Cannot identify the startup user.");
+    }
+
+    private static bool IsCurrentUserSid(string sid)
+    {
+        if (string.IsNullOrWhiteSpace(sid)) return true;
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            return string.Equals(identity.User?.Value, sid, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            LogSuppressedException("IsCurrentUserSid", ex);
+            return false;
+        }
+    }
+
+    private static async Task<bool> CreateElevatedStartupTaskAsync(string executablePath, bool elevated = true, string userSid = null)
     {
         string definitionPath = Path.Combine(Path.GetTempPath(), "FreeSnip", "Lifecycle", "Startup_" + Guid.NewGuid().ToString("N") + ".xml");
         try
         {
-            using var identity = WindowsIdentity.GetCurrent();
-            string sid = identity.User?.Value ?? throw new InvalidOperationException("Cannot identify the startup user.");
+            string sid = ResolveStartupTaskSid(userSid);
             Directory.CreateDirectory(Path.GetDirectoryName(definitionPath));
             await File.WriteAllTextAsync(definitionPath, StartupTaskDefinition.Create(executablePath, sid, elevated)).ConfigureAwait(false);
             int exitCode = await RunHiddenProcessAsync("schtasks.exe",
@@ -174,6 +215,7 @@ public static class StartupTaskHelper
                 return false;
             }
             Log?.Info("Elevated startup registered with battery restrictions disabled for " + sid);
+            LogInstallationElevationState("Scheduled task owner SID: " + sid + (string.IsNullOrWhiteSpace(userSid) ? " (current identity)" : " (explicit original user)"));
             return true;
         }
         catch (Exception ex)
@@ -272,18 +314,20 @@ public static class StartupTaskHelper
             || (!text.Contains("<ExecutionTimeLimit>PT0S", StringComparison.OrdinalIgnoreCase) && text.Contains("<ExecutionTimeLimit>", StringComparison.OrdinalIgnoreCase));
     }
 
-    public static async Task<bool> ConfigureElevatedStartupTaskAsync(string executablePath = null)
+    public static async Task<bool> ConfigureElevatedStartupTaskAsync(string executablePath = null, string userSid = null)
     {
         try
         {
             string targetExecutable = string.IsNullOrWhiteSpace(executablePath) ? GetStartupTaskExecutablePath() : executablePath;
             if (!IsElevated())
             {
-                bool elevated = await RunElevatedAdminCommandAsync(ConfigureAdminStartupArgument).ConfigureAwait(false);
+                string arguments = ConfigureAdminStartupArgument;
+                if (UpgradeUserContext.IsValidSid(userSid)) arguments += " " + StartupUserSidArgument + " " + userSid;
+                bool elevated = await RunElevatedAdminCommandAsync(arguments).ConfigureAwait(false);
                 return elevated && await HasElevatedStartupTaskAsync().ConfigureAwait(false);
             }
 
-            return await ConfigureElevatedStartupTaskInCurrentProcessAsync(targetExecutable).ConfigureAwait(false);
+            return await ConfigureElevatedStartupTaskInCurrentProcessAsync(targetExecutable, userSid).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -292,7 +336,7 @@ public static class StartupTaskHelper
         }
     }
 
-    private static async Task<bool> ConfigureElevatedStartupTaskInCurrentProcessAsync(string executablePath)
+    private static async Task<bool> ConfigureElevatedStartupTaskInCurrentProcessAsync(string executablePath, string userSid = null)
     {
         try
         {
@@ -302,12 +346,13 @@ public static class StartupTaskHelper
             }
 
             string targetExecutable = string.IsNullOrWhiteSpace(executablePath) ? GetStartupTaskExecutablePath() : executablePath;
-            if (!await CreateElevatedStartupTaskAsync(targetExecutable).ConfigureAwait(false))
+            if (!await CreateElevatedStartupTaskAsync(targetExecutable, elevated: true, userSid: userSid).ConfigureAwait(false))
             {
                 return false;
             }
 
             PurgeAllRunKeys();
+            PurgeRunKeysForUser(userSid);
             ExecutionTrace.LogEvent("StartupTaskHelper.ScheduledTask", "Configured", targetExecutable);
             return await HasElevatedStartupTaskAsync().ConfigureAwait(false);
         }
@@ -459,6 +504,59 @@ public static class StartupTaskHelper
         return list.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    private static IEnumerable<SettingsCandidate> GetProgramFilesSettingsCandidates(bool includeMachineLegacy)
+    {
+        yield return new SettingsCandidate(Path.Combine(InstallFolder, "freesnip.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+        yield return new SettingsCandidate(Path.Combine(InstallFolder, "snapvox.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+        yield return new SettingsCandidate(Path.Combine(InstallFolder, @"Data\Settings\freesnip.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+        if (!includeMachineLegacy) yield break;
+        yield return new SettingsCandidate(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+        string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        if (!string.IsNullOrEmpty(progFilesX86))
+            yield return new SettingsCandidate(Path.Combine(progFilesX86, "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+    }
+
+    /// <summary>Classified candidates rooted at the static <see cref="ConfigurationFolder"/> (non-upgrade paths and legacy callers).</summary>
+    internal static SettingsCandidate[] GetClassifiedSettingsCandidates()
+    {
+        string configurationFolder = ConfigurationFolder;
+        var list = new List<SettingsCandidate>
+        {
+            new(Path.Combine(configurationFolder, "freesnip.ini"), SettingsCandidateOrigin.CanonicalUserProfile),
+            new(Path.Combine(configurationFolder, "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile)
+        };
+        string defaultAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string defaultLocalAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        bool isDefaultFolder = string.Equals(configurationFolder, Path.Combine(defaultAppData, "FreeSnip"), StringComparison.OrdinalIgnoreCase);
+        if (isDefaultFolder)
+        {
+            list.Add(new(Path.Combine(defaultAppData, "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+            list.Add(new(Path.Combine(defaultLocalAppData, "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+            list.Add(new(Path.Combine(defaultLocalAppData, "FreeSnip", "freesnip.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+        }
+        list.AddRange(GetProgramFilesSettingsCandidates(isDefaultFolder));
+        return list.ToArray();
+    }
+
+    /// <summary>Classified candidates rooted EXCLUSIVELY at the captured original user's profile (never the elevated worker's).</summary>
+    internal static SettingsCandidate[] GetClassifiedSettingsCandidates(UpgradeUserContext context)
+    {
+        if (context == null) throw new ArgumentNullException(nameof(context));
+        var list = new List<SettingsCandidate> { new(context.CanonicalSettingsPath, SettingsCandidateOrigin.CanonicalUserProfile) };
+        list.AddRange(context.GetLegacyUserProfileCandidates().Select(p => new SettingsCandidate(p, SettingsCandidateOrigin.LegacyUserProfile)));
+        list.AddRange(GetProgramFilesSettingsCandidates(includeMachineLegacy: true));
+        return list.ToArray();
+    }
+
+    internal static void LogSettingsSelection(SettingsSelection selection, string scope)
+    {
+        foreach (var evaluation in selection.Evaluated.Where(e => e.Exists))
+            LogInstallationElevationState($"[{scope}] Settings candidate: {evaluation}");
+        LogInstallationElevationState(selection.Selected != null
+            ? $"[{scope}] Selected settings source '{selection.Selected.Path}' ({selection.Selected.Origin}): {selection.Reason}"
+            : $"[{scope}] No settings source selected: {selection.Reason}");
+    }
+
     public static bool DetectAdminStartupInSettingsCandidates(IEnumerable<string> candidates = null)
     {
         try
@@ -533,6 +631,59 @@ public static class StartupTaskHelper
         StartupHelper.DeleteStartupFolderShortcut();
     }
 
+    private static readonly string[] UserRunSubKeys =
+    {
+        @"Software\Microsoft\Windows\CurrentVersion\Run",
+        @"Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"
+    };
+
+    /// <summary>
+    /// Removes FreeSnip Run values from the ORIGINAL user's loaded hive (HKEY_USERS\SID) when that user is not the
+    /// current process identity. No-op for the current user (already handled by <see cref="PurgeAllRunKeys"/>).
+    /// </summary>
+    internal static void PurgeRunKeysForUser(string userSid)
+    {
+        if (IsCurrentUserSid(userSid) || !UpgradeUserContext.IsValidSid(userSid)) return;
+        string[] valueNames = { "freesnip", "FreeSnip", "snapvox", "SnapVox" };
+        foreach (string subKey in UserRunSubKeys)
+        {
+            try
+            {
+                using var key = Registry.Users.OpenSubKey(userSid + @"\" + subKey, true);
+                if (key == null) continue;
+                foreach (string name in valueNames)
+                {
+                    if (key.GetValue(name) == null) continue;
+                    key.DeleteValue(name, false);
+                    LogInstallationElevationState($"Purged Run key: HKU\\{userSid}\\{subKey}\\{name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogSuppressedException("PurgeRunKeysForUser", ex);
+            }
+        }
+    }
+
+    /// <summary>Registers normal (non-elevated) user startup for the original user SID.</summary>
+    internal static void SetRunForUser(string userSid, string arguments, string executablePath)
+    {
+        if (IsCurrentUserSid(userSid))
+        {
+            StartupHelper.SetRunUser(arguments, executablePath);
+            return;
+        }
+
+        if (!UpgradeUserContext.IsValidSid(userSid)) throw new ArgumentException("Invalid startup user SID.", nameof(userSid));
+        string command = "\"" + executablePath + "\"" + (string.IsNullOrWhiteSpace(arguments) ? string.Empty : " " + arguments.Trim());
+        using RegistryKey key = Registry.Users.CreateSubKey(userSid + @"\" + UserRunSubKeys[0], true)
+            ?? throw new IOException("The original user's startup registry key could not be opened.");
+        key.SetValue("FreeSnip", command);
+        if (!string.Equals(key.GetValue("FreeSnip") as string, command, StringComparison.Ordinal))
+            throw new IOException("Original user's startup registration could not be verified.");
+        LogInstallationElevationState($"Standard Run startup registered for HKU\\{userSid}");
+    }
+
     public static void LogInstallationElevationState(string message)
     {
         for (int attempt = 0; attempt < 3; attempt++)
@@ -568,26 +719,24 @@ public static class StartupTaskHelper
     {
         LogInstallationElevationState($"Beginning startup restoration: keepUserSettings={keepUserSettings}, hadElevatedStartup={hadElevatedStartup}");
         string primaryIni = Path.Combine(ConfigurationFolder, "freesnip.ini");
-        bool primaryIniExisted = File.Exists(primaryIni);
+        var classified = GetClassifiedSettingsCandidates();
+        var primarySelection = SettingsCandidateSelector.Select(classified);
+        bool primaryIniExisted = primarySelection.Selected?.Origin == SettingsCandidateOrigin.CanonicalUserProfile;
         if (keepUserSettings && !primaryIniExisted)
         {
-            foreach (var cand in GetSettingsCandidates())
+            LogSettingsSelection(primarySelection, "RestoreStartupAfterInstall");
+            if (primarySelection.Selected != null)
             {
-                if (File.Exists(cand) && !string.Equals(cand, primaryIni, StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    try
-                    {
-                        Directory.CreateDirectory(ConfigurationFolder);
-                        string content = File.ReadAllText(cand);
-                        content = content.Replace("[SnapVox]", "[Core]", StringComparison.OrdinalIgnoreCase);
-                        File.WriteAllText(primaryIni, content, Encoding.UTF8);
-                        LogInstallationElevationState($"Migrated settings candidate '{cand}' to '{primaryIni}'");
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        LogSuppressedException("RestoreStartupAfterInstallAsync.MigrateCandidate", ex);
-                    }
+                    Directory.CreateDirectory(ConfigurationFolder);
+                    string content = SettingsCandidateSelector.MigrateLegacyContent(File.ReadAllText(primarySelection.Selected.Path));
+                    File.WriteAllText(primaryIni, content, Encoding.UTF8);
+                    LogInstallationElevationState($"Migrated settings candidate '{primarySelection.Selected.Path}' to '{primaryIni}'");
+                }
+                catch (Exception ex)
+                {
+                    LogSuppressedException("RestoreStartupAfterInstallAsync.MigrateCandidate", ex);
                 }
             }
         }
@@ -635,6 +784,78 @@ public static class StartupTaskHelper
             }
         }
         LogInstallationElevationState($"Startup restoration finalized with RunAsAdministratorOnStartup={elevated}");
+    }
+
+    internal readonly record struct UpgradeStartupResult(bool RunAsAdministratorOnStartup, bool SettingsFileModified);
+
+    /// <summary>
+    /// KEEP-SETTINGS / auto-update startup restoration for the ORIGINAL user captured before UAC.
+    /// Never derives ownership from the worker identity: the elevated task is created for <see cref="UpgradeUserContext.UserSid"/>,
+    /// normal startup is written to that user's hive, and the restored INI is only edited (single key, byte-preserving) when
+    /// RunAsAdministratorOnStartup must be reconciled with the configured startup mode.
+    /// </summary>
+    internal static async Task<UpgradeStartupResult> RestoreStartupForUpgradeAsync(UpgradeUserContext context, bool hadElevatedStartup)
+    {
+        if (context == null) throw new ArgumentNullException(nameof(context));
+        string ini = context.CanonicalSettingsPath;
+        string text = File.Exists(ini) ? await File.ReadAllTextAsync(ini, Encoding.UTF8).ConfigureAwait(false) : null;
+        bool iniFlag = text != null && SettingsCandidateSelector.ReadRunAsAdministrator(text) == true;
+        bool elevated = hadElevatedStartup || iniFlag;
+        LogInstallationElevationState($"Upgrade startup restoration for SID {context.UserSid}: hadElevatedStartup={hadElevatedStartup}, iniFlag={iniFlag} -> effectiveElevated={elevated}, ini='{ini}'");
+
+        if (elevated)
+        {
+            if (!await ConfigureElevatedStartupTaskAsync(InstallPath, context.UserSid).ConfigureAwait(false))
+            {
+                LogInstallationElevationState("FAILED to configure elevated scheduled task for original user.");
+                throw new IOException("Could not restore administrator startup. Your settings backup has been kept.");
+            }
+            PurgeAllRunKeys();
+            PurgeRunKeysForUser(context.UserSid);
+            LogInstallationElevationState("Elevated scheduled task configured successfully. Purging Run registry entries to prevent dual startup.");
+        }
+        else
+        {
+            await DeleteElevatedStartupTaskAsync().ConfigureAwait(false);
+            PurgeAllRunKeys();
+            PurgeRunKeysForUser(context.UserSid);
+            SetRunForUser(context.UserSid, "--autorun", InstallPath);
+            LogInstallationElevationState("Standard user Run startup configured for original user.");
+        }
+
+        bool modified = false;
+        Directory.CreateDirectory(context.ConfigurationFolder);
+        if (text != null && iniFlag != elevated)
+        {
+            string updated = SettingsCandidateSelector.SetIniValue(text, "Core", "RunAsAdministratorOnStartup", elevated ? "True" : "False");
+            string temporary = ini + ".startup-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                byte[] original = await File.ReadAllBytesAsync(ini).ConfigureAwait(false);
+                bool hadBom = original.Length >= 3 && original[0] == 0xEF && original[1] == 0xBB && original[2] == 0xBF;
+                await File.WriteAllTextAsync(temporary, updated, new UTF8Encoding(hadBom)).ConfigureAwait(false);
+                File.Move(temporary, ini, overwrite: true);
+            }
+            finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            modified = true;
+        }
+
+        IniConfig.IniDirectory = context.ConfigurationFolder;
+        IniConfig.Init("FreeSnip", IniConfigurationDeployer.ConfigBaseName);
+        var config = IniConfig.GetIniSection<CoreConfiguration>(allowSave: false);
+        if (text == null)
+        {
+            config.RunAsAdministratorOnStartup = elevated;
+            IniConfig.SaveTo(ini);
+            modified = true;
+        }
+        else if (config.RunAsAdministratorOnStartup != elevated)
+        {
+            throw new IOException("Reloaded settings do not reflect the restored administrator-startup state.");
+        }
+
+        LogInstallationElevationState($"Upgrade startup restoration finalized with RunAsAdministratorOnStartup={elevated}, settingsModified={modified}");
+        return new UpgradeStartupResult(elevated, modified);
     }
 
     public static bool IsRunningFromInstallPath()

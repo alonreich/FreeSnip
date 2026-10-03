@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -324,7 +324,6 @@ public static class UpdateService
                 }
             }
 
-            // Fallback to FreeSnip.exe if specific asset wasn't found
             if (asset == null)
             {
                 foreach (JsonNode candidate in root?["assets"]?.AsArray() ?? [])
@@ -353,7 +352,6 @@ public static class UpdateService
                 sha256 = colon >= 0 ? digest[(colon + 1)..].ToLowerInvariant() : digest.ToLowerInvariant();
             }
 
-            // Fallback: extract SHA-256 from release notes body if digest not populated by GitHub API
             if (string.IsNullOrEmpty(sha256) && !string.IsNullOrEmpty(releaseNotes))
             {
                 string pattern = expectedAsset.Replace(".", "\\.") + @"\s+SHA256\s+([0-9a-fA-F]{64})";

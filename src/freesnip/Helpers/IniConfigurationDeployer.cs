@@ -44,19 +44,16 @@ namespace freesnip.helpers
                 return;
             }
 
-            foreach (var cand in StartupTaskHelper.GetSettingsCandidates())
+            var selection = SettingsCandidateSelector.Select(StartupTaskHelper.GetClassifiedSettingsCandidates());
+            if (selection.Selected != null && !string.Equals(selection.Selected.Path, userPath, StringComparison.OrdinalIgnoreCase))
             {
-                if (File.Exists(cand) && !string.Equals(cand, userPath, StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    try
-                    {
-                        string content = File.ReadAllText(cand);
-                        content = content.Replace("[SnapVox]", "[Core]", StringComparison.OrdinalIgnoreCase);
-                        File.WriteAllText(userPath, content, Encoding.UTF8);
-                        return;
-                    }
-                    catch { }
+                    string content = SettingsCandidateSelector.MigrateLegacyContent(File.ReadAllText(selection.Selected.Path));
+                    File.WriteAllText(userPath, content, Encoding.UTF8);
+                    return;
                 }
+                catch { }
             }
 
             IniConfig.IniDirectory = configurationFolder;

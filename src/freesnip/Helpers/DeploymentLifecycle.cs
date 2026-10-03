@@ -122,6 +122,8 @@ internal static class DeploymentLifecycle
                     elevArgs += $" --wait-pid {cmdArgs[i + 1]}";
                 }
             }
+            string forwardedContext = UpgradeUserContext.GetManifestArgument(cmdArgs);
+            if (!string.IsNullOrWhiteSpace(forwardedContext)) elevArgs += $" {UpgradeUserContext.ArgumentName} \"{forwardedContext}\"";
             StartElevated(RuntimePathHelper.ExecutablePath, elevArgs);
             return 0;
         }
@@ -130,6 +132,7 @@ internal static class DeploymentLifecycle
         bool lockAcquired = false;
         DeploymentLogger logger = null;
         DeploymentProgress progress = null;
+        UpgradeUserContext userContext = null;
         string logPath = DeploymentFootprint.InstallLogPath;
 
         try
@@ -175,18 +178,15 @@ internal static class DeploymentLifecycle
             }
 
             bool existingFreeSnip = DetectExistingInstallation();
-            bool keepUserSettings = false;
-            bool cleanWipeRequested = false;
+            DialogResult? upgradeChoice = null;
 
             if (isAutoUpdate)
             {
-                keepUserSettings = true;
-                cleanWipeRequested = false;
                 await logger.LogAsync("UPGRADE", "AUTO_UPDATE", "Auto-update in progress: preserving all user settings automatically.", ct).ConfigureAwait(false);
             }
             else if (existingFreeSnip)
             {
-                var upgradeChoice = await ShowBlockingPromptAsync(progress,
+                upgradeChoice = await ShowBlockingPromptAsync(progress,
                     "An existing FreeSnip installation was detected on this system.\r\n\r\n" +
                     "Yes    - Upgrade and KEEP my settings (freesnip.ini)\r\n" +
                     "No     - Clean install: wipe ALL settings and user artifacts\r\n" +
@@ -196,20 +196,38 @@ internal static class DeploymentLifecycle
                     MessageBoxIcon.Question).ConfigureAwait(false);
 
                 await logger.LogAsync("UPGRADE", "PROMPT", $"Existing install detected; user choice: {upgradeChoice}", ct).ConfigureAwait(false);
-                if (upgradeChoice == DialogResult.Cancel)
-                {
-                    await ReportAsync(progress, logger, 100, "ABORT", "CANCELLED", "Upgrade cancelled by user.", ct).ConfigureAwait(false);
-                    return 0;
-                }
-                keepUserSettings = upgradeChoice == DialogResult.Yes;
-                cleanWipeRequested = upgradeChoice == DialogResult.No;
             }
 
+            var decision = DecideUpgrade(isAutoUpdate, existingFreeSnip, upgradeChoice);
+            if (decision.Cancelled)
+            {
+                await ReportAsync(progress, logger, 100, "ABORT", "CANCELLED", "Upgrade cancelled by user.", ct).ConfigureAwait(false);
+                return 0;
+            }
+            bool keepUserSettings = decision.KeepUserSettings;
+            bool cleanWipeRequested = decision.CleanWipe;
+
             if (!await WaitForApplicationsToCloseAsync(progress, ct).ConfigureAwait(false)) return 0;
-            bool restoreAdminStartup = keepUserSettings && (await StartupTaskHelper.HasElevatedStartupTaskAsync().ConfigureAwait(false) || StartupTaskHelper.DetectAdminStartupInSettingsCandidates());
-            await logger.LogAsync("UPGRADE", "ELEVATION_PRESCAN", $"restoreAdminStartup={restoreAdminStartup}, keepUserSettings={keepUserSettings}", ct).ConfigureAwait(false);
-            StartupTaskHelper.LogInstallationElevationState($"Pre-cleanup scan: restoreAdminStartup={restoreAdminStartup}, keepUserSettings={keepUserSettings}");
-            string settingsBackupFolder = keepUserSettings ? await BackupUserSettingsAsync(logger, ct).ConfigureAwait(false) : null;
+
+            UpgradeSettingsTransaction settingsTransaction = null;
+            bool restoreAdminStartup = false;
+            if (keepUserSettings)
+            {
+                userContext = await ResolveUpgradeUserContextAsync(cmdArgs, logger, ct).ConfigureAwait(false);
+                settingsTransaction = await UpgradeSettingsTransaction.PrepareAsync(userContext, StartupTaskHelper.GetClassifiedSettingsCandidates(userContext), ct).ConfigureAwait(false);
+                StartupTaskHelper.LogSettingsSelection(settingsTransaction.Selection, "UPGRADE");
+                await logger.LogAsync("UPGRADE", "SETTINGS_SOURCE",
+                    settingsTransaction.Selection.Selected != null
+                        ? $"{settingsTransaction.Selection.Selected.Path} ({settingsTransaction.Selection.Selected.Origin}) :: {settingsTransaction.Selection.Reason}"
+                        : settingsTransaction.Selection.Reason, ct).ConfigureAwait(false);
+                await logger.LogAsync("UPGRADE", "BACKUP", settingsTransaction.BackupFolder ?? "No existing settings file", ct).ConfigureAwait(false);
+
+                bool workerSeesTask = await StartupTaskHelper.HasElevatedStartupTaskAsync().ConfigureAwait(false);
+                restoreAdminStartup = userContext.HadElevatedStartupTask || workerSeesTask || settingsTransaction.SourceRequestsAdminStartup;
+            }
+            await logger.LogAsync("UPGRADE", "ELEVATION_PRESCAN", $"restoreAdminStartup={restoreAdminStartup}, keepUserSettings={keepUserSettings}, originalSid={userContext?.UserSid ?? "n/a"}", ct).ConfigureAwait(false);
+            StartupTaskHelper.LogInstallationElevationState($"Pre-cleanup scan: restoreAdminStartup={restoreAdminStartup}, keepUserSettings={keepUserSettings}, originalSid={userContext?.UserSid ?? "n/a"}");
+            string settingsBackupFolder = settingsTransaction?.BackupFolder;
             try
             {
                 StartupTaskHelper.RequireInstalledApplicationsClosed();
@@ -217,10 +235,20 @@ internal static class DeploymentLifecycle
 
                 await ReportAsync(progress, logger, 65, "DEPLOY", "PAYLOAD", "Extracting assets...", ct).ConfigureAwait(false);
                 await InstallFreshAsync(progress, logger, ct).ConfigureAwait(false);
-                if (settingsBackupFolder != null) await RestoreUserSettingsAsync(settingsBackupFolder, logger, ct).ConfigureAwait(false);
-                await StartupTaskHelper.RestoreStartupAfterInstallAsync(keepUserSettings, restoreAdminStartup).ConfigureAwait(false);
+                if (settingsTransaction != null)
+                {
+                    await settingsTransaction.RestoreAsync(ct).ConfigureAwait(false);
+                    await logger.LogAsync("UPGRADE", "RESTORED", $"Settings restored to {userContext.CanonicalSettingsPath}", ct).ConfigureAwait(false);
+                    var startup = await StartupTaskHelper.RestoreStartupForUpgradeAsync(userContext, restoreAdminStartup).ConfigureAwait(false);
+                    await settingsTransaction.VerifyAsync(startup.RunAsAdministratorOnStartup, ct).ConfigureAwait(false);
+                    await logger.LogAsync("UPGRADE", "VERIFIED", $"Settings verified (sha256={settingsTransaction.ExpectedSha256 ?? "n/a"}, startupElevated={startup.RunAsAdministratorOnStartup}, modified={startup.SettingsFileModified})", ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    await StartupTaskHelper.RestoreStartupAfterInstallAsync(keepUserSettings, restoreAdminStartup).ConfigureAwait(false);
+                }
                 await LaunchInstalledApplicationAsync().ConfigureAwait(false);
-                CleanupSettingsBackup(settingsBackupFolder);
+                settingsTransaction?.Commit();
                 await ReportAsync(progress, logger, 100, "SUCCESS", "COMPLETE", "Deployment finalized.", ct).ConfigureAwait(false);
                 if (isAutoUpdate)
                 {
@@ -233,7 +261,7 @@ internal static class DeploymentLifecycle
             }
             catch (Exception ex)
             {
-                if (settingsBackupFolder != null)
+                if (settingsBackupFolder != null && settingsTransaction?.IsCommitted != true)
                     throw new IOException("Upgrade failed. Your settings recovery copy is kept at: " + settingsBackupFolder, ex);
                 throw;
             }
@@ -259,8 +287,66 @@ internal static class DeploymentLifecycle
             if (logger != null) await logger.DisposeAsync().ConfigureAwait(false);
             if (lockAcquired)
             {
+                TryDeleteUpgradeContextManifest(UpgradeUserContext.GetManifestArgument(cmdArgs));
                 QueueSelfCleanup(DeploymentFootprint.DeploymentTempRoot);
             }
+        }
+    }
+
+    internal readonly record struct UpgradeDecision(bool KeepUserSettings, bool CleanWipe, bool Cancelled);
+
+    /// <summary>
+    /// Pure decision table: auto-update always keeps settings; an existing install honours Yes (keep) / No (clean wipe) /
+    /// Cancel; a fresh install neither keeps nor wipes user artifacts.
+    /// </summary>
+    internal static UpgradeDecision DecideUpgrade(bool isAutoUpdate, bool existingInstall, DialogResult? choice)
+    {
+        if (isAutoUpdate) return new UpgradeDecision(KeepUserSettings: true, CleanWipe: false, Cancelled: false);
+        if (!existingInstall) return new UpgradeDecision(false, false, false);
+        if (choice == DialogResult.Cancel) return new UpgradeDecision(false, false, Cancelled: true);
+        return new UpgradeDecision(KeepUserSettings: choice == DialogResult.Yes, CleanWipe: choice == DialogResult.No, Cancelled: false);
+    }
+
+    /// <summary>
+    /// Resolves the ORIGINAL user context. A supplied manifest is mandatory-valid (an invalid one aborts before any destructive
+    /// step). Only when no manifest was supplied (direct legacy worker invocation) is the current identity captured.
+    /// </summary>
+    private static async Task<UpgradeUserContext> ResolveUpgradeUserContextAsync(string[] cmdArgs, DeploymentLogger logger, CancellationToken ct)
+    {
+        string manifest = UpgradeUserContext.GetManifestArgument(cmdArgs);
+        if (!string.IsNullOrWhiteSpace(manifest))
+        {
+            UpgradeUserContext loaded;
+            try
+            {
+                loaded = UpgradeUserContext.LoadManifest(manifest, Path.GetDirectoryName(RuntimePathHelper.ExecutablePath), DateTime.UtcNow);
+            }
+            catch (InvalidDataException ex)
+            {
+                await logger.LogAsync("UPGRADE", "CONTEXT_INVALID", ex.Message, ct).ConfigureAwait(false);
+                throw new IOException("The original user upgrade context could not be validated. No files were changed. " + ex.Message, ex);
+            }
+            await logger.LogAsync("UPGRADE", "CONTEXT", $"Original user SID={loaded.UserSid} AppData='{loaded.AppData}' LocalAppData='{loaded.LocalAppData}' hadElevatedTask={loaded.HadElevatedStartupTask}", ct).ConfigureAwait(false);
+            return loaded;
+        }
+
+        bool hadTask = await StartupTaskHelper.HasElevatedStartupTaskAsync().ConfigureAwait(false);
+        var current = UpgradeUserContext.CaptureCurrent(hadTask);
+        await logger.LogAsync("UPGRADE", "CONTEXT_LEGACY", $"No upgrade context supplied; using worker identity SID={current.UserSid}", ct).ConfigureAwait(false);
+        return current;
+    }
+
+    private static void TryDeleteUpgradeContextManifest(string manifest)
+    {
+        if (string.IsNullOrWhiteSpace(manifest)) return;
+        try
+        {
+            if (string.Equals(Path.GetFileName(manifest), UpgradeUserContext.ManifestFileName, StringComparison.OrdinalIgnoreCase) && File.Exists(manifest))
+                File.Delete(manifest);
+        }
+        catch (Exception ex)
+        {
+            LogSwallowed("TryDeleteUpgradeContextManifest", manifest, ex);
         }
     }
 
@@ -561,13 +647,8 @@ internal static class DeploymentLifecycle
         }
     }
 
-    private static async Task PerformFullHostCleanupAsync(DeploymentProgress progress, DeploymentLogger logger, string op, int start, int end, bool requireZeroFootprint, bool purgeUserArtifacts, CancellationToken ct)
+    internal static List<string> ComputeCleanupDirectoryTargets(bool purgeUserArtifacts)
     {
-        Interlocked.Exchange(ref _pendingRebootDeletes, 0);
-        await logger.LogAsync("CLEANUP", "START", $"Performing Scorched Earth for: {op}", ct).ConfigureAwait(false);
-
-        await ReportAsync(progress, logger, start + 10, "CLEANUP", "TASKS", "Removing triggers...", ct).ConfigureAwait(false);
-        await RunHiddenProcessAsync("schtasks.exe", $"/Delete /TN \"{DeploymentFootprint.ScheduledTaskName}\" /F", 5000, logger, ct).ConfigureAwait(false);
         var targets = DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: true).ToList();
         var allowedRoots = new[]
         {
@@ -588,6 +669,17 @@ internal static class DeploymentLifecycle
                 t.StartsWith(DeploymentFootprint.RoamingAppDataFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
                 t.StartsWith(DeploymentFootprint.LocalAppDataFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
         }
+        return targets;
+    }
+
+    private static async Task PerformFullHostCleanupAsync(DeploymentProgress progress, DeploymentLogger logger, string op, int start, int end, bool requireZeroFootprint, bool purgeUserArtifacts, CancellationToken ct)
+    {
+        Interlocked.Exchange(ref _pendingRebootDeletes, 0);
+        await logger.LogAsync("CLEANUP", "START", $"Performing Scorched Earth for: {op}", ct).ConfigureAwait(false);
+
+        await ReportAsync(progress, logger, start + 10, "CLEANUP", "TASKS", "Removing triggers...", ct).ConfigureAwait(false);
+        await RunHiddenProcessAsync("schtasks.exe", $"/Delete /TN \"{DeploymentFootprint.ScheduledTaskName}\" /F", 5000, logger, ct).ConfigureAwait(false);
+        var targets = ComputeCleanupDirectoryTargets(purgeUserArtifacts);
         foreach (string skipped in DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: true).Except(targets, StringComparer.OrdinalIgnoreCase))
         {
             await logger.LogAsync("FILESYSTEM", "SKIP_GUARD", $"Refusing to purge outside owned roots: {skipped}", ct).ConfigureAwait(false);
@@ -1464,45 +1556,6 @@ internal static class DeploymentLifecycle
         return false;
     }
 
-    private static string[] GetSettingsCandidates() => StartupTaskHelper.GetSettingsCandidates();
-
-    private static async Task<string> BackupUserSettingsAsync(DeploymentLogger logger, CancellationToken ct)
-    {
-        string backupRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FreeSnipUpgradeBackups");
-        string folder = await UpgradeSettingsBackup.CreateAsync(GetSettingsCandidates(), backupRoot, ct).ConfigureAwait(false);
-        await logger.LogAsync("UPGRADE", "BACKUP", folder ?? "No existing settings file", ct).ConfigureAwait(false);
-        return folder;
-    }
-
-    private static async Task RestoreUserSettingsAsync(string folder, DeploymentLogger logger, CancellationToken ct)
-    {
-        await UpgradeSettingsBackup.RestoreAsync(folder, GetSettingsCandidates(), ct).ConfigureAwait(false);
-        string primaryIni = Path.Combine(StartupTaskHelper.ConfigurationFolder, "freesnip.ini");
-        if (!File.Exists(primaryIni))
-        {
-            foreach (var cand in GetSettingsCandidates())
-            {
-                if (File.Exists(cand) && !string.Equals(cand, primaryIni, StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        Directory.CreateDirectory(StartupTaskHelper.ConfigurationFolder);
-                        string content = await File.ReadAllTextAsync(cand, ct).ConfigureAwait(false);
-                        content = content.Replace("[SnapVox]", "[Core]", StringComparison.OrdinalIgnoreCase);
-                        await File.WriteAllTextAsync(primaryIni, content, Encoding.UTF8, ct).ConfigureAwait(false);
-                        await logger.LogAsync("UPGRADE", "MIGRATE", $"Migrated '{cand}' to '{primaryIni}'", ct).ConfigureAwait(false);
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        LogSwallowed("RestoreUserSettingsAsync", "migrate", ex);
-                    }
-                }
-            }
-        }
-        await logger.LogAsync("UPGRADE", "RESTORED", "Settings verified from " + folder, ct).ConfigureAwait(false);
-    }
-
     private static async Task<bool> WaitForApplicationsToCloseAsync(DeploymentProgress progress, CancellationToken ct)
     {
         while (StartupTaskHelper.FindRunningInstalledProcesses().Length != 0)
@@ -1515,26 +1568,6 @@ internal static class DeploymentLifecycle
             if (result != DialogResult.Retry) return false;
         }
         return true;
-    }
-
-    private static void CleanupSettingsBackup(string backupFolder)
-    {
-        try
-        {
-            if (!string.IsNullOrEmpty(backupFolder) && Directory.Exists(backupFolder))
-            {
-                Directory.Delete(backupFolder, true);
-                string parent = Path.GetDirectoryName(backupFolder);
-                if (!string.IsNullOrEmpty(parent) && Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any())
-                {
-                    Directory.Delete(parent, false);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            LogSwallowed("CleanupSettingsBackup", backupFolder, ex);
-        }
     }
 
     private static async Task AwaitUserAcknowledgementAsync(DeploymentProgress progress, DeploymentLogger logger, string finalStatus, CancellationToken ct)
@@ -1609,8 +1642,13 @@ internal static class DeploymentLifecycle
             }
         }
 
+        bool hadElevatedTask = await StartupTaskHelper.HasElevatedStartupTaskAsync().ConfigureAwait(false);
+        var originalUser = UpgradeUserContext.CaptureCurrent(hadElevatedTask);
+        string manifest = await originalUser.WriteManifestAsync(SessionTempFolder, ct).ConfigureAwait(false);
+        extraArgs += $" {UpgradeUserContext.ArgumentName} \"{manifest}\"";
+        BootstrapDebug.Log($"Captured original upgrade user SID={originalUser.UserSid} before elevation; manifest={manifest}");
+
         Process.Start(new ProcessStartInfo { FileName = temp, Arguments = "--install --install-worker" + extraArgs, UseShellExecute = true, Verb = "runas" });
-        await Task.CompletedTask;
     }
 
     internal sealed class DeploymentProgress : IDisposable

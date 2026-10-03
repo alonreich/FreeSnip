@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using freesnip.foundation.core;
 using SixLabors.ImageSharp;
@@ -310,12 +310,10 @@ namespace freesnip.tests
 
             using var testImage = new Image<Rgba32>(24, 24, new Rgba32(50, 100, 150, 255));
 
-            // Step 1: Stage CF_DIB
             await UiClipboard.SetImageAsync(testImage, markFreeSnipEditorImage: true);
             bool dibProbed = UiClipboard.ProbeClipboardFormat(UiClipboard.CF_DIB_FORMAT, 200);
             Assert.True(dibProbed, "CF_DIB must be probed as available on the clipboard.");
 
-            // Step 2: Set plain text only wrapped in quotation marks
             bool textSet = await UiClipboard.SetPlainTextOnlyAsync(quotedPath);
             Assert.True(textSet, "SetPlainTextOnlyAsync must succeed for quoted path.");
 
@@ -375,7 +373,6 @@ namespace freesnip.tests
         {
             UiClipboard.SetInMemoryAnnotationMarker(true);
             UiClipboard.SetInMemoryAnnotationMarker(false);
-            // Verify no exceptions or state corruption
             Assert.True(true);
         }
     }

@@ -545,6 +545,8 @@ namespace freesnip.forms
                 await Task.Delay(100);
 
                 Recorder = new ScrollCaptureRecorder(rect);
+                // Mouse wheel scroll defaults to vertical intent; overlap verification is authoritative
+                Recorder.AxisHint = true;
                 Recorder.SegmentCeilingReached += () =>
                 {
                     Dispatcher.UIThread.Post(() =>

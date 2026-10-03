@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -298,7 +298,6 @@ public class EditorSafetyTests
             Assert.Equal(new Point(100, 100), initialStart);
             Assert.Equal(new Point(150, 150), initialEnd);
 
-            // Create a multi-select group containing the line
             var group = new Canvas { Tag = "MultiSelectGroup", Width = 100, Height = 100 };
             Canvas.SetLeft(group, 50);
             Canvas.SetTop(group, 50);
@@ -306,12 +305,10 @@ public class EditorSafetyTests
             var canvas = Field<Canvas>(editor, "_canvas");
             canvas.Children.Remove(line);
 
-            // Coordinate adjustment into group
             Call(editor, "SetVectorAbsolutePoints", line, new Point(initialStart.X - 50, initialStart.Y - 50), new Point(initialEnd.X - 50, initialEnd.Y - 50));
             group.Children.Add(line);
             canvas.Children.Add(group);
 
-            // Now ungroup
             Call(editor, "UngroupMultiSelectGroup", group);
 
             Assert.True(ImageEditorWindow.TryGetVectorAbsolutePoints(line, out var finalStart, out var finalEnd));
@@ -329,7 +326,6 @@ public class EditorSafetyTests
         var editor = await CreateEditor();
         try
         {
-            // Initial state: no selection
             Call(editor, "UpdateSelectionIndicator");
 
             var lineInd = Field<Avalonia.Controls.Shapes.Polygon>(editor, "_lineSelectionIndicator");
@@ -342,13 +338,11 @@ public class EditorSafetyTests
             Assert.NotNull(lineHov.Points);
             Assert.NotNull(arrowHov.Points);
 
-            // Measuring or arranging should not throw NullReferenceException
             lineInd.Measure(new Size(100, 100));
             lineInd.Arrange(new Rect(0, 0, 100, 100));
             arrowInd.Measure(new Size(100, 100));
             arrowInd.Arrange(new Rect(0, 0, 100, 100));
 
-            // Select a line then clear selection
             var line = new Avalonia.Controls.Shapes.Line
             {
                 StartPoint = new Point(10, 10),
@@ -365,7 +359,6 @@ public class EditorSafetyTests
             Assert.NotNull(lineInd.Points);
             Assert.NotEmpty(lineInd.Points);
 
-            // Clear selection
             typeof(ImageEditorWindow).GetField("_selectedControl", Private)!.SetValue(editor, null);
             Call(editor, "UpdateSelectionIndicator");
 
@@ -374,7 +367,6 @@ public class EditorSafetyTests
             Assert.NotNull(arrowInd.Points);
             Assert.Empty(arrowInd.Points);
 
-            // Verify Avalonia layout pass does not throw NullReferenceException
             lineInd.Measure(new Size(100, 100));
             lineInd.Arrange(new Rect(0, 0, 100, 100));
         }
@@ -397,7 +389,6 @@ public class EditorSafetyTests
             }));
         }
 
-        // Must complete without unhandled sharing violation IOException
         await Task.WhenAll(tasks);
     }
 
@@ -406,6 +397,5 @@ public class EditorSafetyTests
         public override void Render(DrawingContext context) => throw new InvalidOperationException("Injected renderer failure");
     }
 }
-
 
 

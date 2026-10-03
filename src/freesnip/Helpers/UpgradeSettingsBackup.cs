@@ -37,6 +37,32 @@ internal static class UpgradeSettingsBackup
         return folder;
     }
 
+    /// <summary>
+    /// Durably backs up exactly one authoritative configuration payload, bound to exactly one restore destination
+    /// (the original user's canonical freesnip.ini). Uses the same verified manifest format as <see cref="CreateAsync"/>.
+    /// </summary>
+    public static async Task<(string Folder, string Sha256)> CreateForDestinationAsync(string destination, byte[] bytes, string backupRoot, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(destination)) throw new ArgumentException("A restore destination is required.", nameof(destination));
+        if (bytes == null) throw new ArgumentNullException(nameof(bytes));
+        ct.ThrowIfCancellationRequested();
+
+        string folder = Path.Combine(backupRoot, DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        const string name = "settings_0.ini";
+        string copy = Path.Combine(folder, name);
+        await WriteDurablyAsync(copy, bytes, ct).ConfigureAwait(false);
+        string hash = Convert.ToHexString(SHA256.HashData(bytes));
+        if (await HashAsync(copy, ct).ConfigureAwait(false) != hash)
+            throw new IOException("Settings backup verification failed: " + copy);
+        await WriteDurablyAsync(Path.Combine(folder, "manifest.txt"),
+            System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(destination) + "\t" + name + "\t" + hash), ct).ConfigureAwait(false);
+        return (folder, hash);
+    }
+
+    internal static async Task<string> ComputeSha256Async(string path, CancellationToken ct = default)
+        => await HashAsync(path, ct).ConfigureAwait(false);
+
     public static async Task RestoreAsync(string folder, IEnumerable<string> allowedDestinations, CancellationToken ct = default)
     {
         var allowed = allowedDestinations.Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);

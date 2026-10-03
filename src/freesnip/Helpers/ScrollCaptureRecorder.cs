@@ -43,6 +43,17 @@ namespace freesnip.helpers
         public int TotalCapturedHeight => _stitcher.TotalCapturedHeight;
         public long CurrentCompositePixels => _stitcher.CurrentCompositePixels;
         public bool IsPaused { get; private set; }
+
+        /// <summary>
+        /// Optional axis hint from the UI (e.g. mouse wheel direction).
+        /// true = vertical, false = horizontal, null = unknown.
+        /// </summary>
+        public bool? AxisHint
+        {
+            get => _stitcher.AxisHint;
+            set => _stitcher.AxisHint = value;
+        }
+
         public event Action SegmentCeilingReached;
 
         public void Pause()
@@ -236,7 +247,16 @@ namespace freesnip.helpers
         private bool _isTrackingLost;
         private bool _scrollAxisLocked;
         private bool _isVerticalScroll = true;
+        private int _consecutiveVerticalVotes;
+        private int _consecutiveHorizontalVotes;
         private bool _disposed;
+
+        /// <summary>
+        /// Optional axis hint from the UI (e.g. mouse wheel direction).
+        /// true = vertical hint, false = horizontal hint, null = no hint.
+        /// This is advisory only; pixel overlap verification is authoritative.
+        /// </summary>
+        public bool? AxisHint { get; set; }
 
         public int AcceptedFrames { get; private set; }
         public int SegmentCount => _segments.Count;
@@ -334,26 +354,43 @@ namespace freesnip.helpers
                         return ScrollFrameStatus.Duplicate;
                     }
 
-                    if (!_scrollAxisLocked)
-                    {
-                        bool isIntentionalHorizontal = Math.Abs(motion.DeltaX) >= 20 && Math.Abs(motion.DeltaX) > (3 * Math.Abs(motion.DeltaY));
-                        _isVerticalScroll = !isIntentionalHorizontal;
-                        _scrollAxisLocked = true;
-                    }
+                    // Use coarse motion for axis inference (not locked yet)
+                    int coarseDx = motion.DeltaX;
+                    int coarseDy = motion.DeltaY;
 
-                    int effDx = _isVerticalScroll ? 0 : motion.DeltaX;
-                    int effDy = _isVerticalScroll ? motion.DeltaY : 0;
+                    // Update axis consensus but do NOT immediately lock from a single frame
+                    UpdateAxisConsensus(coarseDx, coarseDy);
+
+                    int effDx = (_scrollAxisLocked && _isVerticalScroll) ? 0 : coarseDx;
+                    int effDy = (_scrollAxisLocked && !_isVerticalScroll) ? 0 : coarseDy;
 
                     _viewport = DetectScrollingViewport(_previousLuma, currentLuma, effDx, effDy);
                     _viewportDetected = true;
                     Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame - Viewport detected: [{_viewport.X}, {_viewport.Y}, {_viewport.Width}x{_viewport.Height}] (Motion: dx={effDx}, dy={effDy}).");
 
+                    // Verify overlap displacement within _viewport
+                    var verified = VerifyOverlapDisplacement(_previousLuma, currentLuma, effDx, effDy);
+                    if (verified == null)
+                    {
+                        // Cannot verify overlap — accept viewport detection but reject strip
+                        _segments.Clear();
+                        _segments.Add(new ScrollSegment(_firstFrame.Clone(ctx => ctx.Crop(_viewport)), 0, 0));
+                        UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
+                        AcceptedFrames++;
+                        _isTrackingLost = false;
+                        Log.Info($"[STEP:WARN] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Viewport detected but overlap verification failed. Strip skipped.");
+                        return ScrollFrameStatus.Accepted;
+                    }
+
+                    int vDx = verified.Value.dx;
+                    int vDy = verified.Value.dy;
+
                     _segments.Clear();
                     _segments.Add(new ScrollSegment(_firstFrame.Clone(ctx => ctx.Crop(_viewport)), 0, 0));
 
-                    _offsetX += effDx;
-                    _offsetY += effDy;
-                    AddVisibleStrips(frame, _offsetX, _offsetY, effDx, effDy);
+                    _offsetX += vDx;
+                    _offsetY += vDy;
+                    AddVisibleStrips(frame, _offsetX, _offsetY, vDx, vDy);
 
                     UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
                     AcceptedFrames++;
@@ -365,11 +402,6 @@ namespace freesnip.helpers
                 var vpMotion = EstimateViewportMotion(_previousLuma, currentLuma, _viewport, lockAxis);
                 if (vpMotion.IsReliable)
                 {
-                    if (!_isVerticalScroll && Math.Abs(vpMotion.DeltaY) >= 20 && Math.Abs(vpMotion.DeltaY) > 2 * Math.Abs(vpMotion.DeltaX))
-                    {
-                        _isVerticalScroll = true;
-                    }
-
                     int effDx = _scrollAxisLocked && _isVerticalScroll ? 0 : vpMotion.DeltaX;
                     int effDy = _scrollAxisLocked && !_isVerticalScroll ? 0 : vpMotion.DeltaY;
 
@@ -379,25 +411,33 @@ namespace freesnip.helpers
                         return ScrollFrameStatus.Duplicate;
                     }
 
-                    _offsetX += effDx;
-                    _offsetY += effDy;
-                    AddVisibleStrips(frame, _offsetX, _offsetY, effDx, effDy);
+                    // Verify overlap before committing
+                    var verified = VerifyOverlapDisplacement(_previousLuma, currentLuma, effDx, effDy);
+                    if (verified == null)
+                    {
+                        // Overlap verification failed — fall through to re-acquisition
+                        Log.Info($"[STEP:WARN] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Viewport motion overlap verification failed (dx={effDx}, dy={effDy}). Trying fallback.");
+                    }
+                    else
+                    {
+                        int vDx = verified.Value.dx;
+                        int vDy = verified.Value.dy;
+                        UpdateAxisConsensus(vDx, vDy);
 
-                    UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
-                    AcceptedFrames++;
-                    _isTrackingLost = false;
-                    return ScrollFrameStatus.Accepted;
+                        _offsetX += vDx;
+                        _offsetY += vDy;
+                        AddVisibleStrips(frame, _offsetX, _offsetY, vDx, vDy);
+
+                        UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
+                        AcceptedFrames++;
+                        _isTrackingLost = false;
+                        return ScrollFrameStatus.Accepted;
+                    }
                 }
 
-                // Fallback to Global Motion if Viewport Motion failed against previous frame
                 var fallbackGlobal = EstimateGlobalMotion(_previousLuma, currentLuma, lockAxis);
                 if (fallbackGlobal.IsReliable)
                 {
-                    if (!_isVerticalScroll && Math.Abs(fallbackGlobal.DeltaY) >= 20 && Math.Abs(fallbackGlobal.DeltaY) > 2 * Math.Abs(fallbackGlobal.DeltaX))
-                    {
-                        _isVerticalScroll = true;
-                    }
-
                     int effDx = _scrollAxisLocked && _isVerticalScroll ? 0 : fallbackGlobal.DeltaX;
                     int effDy = _scrollAxisLocked && !_isVerticalScroll ? 0 : fallbackGlobal.DeltaY;
 
@@ -407,18 +447,30 @@ namespace freesnip.helpers
                         return ScrollFrameStatus.Duplicate;
                     }
 
-                    _offsetX += effDx;
-                    _offsetY += effDy;
-                    AddVisibleStrips(frame, _offsetX, _offsetY, effDx, effDy);
+                    // Verify overlap before committing
+                    var verified = VerifyOverlapDisplacement(_previousLuma, currentLuma, effDx, effDy);
+                    if (verified == null)
+                    {
+                        Log.Info($"[STEP:WARN] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Global fallback overlap verification failed (dx={effDx}, dy={effDy}). Trying re-acquisition.");
+                    }
+                    else
+                    {
+                        int vDx = verified.Value.dx;
+                        int vDy = verified.Value.dy;
+                        UpdateAxisConsensus(vDx, vDy);
 
-                    UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
-                    AcceptedFrames++;
-                    _isTrackingLost = false;
-                    Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Global motion fallback accepted (dx={effDx}, dy={effDy}).");
-                    return ScrollFrameStatus.Accepted;
+                        _offsetX += vDx;
+                        _offsetY += vDy;
+                        AddVisibleStrips(frame, _offsetX, _offsetY, vDx, vDy);
+
+                        UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
+                        AcceptedFrames++;
+                        _isTrackingLost = false;
+                        Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Global motion fallback accepted (verified dx={vDx}, dy={vDy}).");
+                        return ScrollFrameStatus.Accepted;
+                    }
                 }
 
-                // Re-acquisition against recent accepted frames
                 Log.Info($"[STEP:WARN] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Viewport tracking lost against previous frame. Attempting re-acquisition against {_recentFrames.Count} recent frames.");
                 for (int i = _recentFrames.Count - 1; i >= 0; i--)
                 {
@@ -434,8 +486,15 @@ namespace freesnip.helpers
 
                     if (reacquireMotion.IsReliable && (Math.Abs(effDx) >= MinMovementPixels || Math.Abs(effDy) >= MinMovementPixels))
                     {
-                        int newOffsetX = recent.OffsetX + effDx;
-                        int newOffsetY = recent.OffsetY + effDy;
+                        // Verify overlap against this recent frame
+                        var verified = VerifyOverlapDisplacement(recent.Luma, currentLuma, effDx, effDy);
+                        if (verified == null) continue; // try next recent frame
+
+                        int vDx = verified.Value.dx;
+                        int vDy = verified.Value.dy;
+
+                        int newOffsetX = recent.OffsetX + vDx;
+                        int newOffsetY = recent.OffsetY + vDy;
                         int stepDx = newOffsetX - _offsetX;
                         int stepDy = newOffsetY - _offsetY;
 
@@ -446,7 +505,7 @@ namespace freesnip.helpers
                         UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
                         AcceptedFrames++;
                         _isTrackingLost = false;
-                        Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Re-acquired tracking against recent frame {i} (New offset: {_offsetX}, {_offsetY}).");
+                        Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Re-acquired tracking against recent frame {i} (verified offset: {_offsetX}, {_offsetY}).");
                         return ScrollFrameStatus.Accepted;
                     }
                 }
@@ -601,7 +660,6 @@ namespace freesnip.helpers
             int yInteriorStart = (int)(h * 0.15);
             int yInteriorEnd = (int)(h * 0.85);
 
-            // 1. Detect Top Header (Outside-in from y = 0 downward)
             int maxHeaderH = Math.Min(220, (int)(h * 0.30));
             int exactTop = 0;
             int firstMovingY = -1;
@@ -636,7 +694,6 @@ namespace freesnip.helpers
                 exactTop = 0;
             }
 
-            // 2. Detect Bottom Footer (Outside-in from y = h - 1 upward)
             int maxFooterH = Math.Min(120, (int)(h * 0.20));
             int exactBottom = h;
             int lastMovingY = -1;
@@ -671,7 +728,6 @@ namespace freesnip.helpers
                 exactBottom = h;
             }
 
-            // 3. Detect Left Sidebar (Outside-in from x = 0 rightward)
             int maxLeftW = Math.Min(500, (int)(w * 0.45));
             int exactLeft = 0;
             int firstMovingX = -1;
@@ -706,7 +762,6 @@ namespace freesnip.helpers
                 exactLeft = 0;
             }
 
-            // 4. Detect Right Scrollbar (Outside-in from x = w - 1 leftward)
             int maxRightW = Math.Min(120, (int)(w * 0.15));
             int exactRight = w;
             int lastMovingX = -1;
@@ -744,7 +799,6 @@ namespace freesnip.helpers
             int vpWidth = exactRight - exactLeft;
             int vpHeight = exactBottom - exactTop;
 
-            // Invariant: Viewport must cover at least 30% of width and 30% of height
             if (vpWidth < (int)(w * 0.30))
             {
                 exactLeft = 0;
@@ -796,7 +850,6 @@ namespace freesnip.helpers
                 }
             }
 
-            // If we have candidate feature blocks inside the viewport, use consensus motion
             if (candidateBlocks.Count >= 2)
             {
                 int sampleCount = Math.Min(candidateBlocks.Count, 32);
@@ -897,7 +950,6 @@ namespace freesnip.helpers
                 }
             }
 
-            // Fallback: area SAD search inside viewport
             int areaMaxDy = Math.Max(2, (int)(vh * 0.85));
             int areaMaxDx = Math.Max(2, (int)(vw * 0.85));
             int areaBestDx = 0, areaBestDy = 0;
@@ -961,6 +1013,123 @@ namespace freesnip.helpers
 
             bool areaReliable = areaBestSad <= MaxTileSad;
             return new MovementEstimate(areaBestDx, areaBestDy, areaReliable);
+        }
+
+        /// <summary>
+        /// Second-stage overlap verifier. Searches ±SearchRadius px around the coarse
+        /// displacement, scoring the overlapping viewport region using the same normalized
+        /// SAD metric the motion estimator uses. Returns the verified displacement or null
+        /// if no confident match is found (SAD > MaxTileSad for all candidates).
+        /// </summary>
+        internal const int OverlapSearchRadius = 3;
+        internal const double OverlapConfidenceThreshold = MaxTileSad;
+
+        private (int dx, int dy)? VerifyOverlapDisplacement(FrameLuma prevLuma, FrameLuma currLuma, int coarseDx, int coarseDy)
+        {
+            if (!_viewportDetected) return (coarseDx, coarseDy);
+
+            int vx0 = _viewport.X;
+            int vy0 = _viewport.Y;
+            int vx1 = _viewport.Right;
+            int vy1 = _viewport.Bottom;
+            int vw = _viewport.Width;
+            int vh = _viewport.Height;
+
+            double bestSad = double.MaxValue;
+            int bestDx = coarseDx, bestDy = coarseDy;
+
+            // Determine search axes based on locked scroll direction
+            bool searchVertical = !_scrollAxisLocked || _isVerticalScroll;
+            bool searchHorizontal = !_scrollAxisLocked || !_isVerticalScroll;
+
+            int dyLo = searchVertical ? coarseDy - OverlapSearchRadius : coarseDy;
+            int dyHi = searchVertical ? coarseDy + OverlapSearchRadius : coarseDy;
+            int dxLo = searchHorizontal ? coarseDx - OverlapSearchRadius : coarseDx;
+            int dxHi = searchHorizontal ? coarseDx + OverlapSearchRadius : coarseDx;
+
+            for (int dy = dyLo; dy <= dyHi; dy++)
+            {
+                for (int dx = dxLo; dx <= dxHi; dx++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+
+                    // Compute the overlapping viewport region at this displacement
+                    int ox0 = Math.Max(vx0, vx0 - dx);
+                    int oy0 = Math.Max(vy0, vy0 - dy);
+                    int ox1 = Math.Min(vx1, vx1 - dx);
+                    int oy1 = Math.Min(vy1, vy1 - dy);
+                    int ow = ox1 - ox0;
+                    int oh = oy1 - oy0;
+
+                    // Need a meaningful overlap area (at least 10% of viewport)
+                    if (ow < 16 || oh < 16 || (long)ow * oh < ((long)vw * vh) / 10) continue;
+
+                    double sad = ComputeAreaSad(prevLuma, currLuma, ox0, oy0, ox1, oy1, dx, dy);
+                    // Slight bias toward the coarse estimate to break ties
+                    double distPenalty = (Math.Abs(dx - coarseDx) + Math.Abs(dy - coarseDy)) * 0.05;
+                    double cost = sad + distPenalty;
+
+                    if (cost < bestSad - 1e-6)
+                    {
+                        bestSad = cost;
+                        bestDx = dx;
+                        bestDy = dy;
+                    }
+                }
+            }
+
+            // Reject if even the best candidate exceeds the confidence threshold
+            if (bestSad > OverlapConfidenceThreshold)
+            {
+                return null;
+            }
+
+            return (bestDx, bestDy);
+        }
+
+        /// <summary>
+        /// Updates axis consensus tracking based on a verified displacement.
+        /// Requires 2 consecutive frames agreeing on the same dominant axis
+        /// before locking. AxisHint from the UI counts as a pre-vote.
+        /// </summary>
+        private void UpdateAxisConsensus(int verifiedDx, int verifiedDy)
+        {
+            if (_scrollAxisLocked) return;
+
+            bool frameIsVertical = Math.Abs(verifiedDy) >= Math.Abs(verifiedDx);
+
+            if (frameIsVertical)
+            {
+                _consecutiveVerticalVotes++;
+                _consecutiveHorizontalVotes = 0;
+            }
+            else
+            {
+                _consecutiveHorizontalVotes++;
+                _consecutiveVerticalVotes = 0;
+            }
+
+            // AxisHint from UI counts as a pre-existing vote
+            int verticalVotesNeeded = (AxisHint == true) ? 1 : 2;
+            int horizontalVotesNeeded = (AxisHint == false) ? 1 : 2;
+
+            // Horizontal lock requires strong dominance to prevent false axis classification
+            bool horizontalConfident = _consecutiveHorizontalVotes >= horizontalVotesNeeded
+                && Math.Abs(verifiedDx) >= 20
+                && Math.Abs(verifiedDx) > (3 * Math.Abs(verifiedDy));
+
+            if (_consecutiveVerticalVotes >= verticalVotesNeeded)
+            {
+                _isVerticalScroll = true;
+                _scrollAxisLocked = true;
+                Log.Info($"[STEP:INFO] Axis locked to VERTICAL after {_consecutiveVerticalVotes} consecutive votes (hint={AxisHint}).");
+            }
+            else if (horizontalConfident)
+            {
+                _isVerticalScroll = false;
+                _scrollAxisLocked = true;
+                Log.Info($"[STEP:INFO] Axis locked to HORIZONTAL after {_consecutiveHorizontalVotes} consecutive votes (hint={AxisHint}).");
+            }
         }
 
         private void AddVisibleStrips(Image<Bgra32> frame, int offsetX, int offsetY, int deltaX, int deltaY)

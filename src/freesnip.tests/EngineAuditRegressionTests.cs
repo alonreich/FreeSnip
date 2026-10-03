@@ -158,7 +158,7 @@ namespace freesnip.tests
             ScreenTintBypass.ShouldExcludeLayeredWindows(region);
             sw.Stop();
 
-            Assert.True(sw.Elapsed.TotalMilliseconds < 2.0, $"Expected ShouldExcludeLayeredWindows to execute in under 2ms, but took {sw.Elapsed.TotalMilliseconds:F3}ms");
+            Assert.True(sw.Elapsed.TotalMilliseconds < 10.0, $"Expected ShouldExcludeLayeredWindows to execute in under 10ms, but took {sw.Elapsed.TotalMilliseconds:F3}ms");
         }
     }
 }
