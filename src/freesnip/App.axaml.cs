@@ -71,7 +71,7 @@ namespace freesnip
                         try
                         {
                             LogHelper.LogCrash("Dispatcher.UnhandledException", e.Exception, e.Exception);
-                            LogHelper.GetLogger(typeof(App)).Error("UI thread unhandled exception (handled)", e.Exception);
+                            LogHelper.GetLogger(typeof(App)).Error("UI thread unhandled exception", e.Exception);
                         }
                         catch (Exception logEx)
                         {
@@ -82,7 +82,14 @@ namespace freesnip
                     {
                         LogHelper.GetLogger(typeof(App)).Warn("Rapid UI thread exception cascade detected; throttling further crash logs.");
                     }
-                    e.Handled = true;
+                    bool recoverable = e.Exception is OperationCanceledException
+                        || e.Exception is TaskCanceledException
+                        || e.Exception is ObjectDisposedException;
+                    e.Handled = recoverable;
+                    if (!recoverable)
+                    {
+                        LogHelper.GetLogger(typeof(App)).Fatal("Non-recoverable UI dispatcher exception; allowing fail-fast termination to avoid continuing with corrupted editor state.", e.Exception);
+                    }
                 };
                 desktop.MainWindow = null;
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -185,11 +192,14 @@ namespace freesnip
             }
             finally
             {
-                s_ipcServer?.Dispose();
-                s_ipcServer = null;
+                if (s_ipcServer != null)
+                {
+                    await s_ipcServer.DisposeAsync().ConfigureAwait(false);
+                    s_ipcServer = null;
+                }
                 s_instanceMutex?.Dispose();
                 s_instanceMutex = null;
-                ForceRedTrayIcon(false);
+                ClearAllTrayHolds();
                 RetentionHelper.Stop();
                 ExecutionTrace.Stop();
                 IniConfig.Flush();
@@ -212,7 +222,6 @@ namespace freesnip
             try
             {
                 string configurationFolder = StartupTaskHelper.ConfigurationFolder;
-                if (!StartupTaskHelper.IsRunningFromInstallPath()) { configurationFolder = Path.Combine(DeploymentFootprint.TempAppFolder, "Config"); }
                 Directory.CreateDirectory(configurationFolder);
                 IniConfigurationDeployer.EnsureDefaultsFile(configurationFolder);
                 IniConfigurationDeployer.EnsureUserConfiguration(configurationFolder);
@@ -323,6 +332,17 @@ namespace freesnip
             });
         }
 
+        private static string FormatHotkeyPair(string primary, string alternate)
+        {
+            static bool IsSet(string value) => !string.IsNullOrWhiteSpace(value) && !string.Equals(value, "None", StringComparison.OrdinalIgnoreCase);
+            bool hasPrimary = IsSet(primary);
+            bool hasAlternate = IsSet(alternate);
+            if (hasPrimary && hasAlternate) return primary + " / " + alternate;
+            if (hasPrimary) return primary;
+            if (hasAlternate) return alternate;
+            return string.Empty;
+        }
+
         public static void UpdateTrayMenuHotkeys()
         {
             Dispatcher.UIThread.Post(() =>
@@ -339,17 +359,32 @@ namespace freesnip
                     {
                         if (item.Header == null) continue;
                         if (item.Header.StartsWith("Capture Region"))
-                            item.Header = string.IsNullOrWhiteSpace(config.RegionHotkey) ? "Capture Region" : $"Capture Region ({config.RegionHotkey})";
+                        {
+                            string pair = FormatHotkeyPair(config.RegionHotkey, config.RegionHotkeyAlt);
+                            item.Header = pair.Length == 0 ? "Capture Region" : $"Capture Region ({pair})";
+                        }
                         else if (item.Header.StartsWith("Repeat Last Region"))
-                            item.Header = string.IsNullOrWhiteSpace(config.LastregionHotkey) ? "Repeat Last Region" : $"Repeat Last Region ({config.LastregionHotkey})";
+                        {
+                            string pair = FormatHotkeyPair(config.LastregionHotkey, config.LastregionHotkeyAlt);
+                            item.Header = pair.Length == 0 ? "Repeat Last Region" : $"Repeat Last Region ({pair})";
+                        }
                         else if (item.Header.StartsWith("Capture Window"))
-                            item.Header = string.IsNullOrWhiteSpace(config.WindowHotkey) ? "Capture Window" : $"Capture Window ({config.WindowHotkey})";
+                        {
+                            string pair = FormatHotkeyPair(config.WindowHotkey, config.WindowHotkeyAlt);
+                            item.Header = pair.Length == 0 ? "Capture Window" : $"Capture Window ({pair})";
+                        }
                         else if (item.Header.StartsWith("Capture Fullscreen"))
-                            item.Header = string.IsNullOrWhiteSpace(config.FullscreenHotkey) ? "Capture Fullscreen" : $"Capture Fullscreen ({config.FullscreenHotkey})";
+                        {
+                            string pair = FormatHotkeyPair(config.FullscreenHotkey, config.FullscreenHotkeyAlt);
+                            item.Header = pair.Length == 0 ? "Capture Fullscreen" : $"Capture Fullscreen ({pair})";
+                        }
                         else if (item.Header.StartsWith("Scroll Capture"))
                             item.Header = "Scroll Capture";
                         else if (item.Header.StartsWith("Open From Clipboard"))
-                            item.Header = string.IsNullOrWhiteSpace(config.ClipboardHotkey) ? "Open From Clipboard" : $"Open From Clipboard ({config.ClipboardHotkey})";
+                        {
+                            string pair = FormatHotkeyPair(config.ClipboardHotkey, config.ClipboardHotkeyAlt);
+                            item.Header = pair.Length == 0 ? "Open From Clipboard" : $"Open From Clipboard ({pair})";
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -476,6 +511,13 @@ namespace freesnip
         private static volatile bool _currentIconIsRed = false;
         private static readonly object _iconLock = new object();
 
+        private static bool IsAuthorizedRedTraySource(string source)
+        {
+            return string.Equals(source, "CaptureSession", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source, "RubberbandDrag", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(source, "CaptureOcr", StringComparison.OrdinalIgnoreCase);
+        }
+
         internal static int ActiveRedHoldCount
         {
             get
@@ -496,13 +538,9 @@ namespace freesnip
 
                 if (force)
                 {
-                    if (source != null)
+                    if (source != null && IsAuthorizedRedTraySource(source))
                     {
                         _activeHoldSources.Add(source);
-                    }
-                    else
-                    {
-                        _anonymousHoldCount++;
                     }
                 }
                 else
@@ -824,6 +862,14 @@ namespace freesnip
             {
                 string filePath = message.Substring(helpers.InstanceIpcRelay.MessageOpenFilePrefix.Length).Trim().Trim('"');
                 await OpenImageFileInEditorAsync(filePath).ConfigureAwait(false);
+            }
+            else if (string.Equals(message, helpers.InstanceIpcRelay.MessageShutdown, StringComparison.OrdinalIgnoreCase))
+            {
+                log.Info("IPC Shutdown message received; initiating clean application exit...");
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    _desktop?.Shutdown();
+                });
             }
             else
             {

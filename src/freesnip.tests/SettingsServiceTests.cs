@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using freesnip.foundation.interfaces.Ocr;
 using freesnip.Services;
@@ -11,25 +11,43 @@ namespace freesnip.tests
         private readonly SettingsService _service = new();
 
         [Fact]
-        public void DefaultHotkeys_ContainsExpectedKeys()
+        public void DefaultHotkeys_ContainsExpectedPrimaryAndAlternateKeys()
         {
-            Assert.Equal(21, _service.DefaultHotkeys.Count);
+            Assert.Equal(42, _service.DefaultHotkeys.Count);
+
             Assert.Equal("PrintScreen", _service.DefaultHotkeys["TxtRegionKey"]);
+            Assert.Equal("None", _service.DefaultHotkeys["TxtRegionKeyAlt"]);
             Assert.Equal("Alt + PrintScreen", _service.DefaultHotkeys["TxtWindowKey"]);
+            Assert.Equal("None", _service.DefaultHotkeys["TxtWindowKeyAlt"]);
             Assert.Equal("Ctrl + PrintScreen", _service.DefaultHotkeys["TxtFullscreenKey"]);
+            Assert.Equal("None", _service.DefaultHotkeys["TxtFullscreenKeyAlt"]);
             Assert.Equal("None", _service.DefaultHotkeys["TxtLastRegionKey"]);
+            Assert.Equal("None", _service.DefaultHotkeys["TxtLastRegionKeyAlt"]);
             Assert.Equal("None", _service.DefaultHotkeys["TxtClipboardKey"]);
+            Assert.Equal("None", _service.DefaultHotkeys["TxtClipboardKeyAlt"]);
+            Assert.Equal("Enter", _service.DefaultHotkeys["TxtScrollCaptureDelimiterKey"]);
+            Assert.Equal("None", _service.DefaultHotkeys["TxtScrollCaptureDelimiterKeyAlt"]);
+
+            Assert.Equal("A", _service.DefaultHotkeys["TxtArrowKey"]);
+            Assert.Equal("None", _service.DefaultHotkeys["TxtArrowKeyAlt"]);
+            Assert.Equal("Delete", _service.DefaultHotkeys["TxtDeleteObjectKey"]);
+            Assert.Equal("None", _service.DefaultHotkeys["TxtDeleteObjectKeyAlt"]);
         }
 
         [Fact]
-        public void GlobalHotkeyBoxNames_ContainsFivePrimaryHotkeys()
+        public void GlobalHotkeyBoxNames_ContainsPrimaryAndAlternateHotkeys()
         {
-            Assert.Equal(5, _service.GlobalHotkeyBoxNames.Count);
+            Assert.Equal(10, _service.GlobalHotkeyBoxNames.Count);
             Assert.Contains("TxtRegionKey", _service.GlobalHotkeyBoxNames);
+            Assert.Contains("TxtRegionKeyAlt", _service.GlobalHotkeyBoxNames);
             Assert.Contains("TxtWindowKey", _service.GlobalHotkeyBoxNames);
+            Assert.Contains("TxtWindowKeyAlt", _service.GlobalHotkeyBoxNames);
             Assert.Contains("TxtFullscreenKey", _service.GlobalHotkeyBoxNames);
+            Assert.Contains("TxtFullscreenKeyAlt", _service.GlobalHotkeyBoxNames);
             Assert.Contains("TxtLastRegionKey", _service.GlobalHotkeyBoxNames);
+            Assert.Contains("TxtLastRegionKeyAlt", _service.GlobalHotkeyBoxNames);
             Assert.Contains("TxtClipboardKey", _service.GlobalHotkeyBoxNames);
+            Assert.Contains("TxtClipboardKeyAlt", _service.GlobalHotkeyBoxNames);
         }
 
         [Fact]
@@ -162,4 +180,3 @@ namespace freesnip.tests
         }
     }
 }
-

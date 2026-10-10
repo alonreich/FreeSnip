@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -6,6 +8,8 @@ namespace freesnip.helpers
 {
     internal static class NativeDllSearchPath
     {
+        private static readonly object Sync = new();
+        private static readonly List<IntPtr> DirectoryCookies = new();
         private const uint LoadLibrarySearchDefaultDirs = 0x00001000;
         private const uint LoadLibrarySearchUserDirs = 0x00000400;
 
@@ -26,14 +30,19 @@ namespace freesnip.helpers
             }
 
             string fullPath = Path.GetFullPath(directory);
-            try
+            if (SetDefaultDllDirectories(LoadLibrarySearchDefaultDirs | LoadLibrarySearchUserDirs))
             {
-                SetDefaultDllDirectories(LoadLibrarySearchDefaultDirs | LoadLibrarySearchUserDirs);
-                AddDllDirectory(fullPath);
+                IntPtr cookie = AddDllDirectory(fullPath);
+                if (cookie != IntPtr.Zero)
+                {
+                    lock (Sync) DirectoryCookies.Add(cookie);
+                    return;
+                }
             }
-            catch
+
+            if (!SetDllDirectory(fullPath))
             {
-                SetDllDirectory(fullPath);
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not register the native dependency directory.");
             }
         }
     }

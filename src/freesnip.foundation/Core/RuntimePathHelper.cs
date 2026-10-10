@@ -85,6 +85,37 @@ public static class RuntimePathHelper
         }
     }
 
+    public static string InformationalVersion
+    {
+        get
+        {
+            try
+            {
+                Assembly assembly = Assembly.GetEntryAssembly() ?? typeof(RuntimePathHelper).Assembly;
+                string informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+                if (!string.IsNullOrWhiteSpace(informational)) return informational;
+            }
+            catch { }
+            return ProductVersion;
+        }
+    }
+
+    public static string CommitSha
+    {
+        get
+        {
+            string info = InformationalVersion;
+            int plus = info.IndexOf('+');
+            if (plus >= 0 && plus + 1 < info.Length)
+            {
+                string sha = info[(plus + 1)..].Trim();
+                if (sha.Length >= 7) return sha[..Math.Min(12, sha.Length)];
+                return sha;
+            }
+            return "unknown";
+        }
+    }
+
     public static bool TryParseVersion(string raw, out Version version)
     {
         version = new Version(0, 0);

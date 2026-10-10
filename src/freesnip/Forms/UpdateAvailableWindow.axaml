@@ -71,6 +71,17 @@
                                    FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"/>
                     </Button>
 
+                    <Button Name="RemindLaterBtn" Cursor="Hand"
+                            Background="{DynamicResource FreeSnipPanelDarkBrush}"
+                            Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                            BorderThickness="1"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="10,6" CornerRadius="4">
+                        <TextBlock Text="Remind me later — keep using the current version for now."
+                                   FontWeight="Normal" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </Button>
+
                     <Separator Background="{DynamicResource FreeSnipSeparatorBrush}" Height="1" Margin="0,4"/>
 
                     <Button Name="SkipBtn" Cursor="Hand"

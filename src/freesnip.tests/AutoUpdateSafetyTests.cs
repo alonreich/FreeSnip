@@ -110,4 +110,41 @@ public class AutoUpdateSafetyTests
         Assert.Equal(expectedHash, computedHash);
         Assert.False(string.Equals(computedHash, "0000000000000000000000000000000000000000000000000000000000000000", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void ExpectedDeltaAssetName_MatchesValidFlavor()
+    {
+        string deltaName = UpdateService.GetExpectedDeltaAssetName();
+        Assert.True(deltaName == "FreeSnip_delta.zip" || deltaName == "FreeSnip_tesseract_delta.zip");
+    }
+
+    [Fact]
+    public void RuntimePathHelper_InformationalVersionAndCommitSha_Accessible()
+    {
+        string infoVer = RuntimePathHelper.InformationalVersion;
+        string commitSha = RuntimePathHelper.CommitSha;
+        Assert.NotNull(infoVer);
+        Assert.NotNull(commitSha);
+    }
+
+    [Fact]
+    public void UpdateChoice_NotNow_HasDedicatedValue()
+    {
+        var choice = freesnip.forms.UpdateChoice.NotNow;
+        Assert.NotEqual(freesnip.forms.UpdateChoice.UpdateNow, choice);
+        Assert.NotEqual(freesnip.forms.UpdateChoice.SkipThisVersion, choice);
+        Assert.NotEqual(freesnip.forms.UpdateChoice.Dismissed, choice);
+    }
+
+    [Theory]
+    [InlineData(true, true, true, false, false)]
+    [InlineData(true, false, true, false, false)]
+    [InlineData(false, false, false, false, false)]
+    public void DecideUpgrade_TableSafety(bool isAutoUpdate, bool existingInstall, bool expectedKeep, bool expectedWipe, bool expectedCancel)
+    {
+        var decision = freesnip.helpers.DeploymentLifecycle.DecideUpgrade(isAutoUpdate, existingInstall, null);
+        Assert.Equal(expectedKeep, decision.KeepUserSettings);
+        Assert.Equal(expectedWipe, decision.CleanWipe);
+        Assert.Equal(expectedCancel, decision.Cancelled);
+    }
 }

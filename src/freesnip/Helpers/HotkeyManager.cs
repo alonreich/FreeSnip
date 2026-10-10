@@ -53,6 +53,11 @@ namespace freesnip.helpers
         private const int HOTKEY_FULLSCREEN = 3;
         private const int HOTKEY_LASTREGION = 4;
         private const int HOTKEY_CLIPBOARD = 5;
+        private const int HOTKEY_REGION_ALT = 6;
+        private const int HOTKEY_WINDOW_ALT = 7;
+        private const int HOTKEY_FULLSCREEN_ALT = 8;
+        private const int HOTKEY_LASTREGION_ALT = 9;
+        private const int HOTKEY_CLIPBOARD_ALT = 10;
         private const int HOTKEY_PROBE = 9999;
         private static readonly TimeSpan LoopShutdownTimeout = TimeSpan.FromSeconds(3);
 
@@ -371,7 +376,14 @@ namespace freesnip.helpers
             try
             {
                 var cfg = IniConfig.GetIniSection<CoreConfiguration>();
-                configured = new[] { cfg.RegionHotkey, cfg.WindowHotkey, cfg.FullscreenHotkey, cfg.LastregionHotkey, cfg.ClipboardHotkey }
+                configured = new[]
+                {
+                    cfg.RegionHotkey, cfg.RegionHotkeyAlt,
+                    cfg.WindowHotkey, cfg.WindowHotkeyAlt,
+                    cfg.FullscreenHotkey, cfg.FullscreenHotkeyAlt,
+                    cfg.LastregionHotkey, cfg.LastregionHotkeyAlt,
+                    cfg.ClipboardHotkey, cfg.ClipboardHotkeyAlt
+                }
                     .Where(value => !string.IsNullOrWhiteSpace(value))
                     .ToArray();
             }
@@ -513,10 +525,15 @@ namespace freesnip.helpers
             var owned = new System.Collections.Generic.List<string>();
 
             RegisterTracked(HOTKEY_REGION, cfg.RegionHotkey, failures, owned);
+            RegisterTracked(HOTKEY_REGION_ALT, cfg.RegionHotkeyAlt, failures, owned);
             RegisterTracked(HOTKEY_WINDOW, cfg.WindowHotkey, failures, owned);
+            RegisterTracked(HOTKEY_WINDOW_ALT, cfg.WindowHotkeyAlt, failures, owned);
             RegisterTracked(HOTKEY_FULLSCREEN, cfg.FullscreenHotkey, failures, owned);
+            RegisterTracked(HOTKEY_FULLSCREEN_ALT, cfg.FullscreenHotkeyAlt, failures, owned);
             RegisterTracked(HOTKEY_LASTREGION, cfg.LastregionHotkey, failures, owned);
+            RegisterTracked(HOTKEY_LASTREGION_ALT, cfg.LastregionHotkeyAlt, failures, owned);
             RegisterTracked(HOTKEY_CLIPBOARD, cfg.ClipboardHotkey, failures, owned);
+            RegisterTracked(HOTKEY_CLIPBOARD_ALT, cfg.ClipboardHotkeyAlt, failures, owned);
 
             _ownedHotkeys = owned.ToArray();
             _lastFailedHotkeys = failures.ToArray();
@@ -585,7 +602,7 @@ namespace freesnip.helpers
                 return;
             }
 
-            for (int i = 1; i <= 5; i++)
+            for (int i = 1; i <= 10; i++)
             {
                 UnregisterHotKey(hwnd, i);
             }
@@ -601,18 +618,23 @@ namespace freesnip.helpers
                     switch (id)
                     {
                         case HOTKEY_REGION:
+                        case HOTKEY_REGION_ALT:
                             CaptureHelper.CaptureRegion(true);
                             break;
                         case HOTKEY_FULLSCREEN:
+                        case HOTKEY_FULLSCREEN_ALT:
                             CaptureHelper.CaptureFullscreen(false, ScreenCaptureMode.FullScreen);
                             break;
                         case HOTKEY_WINDOW:
+                        case HOTKEY_WINDOW_ALT:
                             CaptureHelper.CaptureActiveWindow(true);
                             break;
                         case HOTKEY_LASTREGION:
+                        case HOTKEY_LASTREGION_ALT:
                             CaptureHelper.CaptureLastRegion(true);
                             break;
                         case HOTKEY_CLIPBOARD:
+                        case HOTKEY_CLIPBOARD_ALT:
                             CaptureHelper.CaptureClipboard();
                             break;
                     }

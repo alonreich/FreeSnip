@@ -14,37 +14,62 @@ namespace freesnip.Services
         public IReadOnlyList<string> GlobalHotkeyBoxNames { get; } = new string[]
         {
             "TxtRegionKey",
+            "TxtRegionKeyAlt",
             "TxtWindowKey",
+            "TxtWindowKeyAlt",
             "TxtFullscreenKey",
+            "TxtFullscreenKeyAlt",
             "TxtLastRegionKey",
-            "TxtClipboardKey"
+            "TxtLastRegionKeyAlt",
+            "TxtClipboardKey",
+            "TxtClipboardKeyAlt"
         };
 
         public IReadOnlyDictionary<string, string> DefaultHotkeys { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["TxtRegionKey"] = "PrintScreen",
+            ["TxtRegionKeyAlt"] = "None",
             ["TxtWindowKey"] = "Alt + PrintScreen",
+            ["TxtWindowKeyAlt"] = "None",
             ["TxtFullscreenKey"] = "Ctrl + PrintScreen",
+            ["TxtFullscreenKeyAlt"] = "None",
             ["TxtLastRegionKey"] = "None",
+            ["TxtLastRegionKeyAlt"] = "None",
             ["TxtClipboardKey"] = "None",
-            ["TxtScrollCaptureDelimiterKey"] = "Space",
+            ["TxtClipboardKeyAlt"] = "None",
+            ["TxtScrollCaptureDelimiterKey"] = "Enter",
+            ["TxtScrollCaptureDelimiterKeyAlt"] = "None",
             ["TxtArrowKey"] = "A",
+            ["TxtArrowKeyAlt"] = "None",
             ["TxtLineKey"] = "L",
+            ["TxtLineKeyAlt"] = "None",
             ["TxtTextKey"] = "T",
+            ["TxtTextKeyAlt"] = "None",
             ["TxtResizeKey"] = "R",
+            ["TxtResizeKeyAlt"] = "None",
             ["TxtFreehandKey"] = "D",
+            ["TxtFreehandKeyAlt"] = "None",
             ["TxtEmojiKey"] = "E",
+            ["TxtEmojiKeyAlt"] = "None",
             ["TxtCounterKey"] = "I",
+            ["TxtCounterKeyAlt"] = "None",
             ["TxtHighlightKey"] = "H",
+            ["TxtHighlightKeyAlt"] = "None",
             ["TxtPixelate1Key"] = "O",
+            ["TxtPixelate1KeyAlt"] = "None",
             ["TxtPixelate2Key"] = "P",
+            ["TxtPixelate2KeyAlt"] = "None",
             ["TxtCropKey"] = "C",
+            ["TxtCropKeyAlt"] = "None",
             ["TxtRotateCwKey"] = "Right",
+            ["TxtRotateCwKeyAlt"] = "None",
             ["TxtRotateCcwKey"] = "Left",
+            ["TxtRotateCcwKeyAlt"] = "None",
             ["TxtDuplicateObjectKey"] = "Ctrl + D",
-            ["TxtDeleteObjectKey"] = "Delete"
+            ["TxtDuplicateObjectKeyAlt"] = "None",
+            ["TxtDeleteObjectKey"] = "Delete",
+            ["TxtDeleteObjectKeyAlt"] = "None"
         };
-
         public IReadOnlyList<string> OverlayDurationChoices { get; } = new string[]
         {
             "0.5 s (fast)",

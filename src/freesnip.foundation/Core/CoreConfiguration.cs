@@ -1,4 +1,3 @@
-
 using freesnip.native;
 using freesnip.native.foundation;
 using System;
@@ -27,17 +26,32 @@ namespace freesnip.foundation.core
         [IniProperty("RegionHotkey", Description = "Hotkey for starting the region capture", DefaultValue = "PrintScreen")]
         public string RegionHotkey { get; set; } = "PrintScreen";
 
+        [IniProperty("RegionHotkeyAlt", Description = "Alternate hotkey for starting the region capture", DefaultValue = "")]
+        public string RegionHotkeyAlt { get; set; } = "";
+
         [IniProperty("WindowHotkey", Description = "Hotkey for starting the window capture", DefaultValue = "Alt + PrintScreen")]
         public string WindowHotkey { get; set; } = "Alt + PrintScreen";
 
+        [IniProperty("WindowHotkeyAlt", Description = "Alternate hotkey for starting the window capture", DefaultValue = "")]
+        public string WindowHotkeyAlt { get; set; } = "";
+
         [IniProperty("FullscreenHotkey", Description = "Hotkey for starting the fullscreen capture", DefaultValue = "Ctrl + PrintScreen")]
         public string FullscreenHotkey { get; set; } = "Ctrl + PrintScreen";
+
+        [IniProperty("FullscreenHotkeyAlt", Description = "Alternate hotkey for starting the fullscreen capture", DefaultValue = "")]
+        public string FullscreenHotkeyAlt { get; set; } = "";
         
         [IniProperty("LastregionHotkey", Description = "Hotkey for starting the last region capture", DefaultValue = "")]
         public string LastregionHotkey { get; set; } = "";
 
+        [IniProperty("LastregionHotkeyAlt", Description = "Alternate hotkey for starting the last region capture", DefaultValue = "")]
+        public string LastregionHotkeyAlt { get; set; } = "";
+
         [IniProperty("ClipboardHotkey", Description = "Hotkey for starting capture from clipboard", DefaultValue = "")]
         public string ClipboardHotkey { get; set; } = "";
+
+        [IniProperty("ClipboardHotkeyAlt", Description = "Alternate hotkey for starting capture from clipboard", DefaultValue = "")]
+        public string ClipboardHotkeyAlt { get; set; } = "";
 
         public HotkeyBinding GetRegionBinding() => HotkeyBinding.Parse(RegionHotkey);
         public HotkeyBinding GetWindowBinding() => HotkeyBinding.Parse(WindowHotkey);
@@ -141,50 +155,98 @@ namespace freesnip.foundation.core
         [IniProperty("ArrowHotkey", DefaultValue = "A")]
         public string ArrowHotkey { get; set; } = "A";
 
+        [IniProperty("ArrowHotkeyAlt", DefaultValue = "")]
+        public string ArrowHotkeyAlt { get; set; } = "";
+
         [IniProperty("LineHotkey", DefaultValue = "L")]
         public string LineHotkey { get; set; } = "L";
+
+        [IniProperty("LineHotkeyAlt", DefaultValue = "")]
+        public string LineHotkeyAlt { get; set; } = "";
 
         [IniProperty("TextHotkey", DefaultValue = "T")]
         public string TextHotkey { get; set; } = "T";
 
+        [IniProperty("TextHotkeyAlt", DefaultValue = "")]
+        public string TextHotkeyAlt { get; set; } = "";
+
         [IniProperty("ResizeHotkey", DefaultValue = "R")]
         public string ResizeHotkey { get; set; } = "R";
+
+        [IniProperty("ResizeHotkeyAlt", DefaultValue = "")]
+        public string ResizeHotkeyAlt { get; set; } = "";
 
         [IniProperty("FreehandHotkey", DefaultValue = "D")]
         public string FreehandHotkey { get; set; } = "D";
 
+        [IniProperty("FreehandHotkeyAlt", DefaultValue = "")]
+        public string FreehandHotkeyAlt { get; set; } = "";
+
         [IniProperty("EmojiHotkey", DefaultValue = "E")]
         public string EmojiHotkey { get; set; } = "E";
+
+        [IniProperty("EmojiHotkeyAlt", DefaultValue = "")]
+        public string EmojiHotkeyAlt { get; set; } = "";
 
         [IniProperty("CounterHotkey", DefaultValue = "I")]
         public string CounterHotkey { get; set; } = "I";
 
+        [IniProperty("CounterHotkeyAlt", DefaultValue = "")]
+        public string CounterHotkeyAlt { get; set; } = "";
+
         [IniProperty("HighlightHotkey", DefaultValue = "H")]
         public string HighlightHotkey { get; set; } = "H";
+
+        [IniProperty("HighlightHotkeyAlt", DefaultValue = "")]
+        public string HighlightHotkeyAlt { get; set; } = "";
 
         [IniProperty("PixelateHotkey1", DefaultValue = "O")]
         public string PixelateHotkey1 { get; set; } = "O";
 
+        [IniProperty("PixelateHotkey1Alt", DefaultValue = "")]
+        public string PixelateHotkey1Alt { get; set; } = "";
+
         [IniProperty("PixelateHotkey2", DefaultValue = "P")]
         public string PixelateHotkey2 { get; set; } = "P";
+
+        [IniProperty("PixelateHotkey2Alt", DefaultValue = "")]
+        public string PixelateHotkey2Alt { get; set; } = "";
 
         [IniProperty("CropHotkey", DefaultValue = "C")]
         public string CropHotkey { get; set; } = "C";
 
+        [IniProperty("CropHotkeyAlt", DefaultValue = "")]
+        public string CropHotkeyAlt { get; set; } = "";
+
         [IniProperty("RotateCcwHotkey", DefaultValue = "Left")]
         public string RotateCcwHotkey { get; set; } = "Left";
+
+        [IniProperty("RotateCcwHotkeyAlt", DefaultValue = "")]
+        public string RotateCcwHotkeyAlt { get; set; } = "";
 
         [IniProperty("RotateCwHotkey", DefaultValue = "Right")]
         public string RotateCwHotkey { get; set; } = "Right";
 
+        [IniProperty("RotateCwHotkeyAlt", DefaultValue = "")]
+        public string RotateCwHotkeyAlt { get; set; } = "";
+
         [IniProperty("DuplicateObjectHotkey", DefaultValue = "Ctrl + D")]
         public string DuplicateObjectHotkey { get; set; } = "Ctrl + D";
+
+        [IniProperty("DuplicateObjectHotkeyAlt", DefaultValue = "")]
+        public string DuplicateObjectHotkeyAlt { get; set; } = "";
 
         [IniProperty("DeleteObjectHotkey", DefaultValue = "Delete")]
         public string DeleteObjectHotkey { get; set; } = "Delete";
 
+        [IniProperty("DeleteObjectHotkeyAlt", DefaultValue = "")]
+        public string DeleteObjectHotkeyAlt { get; set; } = "";
+
         [IniProperty("ScrollCaptureDelimiterHotkey", DefaultValue = "Enter")]
         public string ScrollCaptureDelimiterHotkey { get; set; } = "Enter";
+
+        [IniProperty("ScrollCaptureDelimiterHotkeyAlt", DefaultValue = "")]
+        public string ScrollCaptureDelimiterHotkeyAlt { get; set; } = "";
 
         [IniProperty("CustomColors", Description = "A comma separated list of custom colors.", DefaultValue = "#000000,#00FF00,#FF0000,#FFFF00,#0000FF,#FFFFFF")]
         public string CustomColors { get; set; } = "#000000,#00FF00,#FF0000,#FFFF00,#0000FF,#FFFFFF";
@@ -231,3 +293,4 @@ namespace freesnip.foundation.core
         }
     }
 }
+

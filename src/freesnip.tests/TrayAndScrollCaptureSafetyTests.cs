@@ -18,16 +18,16 @@ namespace freesnip.tests
             App.ResetTrayHoldStateForTesting();
             Assert.Equal(0, App.ActiveRedHoldCount);
 
-            App.ForceRedTrayIcon(true, "ScrollCapture");
+            App.ForceRedTrayIcon(true, "RubberbandDrag");
             Assert.Equal(1, App.ActiveRedHoldCount);
 
-            App.ForceRedTrayIcon(true, "ScrollCapture");
+            App.ForceRedTrayIcon(true, "RubberbandDrag");
             Assert.Equal(1, App.ActiveRedHoldCount);
 
-            App.ForceRedTrayIcon(false, "ScrollCapture");
+            App.ForceRedTrayIcon(false, "RubberbandDrag");
             Assert.Equal(0, App.ActiveRedHoldCount);
 
-            App.ForceRedTrayIcon(false, "ScrollCapture");
+            App.ForceRedTrayIcon(false, "RubberbandDrag");
             Assert.Equal(0, App.ActiveRedHoldCount);
         }
 
@@ -36,34 +36,35 @@ namespace freesnip.tests
         {
             App.ResetTrayHoldStateForTesting();
 
-            App.ForceRedTrayIcon(true, "ScrollCapture");
-            App.ForceRedTrayIcon(true, "OcrCapture");
+            App.ForceRedTrayIcon(true, "CaptureSession");
+            App.ForceRedTrayIcon(true, "RubberbandDrag");
+            App.ForceRedTrayIcon(true, "CaptureOcr");
+            Assert.Equal(3, App.ActiveRedHoldCount);
+
+            App.ForceRedTrayIcon(false, "RubberbandDrag");
             Assert.Equal(2, App.ActiveRedHoldCount);
 
-            App.ForceRedTrayIcon(false, "ScrollCapture");
+            App.ForceRedTrayIcon(false, "CaptureOcr");
             Assert.Equal(1, App.ActiveRedHoldCount);
 
-            App.ForceRedTrayIcon(false, "OcrCapture");
+            App.ForceRedTrayIcon(false, "CaptureSession");
             Assert.Equal(0, App.ActiveRedHoldCount);
         }
 
         [Fact]
-        public void TrayIcon_AnonymousAndNamed_Interoperability()
+        public void TrayIcon_AnonymousAndUnauthorizedSources_AreIgnored()
         {
             App.ResetTrayHoldStateForTesting();
 
             App.ForceRedTrayIcon(true, null);
-            Assert.Equal(1, App.ActiveRedHoldCount);
-
             App.ForceRedTrayIcon(true, "ScrollCapture");
-            Assert.Equal(2, App.ActiveRedHoldCount);
-
-            App.ForceRedTrayIcon(false, "ScrollCapture");
-            Assert.Equal(1, App.ActiveRedHoldCount);
-
-            App.ForceRedTrayIcon(false, null);
+            App.ForceRedTrayIcon(true, "OcrCapture");
             Assert.Equal(0, App.ActiveRedHoldCount);
 
+            App.ForceRedTrayIcon(true, "CaptureOcr");
+            Assert.Equal(1, App.ActiveRedHoldCount);
+
+            App.ForceRedTrayIcon(false, "CaptureOcr");
             App.ForceRedTrayIcon(false, null);
             Assert.Equal(0, App.ActiveRedHoldCount);
         }
@@ -97,10 +98,31 @@ namespace freesnip.tests
                     float g = row[i].Y;
                     float b = row[i].Z;
                     row[i].X = Math.Max(r, Math.Max(g, b));
-                    row[i].Y = g * 0.2f;
-                    row[i].Z = b * 0.2f;
+                    row[i].Y = g * 0.15f;
+                    row[i].Z = b * 0.15f;
                 }
             }));
+
+            long sumR = 0, sumG = 0, sumB = 0;
+            int nonTransparentPixels = 0;
+            image.ProcessPixelRows(accessor =>
+            {
+                for (int y = 0; y < accessor.Height; y++)
+                {
+                    var row = accessor.GetRowSpan(y);
+                    for (int x = 0; x < row.Length; x++)
+                    {
+                        if (row[x].A == 0) continue;
+                        nonTransparentPixels++;
+                        sumR += row[x].R;
+                        sumG += row[x].G;
+                        sumB += row[x].B;
+                    }
+                }
+            });
+            Assert.True(nonTransparentPixels > 0);
+            Assert.True(sumR > sumG && sumR > sumB, "Generated capture-state icon must be visibly red-dominant.");
+
             using var redMs = new MemoryStream();
             image.Save(redMs, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
             byte[] redBytes = redMs.ToArray();
@@ -176,13 +198,13 @@ namespace freesnip.tests
         }
 
         [Fact]
-        public void TrayIcon_ClearAllTrayHolds_ResetsBothAnonymousAndNamed()
+        public void TrayIcon_ClearAllTrayHolds_ResetsAllowedNamedSources()
         {
             App.ResetTrayHoldStateForTesting();
 
-            App.ForceRedTrayIcon(true, null);
-            App.ForceRedTrayIcon(true, "scroll capture editor handoff");
+            App.ForceRedTrayIcon(true, "CaptureSession");
             App.ForceRedTrayIcon(true, "RubberbandDrag");
+            App.ForceRedTrayIcon(true, "CaptureOcr");
             Assert.Equal(3, App.ActiveRedHoldCount);
 
             App.ClearAllTrayHolds();
@@ -208,16 +230,21 @@ namespace freesnip.tests
         }
 
         [Fact]
-        public void TrayIcon_AllCaptureModes_RegisterAndClearHolds()
+        public void TrayIcon_CaptureSessionAcquiresRedHold_WhileUnrelatedModesRemainPassive()
         {
             App.ResetTrayHoldStateForTesting();
             Assert.Equal(0, App.ActiveRedHoldCount);
 
-            string[] modes = { "CaptureSession", "CaptureActiveWindow", "CaptureFullscreen", "CaptureLastRegion", "ScrollCapture" };
-            foreach (var mode in modes)
+            App.ForceRedTrayIcon(true, "CaptureSession");
+            Assert.Equal(1, App.ActiveRedHoldCount);
+            App.ForceRedTrayIcon(false, "CaptureSession");
+            Assert.Equal(0, App.ActiveRedHoldCount);
+
+            string[] passiveModes = { "CaptureActiveWindow", "CaptureFullscreen", "CaptureLastRegion", "ScrollCapture" };
+            foreach (var mode in passiveModes)
             {
                 App.ForceRedTrayIcon(true, mode);
-                Assert.Equal(1, App.ActiveRedHoldCount);
+                Assert.Equal(0, App.ActiveRedHoldCount);
                 App.ForceRedTrayIcon(false, mode);
                 Assert.Equal(0, App.ActiveRedHoldCount);
             }

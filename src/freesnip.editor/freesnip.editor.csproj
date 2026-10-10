@@ -5,8 +5,9 @@
     <AssemblyName>freesnip.editor</AssemblyName>
     <Nullable>disable</Nullable>
     <NoWarn>$(NoWarn);WFO1000</NoWarn>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>13.0</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
     <CustomResourceTypesSupport>true</CustomResourceTypesSupport>
     <EmbeddedResourceUseDependentUponConvention>false</EmbeddedResourceUseDependentUponConvention>
     <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>

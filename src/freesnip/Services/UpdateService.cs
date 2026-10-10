@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -49,7 +49,9 @@ public static class UpdateService
         string DownloadUrl,
         string Sha256Hex,
         long Size,
-        string ReleaseNotes);
+        string ReleaseNotes,
+        bool IsDelta = false,
+        string TargetFileName = null);
 
     public static string GetExpectedAssetName()
     {
@@ -66,6 +68,24 @@ public static class UpdateService
         }
         catch { }
         return "FreeSnip.exe";
+#endif
+    }
+
+    public static string GetExpectedDeltaAssetName()
+    {
+#if USE_TESSERACT
+        return "FreeSnip_tesseract_delta.zip";
+#else
+        try
+        {
+            string exe = RuntimePathHelper.ExecutablePath;
+            if (!string.IsNullOrEmpty(exe) && exe.Contains("tesseract", StringComparison.OrdinalIgnoreCase))
+            {
+                return "FreeSnip_tesseract_delta.zip";
+            }
+        }
+        catch { }
+        return "FreeSnip_delta.zip";
 #endif
     }
 
@@ -89,7 +109,7 @@ public static class UpdateService
 
             await Task.Delay(StartupGracePeriod).ConfigureAwait(false);
 
-            if (!ThrottlePermitsCheck(MinimumIntervalBetweenChecks))
+            if (IsCheckThrottled(MinimumIntervalBetweenChecks))
             {
                 return;
             }
@@ -103,6 +123,8 @@ public static class UpdateService
             {
                 UpdateRelease release = await QueryLatestReleaseAsync().ConfigureAwait(false);
                 if (release == null) return;
+
+                RecordCheckTimestamp();
 
                 if (!RuntimePathHelper.TryParseVersion(release.Tag, out Version remote) ||
                     !RuntimePathHelper.TryParseVersion(RuntimePathHelper.ProductVersion, out Version local))
@@ -175,6 +197,8 @@ public static class UpdateService
                 return;
             }
 
+            RecordCheckTimestamp();
+
             if (!RuntimePathHelper.TryParseVersion(release.Tag, out Version remote) ||
                 !RuntimePathHelper.TryParseVersion(RuntimePathHelper.ProductVersion, out Version local))
             {
@@ -246,7 +270,7 @@ public static class UpdateService
         }
     }
 
-    private static bool ThrottlePermitsCheck(TimeSpan interval)
+    public static bool IsCheckThrottled(TimeSpan interval)
     {
         try
         {
@@ -254,16 +278,25 @@ public static class UpdateService
             if (DateTime.TryParse(last, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime when) &&
                 DateTime.UtcNow - when < interval)
             {
-                return false;
+                return true;
             }
+        }
+        catch { }
+        return false;
+    }
 
-            WriteStateFile(LastCheckFile, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
-            return true;
-        }
-        catch
+    public static void RecordCheckTimestamp()
+    {
+        try
         {
-            return true;
+            WriteStateFile(LastCheckFile, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         }
+        catch { }
+    }
+
+    public static bool ThrottlePermitsCheck(TimeSpan interval)
+    {
+        return !IsCheckThrottled(interval);
     }
 
     private static string ReadStateFile(string fileName)
@@ -312,15 +345,36 @@ public static class UpdateService
             }
 
             string expectedAsset = GetExpectedAssetName();
+            string deltaAsset = GetExpectedDeltaAssetName();
+            bool canUseDelta = StartupTaskHelper.IsRunningFromInstallPath();
             JsonNode asset = null;
+            bool isDelta = false;
 
-            foreach (JsonNode candidate in root?["assets"]?.AsArray() ?? [])
+            if (canUseDelta)
             {
-                string name = candidate?["name"]?.GetValue<string>();
-                if (name != null && name.Equals(expectedAsset, StringComparison.OrdinalIgnoreCase))
+                foreach (JsonNode candidate in root?["assets"]?.AsArray() ?? [])
                 {
-                    asset = candidate;
-                    break;
+                    string name = candidate?["name"]?.GetValue<string>();
+                    if (name != null && name.Equals(deltaAsset, StringComparison.OrdinalIgnoreCase))
+                    {
+                        asset = candidate;
+                        isDelta = true;
+                        break;
+                    }
+                }
+            }
+
+            if (asset == null)
+            {
+                foreach (JsonNode candidate in root?["assets"]?.AsArray() ?? [])
+                {
+                    string name = candidate?["name"]?.GetValue<string>();
+                    if (name != null && name.Equals(expectedAsset, StringComparison.OrdinalIgnoreCase))
+                    {
+                        asset = candidate;
+                        isDelta = false;
+                        break;
+                    }
                 }
             }
 
@@ -332,6 +386,7 @@ public static class UpdateService
                     if (name != null && name.Equals("FreeSnip.exe", StringComparison.OrdinalIgnoreCase))
                     {
                         asset = candidate;
+                        isDelta = false;
                         break;
                     }
                 }
@@ -344,6 +399,7 @@ public static class UpdateService
 
             if (!TrySanitizeTagForPath(tag, out _)) return null;
 
+            string targetName = isDelta ? deltaAsset : (asset["name"]?.GetValue<string>() ?? expectedAsset);
             string digest = asset["digest"]?.GetValue<string>();
             string sha256 = null;
             if (!string.IsNullOrEmpty(digest))
@@ -354,7 +410,8 @@ public static class UpdateService
 
             if (string.IsNullOrEmpty(sha256) && !string.IsNullOrEmpty(releaseNotes))
             {
-                string pattern = expectedAsset.Replace(".", "\\.") + @"\s+SHA256\s+([0-9a-fA-F]{64})";
+                string escapedTarget = Regex.Escape(targetName);
+                string pattern = $@"{escapedTarget}[^0-9a-fA-F]*?(?:SHA256|sha256|hash)?[:\s]+([0-9a-fA-F]{{64}})";
                 var match = Regex.Match(releaseNotes, pattern, RegexOptions.IgnoreCase);
                 if (match.Success)
                 {
@@ -362,13 +419,47 @@ public static class UpdateService
                 }
                 else
                 {
-                    var fallbackMatch = Regex.Match(releaseNotes, @"[0-9a-fA-F]{64}");
-                    if (fallbackMatch.Success) sha256 = fallbackMatch.Value.ToLowerInvariant();
+                    string reversePattern = $@"(?:SHA256|sha256)[:\s]+([0-9a-fA-F]{{64}})[^\n\r]*?{escapedTarget}";
+                    var revMatch = Regex.Match(releaseNotes, reversePattern, RegexOptions.IgnoreCase);
+                    if (revMatch.Success)
+                    {
+                        sha256 = revMatch.Groups[1].Value.ToLowerInvariant();
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(sha256))
+            {
+                foreach (JsonNode candidate in root?["assets"]?.AsArray() ?? [])
+                {
+                    string name = candidate?["name"]?.GetValue<string>();
+                    if (name != null && (name.Equals("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase) ||
+                                         name.Equals("SHA256SUMS", StringComparison.OrdinalIgnoreCase) ||
+                                         name.Equals("checksums.txt", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        string checksumUrl = candidate["browser_download_url"]?.GetValue<string>();
+                        if (!string.IsNullOrWhiteSpace(checksumUrl) && IsAllowedAssetUrl(checksumUrl))
+                        {
+                            try
+                            {
+                                using var sumCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                                string sumsText = await Http.GetStringAsync(checksumUrl, sumCts.Token).ConfigureAwait(false);
+                                string escapedTarget = Regex.Escape(targetName);
+                                var sumMatch = Regex.Match(sumsText, $@"([0-9a-fA-F]{{64}})\s+[\*]?[^\n\r]*?{escapedTarget}", RegexOptions.IgnoreCase);
+                                if (sumMatch.Success)
+                                {
+                                    sha256 = sumMatch.Groups[1].Value.ToLowerInvariant();
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
                 }
             }
 
             long size = asset["size"]?.GetValue<long>() ?? 0;
-            return new UpdateRelease(tag, url, sha256, size, releaseNotes);
+            return new UpdateRelease(tag, url, sha256, size, releaseNotes, isDelta, targetName);
         }
         catch
         {
@@ -378,6 +469,7 @@ public static class UpdateService
 
     private static async Task DownloadVerifyLaunchAsync(Window owner, UpdateRelease release)
     {
+        if (release == null) return;
         PurgeOldDownloadFolders();
 
         if (!TrySanitizeTagForPath(release.Tag, out string tagFolderName))
@@ -387,7 +479,7 @@ public static class UpdateService
 
         string downloadRoot = Path.Combine(Path.GetTempPath(), DownloadFolderRootName);
         string folder = Path.Combine(downloadRoot, tagFolderName, Guid.NewGuid().ToString("N"));
-        string targetFileName = GetExpectedAssetName();
+        string targetFileName = release.TargetFileName ?? (release.IsDelta ? GetExpectedDeltaAssetName() : GetExpectedAssetName());
         string finalPath = Path.Combine(folder, targetFileName);
         string partPath = finalPath + ".part";
         Directory.CreateDirectory(folder);
@@ -424,14 +516,45 @@ public static class UpdateService
 
         try
         {
-            using var response = await Http.GetAsync(release.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            long total = response.Content.Headers.ContentLength ?? release.Size;
+            long existingBytes = 0;
+            if (File.Exists(partPath))
+            {
+                try { existingBytes = new FileInfo(partPath).Length; } catch { existingBytes = 0; }
+            }
 
+            using var request = new HttpRequestMessage(HttpMethod.Get, release.DownloadUrl);
+            if (existingBytes > 0 && (release.Size <= 0 || existingBytes < release.Size))
+            {
+                request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(existingBytes, null);
+            }
+            else
+            {
+                existingBytes = 0;
+            }
+
+            using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+            bool isPartial = response.StatusCode == System.Net.HttpStatusCode.PartialContent;
+            if (!response.IsSuccessStatusCode && !isPartial)
+            {
+                response.EnsureSuccessStatusCode();
+            }
+
+            long total;
+            if (isPartial)
+            {
+                total = response.Content.Headers.ContentRange?.Length ?? (response.Content.Headers.ContentLength.HasValue ? response.Content.Headers.ContentLength.Value + existingBytes : release.Size);
+            }
+            else
+            {
+                existingBytes = 0;
+                total = response.Content.Headers.ContentLength ?? release.Size;
+            }
+
+            FileMode mode = (isPartial && existingBytes > 0) ? FileMode.Append : FileMode.Create;
             await using Stream source = await response.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
-            await using var target = new FileStream(partPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 1024 * 1024);
+            await using var target = new FileStream(partPath, mode, FileAccess.Write, FileShare.None, bufferSize: 1024 * 1024);
             byte[] buffer = new byte[1024 * 1024];
-            long copied = 0;
+            long copied = existingBytes;
             DateTime lastReport = DateTime.MinValue;
 
             while (true)
@@ -455,19 +578,22 @@ public static class UpdateService
             await target.DisposeAsync().ConfigureAwait(false);
             ReportDownloadProgress(progressWindow, copied, total > 0 ? total : copied);
 
-            if (!string.IsNullOrWhiteSpace(release.Sha256Hex))
+            if (string.IsNullOrWhiteSpace(release.Sha256Hex))
             {
-                string actualHash;
-                await using (FileStream verifyStream = File.OpenRead(partPath))
-                {
-                    actualHash = Convert.ToHexString(SHA256.HashData(verifyStream)).ToLowerInvariant();
-                }
+                TryDeleteFile(partPath);
+                throw new InvalidOperationException($"Cannot verify update integrity: no authoritative SHA-256 checksum was provided for {targetFileName}. The download was discarded for safety.");
+            }
 
-                if (!string.Equals(actualHash, release.Sha256Hex, StringComparison.OrdinalIgnoreCase))
-                {
-                    TryDeleteFile(partPath);
-                    throw new InvalidOperationException("Downloaded update failed SHA-256 fingerprint verification. The download was discarded.");
-                }
+            string actualHash;
+            await using (FileStream verifyStream = File.OpenRead(partPath))
+            {
+                actualHash = Convert.ToHexString(SHA256.HashData(verifyStream)).ToLowerInvariant();
+            }
+
+            if (!string.Equals(actualHash, release.Sha256Hex, StringComparison.OrdinalIgnoreCase))
+            {
+                TryDeleteFile(partPath);
+                throw new InvalidOperationException($"Downloaded update failed SHA-256 integrity verification (expected {release.Sha256Hex}, computed {actualHash}). The corrupted payload was discarded.");
             }
 
             File.Move(partPath, finalPath, overwrite: true);
@@ -476,40 +602,47 @@ public static class UpdateService
 
             Dispatcher.UIThread.Post(() => progressWindow?.MarkHandoffToInstaller());
 
-            var installer = new ProcessStartInfo(finalPath)
+            string launcherExe = release.IsDelta ? StartupTaskHelper.InstallPath : finalPath;
+            var installer = new ProcessStartInfo(launcherExe)
             {
                 UseShellExecute = true
             };
             installer.ArgumentList.Add("--install");
             installer.ArgumentList.Add("--auto-update");
+            if (release.IsDelta)
+            {
+                installer.ArgumentList.Add("--delta");
+                installer.ArgumentList.Add(finalPath);
+            }
             installer.ArgumentList.Add("--wait-pid");
             installer.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
 
             Process.Start(installer);
 
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            Dispatcher.UIThread.Post(() =>
             {
-                progressWindow?.Close();
-                StartupTaskHelper.ShowForegroundMessageBox(
-                    "Your update is ready.\r\n\r\nClose FreeSnip when you are ready; it will automatically install and restart with your settings preserved.",
-                    "FreeSnip Update Ready",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                try { progressWindow?.Close(); } catch { }
+                if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                {
+                    desktop.Shutdown();
+                }
+                else
+                {
+                    Environment.Exit(0);
+                }
             });
         }
         catch (OperationCanceledException)
         {
-            TryDeleteFile(partPath);
             TryDeleteFile(finalPath);
         }
         catch (Exception ex)
         {
-            TryDeleteFile(partPath);
             TryDeleteFile(finalPath);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 StartupTaskHelper.ShowForegroundMessageBox(
-                    $"The update could not be downloaded.\r\n\r\nReason: {ex.Message}\r\n\r\nYour current version was not changed.",
+                    $"The update could not be completed.\r\n\r\nReason: {ex.Message}\r\n\r\nYour current version was not changed.",
                     "Update Failed",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);

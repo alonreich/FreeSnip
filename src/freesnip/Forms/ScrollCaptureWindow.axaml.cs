@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -207,11 +207,13 @@ namespace freesnip.forms
         private static bool IsConfiguredDelimiterPressed()
         {
             var config = freesnip.foundation.IniFile.IniConfig.GetIniSection<CoreConfiguration>();
-            string key = config.ScrollCaptureDelimiterHotkey;
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                key = "Enter";
-            }
+            string primary = string.IsNullOrWhiteSpace(config.ScrollCaptureDelimiterHotkey) ? "Enter" : config.ScrollCaptureDelimiterHotkey;
+            return IsConfiguredDelimiterPressed(primary) || IsConfiguredDelimiterPressed(config.ScrollCaptureDelimiterHotkeyAlt);
+        }
+
+        private static bool IsConfiguredDelimiterPressed(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key) || string.Equals(key, "None", StringComparison.OrdinalIgnoreCase)) return false;
 
             bool ctrlReq = key.Contains("Ctrl", StringComparison.OrdinalIgnoreCase);
             bool altReq = key.Contains("Alt", StringComparison.OrdinalIgnoreCase);
@@ -229,12 +231,13 @@ namespace freesnip.forms
             if (winReq != winDown) return false;
 
             string keyName = key.Split('+').Last().Trim();
-            int vkCode = 0x0D;
+            int vkCode;
             if (string.Equals(keyName, "Enter", StringComparison.OrdinalIgnoreCase) || string.Equals(keyName, "Return", StringComparison.OrdinalIgnoreCase)) vkCode = 0x0D;
             else if (string.Equals(keyName, "Space", StringComparison.OrdinalIgnoreCase)) vkCode = 0x20;
             else if (string.Equals(keyName, "Escape", StringComparison.OrdinalIgnoreCase) || string.Equals(keyName, "Esc", StringComparison.OrdinalIgnoreCase)) vkCode = 0x1B;
             else if (string.Equals(keyName, "Tab", StringComparison.OrdinalIgnoreCase)) vkCode = 0x09;
             else if (Enum.TryParse<freesnip.foundation.core.AvaloniaShims.Keys>(keyName, true, out var parsedKey)) vkCode = (int)parsedKey;
+            else return false;
 
             return (GetAsyncKeyState(vkCode) & 0x8000) != 0;
         }
@@ -299,7 +302,6 @@ namespace freesnip.forms
 
         public static async Task StartAsync(Window ownerWindow = null)
         {
-            App.ForceRedTrayIcon(true, "ScrollCapture");
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (ActiveWindows.Count > 0)
@@ -470,11 +472,13 @@ namespace freesnip.forms
         private static bool IsDelimiterKey(KeyEventArgs e)
         {
             var config = freesnip.foundation.IniFile.IniConfig.GetIniSection<CoreConfiguration>();
-            string key = config.ScrollCaptureDelimiterHotkey;
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                key = "Enter";
-            }
+            string primary = string.IsNullOrWhiteSpace(config.ScrollCaptureDelimiterHotkey) ? "Enter" : config.ScrollCaptureDelimiterHotkey;
+            return IsDelimiterKey(e, primary) || IsDelimiterKey(e, config.ScrollCaptureDelimiterHotkeyAlt);
+        }
+
+        private static bool IsDelimiterKey(KeyEventArgs e, string key)
+        {
+            if (string.IsNullOrWhiteSpace(key) || string.Equals(key, "None", StringComparison.OrdinalIgnoreCase)) return false;
 
             bool ctrl = key.Contains("Ctrl", StringComparison.OrdinalIgnoreCase);
             bool alt = key.Contains("Alt", StringComparison.OrdinalIgnoreCase);
@@ -486,7 +490,8 @@ namespace freesnip.forms
             if (win != e.KeyModifiers.HasFlag(KeyModifiers.Meta)) return false;
 
             string keyName = key.Split('+').Last().Trim();
-            return string.Equals(e.Key.ToString(), keyName, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(e.Key.ToString(), keyName, StringComparison.OrdinalIgnoreCase)
+                || (string.Equals(keyName, "Enter", StringComparison.OrdinalIgnoreCase) && e.Key == Key.Return);
         }
 
         private void OnExitClick(object sender, RoutedEventArgs e)
@@ -545,7 +550,6 @@ namespace freesnip.forms
                 await Task.Delay(100);
 
                 Recorder = new ScrollCaptureRecorder(rect);
-                // Mouse wheel scroll defaults to vertical intent; overlap verification is authoritative
                 Recorder.AxisHint = true;
                 Recorder.SegmentCeilingReached += () =>
                 {
@@ -709,23 +713,17 @@ namespace freesnip.forms
                     return;
                 }
 
-                ImageSharpBgra clipboardImage = result.Clone(x => { });
-                try
+                // Encode/stage the finished image before transferring ownership to the editor.
+                // This avoids a second full-resolution clone for long scroll captures.
+                await CaptureHelper.CopyCaptureToClipboardAsync(result).ConfigureAwait(false);
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        RECT captureRect = RECT.FromXYWH(SelectedRect.Left, SelectedRect.Top, result.Width, result.Height);
-                        CloseAllOverlays();
-                        RestoreOwner();
-                        CaptureHelper.OpenEditorForOwnedImage(result, captureRect);
-                        result = null;
-                    });
-                    await CaptureHelper.CopyCaptureToClipboardAsync(clipboardImage).ConfigureAwait(false);
-                }
-                finally
-                {
-                    clipboardImage.Dispose();
-                }
+                    RECT captureRect = RECT.FromXYWH(SelectedRect.Left, SelectedRect.Top, result.Width, result.Height);
+                    CloseAllOverlays();
+                    RestoreOwner();
+                    CaptureHelper.OpenEditorForOwnedImage(result, captureRect);
+                    result = null;
+                });
             }
             catch (Exception ex)
             {
@@ -934,7 +932,6 @@ namespace freesnip.forms
                 BarWindow = null;
             }
 
-            App.ForceRedTrayIcon(false, "ScrollCapture");
             App.ClearAllTrayHolds();
             IsClosingAll = false;
         }

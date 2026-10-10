@@ -11,7 +11,8 @@
     <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
     <GenerateApplicationConfigurationFile>false</GenerateApplicationConfigurationFile>
     <PublishAot>true</PublishAot>
-    <BuiltInComSupport>true</BuiltInComSupport>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <IsAotCompatible>true</IsAotCompatible>
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>link</TrimMode>
     <OptimizationPreference>Size</OptimizationPreference>

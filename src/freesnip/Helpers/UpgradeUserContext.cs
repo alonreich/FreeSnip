@@ -18,6 +18,7 @@ namespace freesnip.helpers;
 internal sealed class UpgradeUserContext
 {
     public const string ArgumentName = "--upgrade-context";
+    public const string InlineArgumentName = "--upgrade-context-b64";
     internal const string ManifestFileName = "upgrade_context.txt";
     internal const string FormatHeader = "FreeSnipUpgradeContext/1";
     internal static readonly TimeSpan MaxManifestAge = TimeSpan.FromHours(24);
@@ -48,7 +49,10 @@ internal sealed class UpgradeUserContext
         Path.Combine(ConfigurationFolder, "snapvox.ini"),
         Path.Combine(AppData, "SnapVox", "snapvox.ini"),
         Path.Combine(LocalAppData, "SnapVox", "snapvox.ini"),
-        Path.Combine(LocalAppData, "FreeSnip", "freesnip.ini")
+        Path.Combine(LocalAppData, "FreeSnip", "freesnip.ini"),
+        // Versions that incorrectly selected %TEMP%\FreeSnip\Config as the active configuration
+        // root can still be recovered during the next upgrade. It is migration-only, never canonical.
+        Path.Combine(LocalAppData, "Temp", "FreeSnip", "Config", "freesnip.ini")
     };
 
     public static UpgradeUserContext CaptureCurrent(bool hadElevatedStartupTask)
@@ -161,6 +165,40 @@ internal sealed class UpgradeUserContext
         if (!TryParse(text, nowUtc, out var context, out string error))
             throw new InvalidDataException("Upgrade context is invalid: " + error);
         return context;
+    }
+
+
+    public string ToInlineArgumentValue()
+    {
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(Serialize()));
+    }
+
+    public static UpgradeUserContext LoadInline(string encoded, DateTime nowUtc)
+    {
+        if (string.IsNullOrWhiteSpace(encoded)) throw new InvalidDataException("Upgrade context is empty.");
+        string text;
+        try
+        {
+            text = Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidDataException("Upgrade context encoding is invalid.", ex);
+        }
+
+        if (!TryParse(text, nowUtc, out var context, out string error))
+            throw new InvalidDataException("Upgrade context is invalid: " + error);
+        return context;
+    }
+
+    public static string GetInlineArgument(string[] args)
+    {
+        if (args == null) return null;
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals(InlineArgumentName, StringComparison.OrdinalIgnoreCase)) return args[i + 1];
+        }
+        return null;
     }
 
     public static string GetManifestArgument(string[] args)

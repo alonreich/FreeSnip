@@ -3,7 +3,7 @@
     <Copyright>Copyright © FreeSnip 2004-2026</Copyright>
     <Authors>FreeSnip</Authors>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
-    <LangVersion>latest</LangVersion>
+    <LangVersion>13.0</LangVersion>
     <UseWPF>false</UseWPF>
     <UseWindowsForms>false</UseWindowsForms>
     <RuntimeIdentifiers>win-x64;win-x86</RuntimeIdentifiers>
@@ -12,7 +12,8 @@
     <Deterministic>true</Deterministic>
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <CustomResourceTypesSupport>true</CustomResourceTypesSupport>
-    <NoWarn>$(NoWarn);IL2050;IL2062;IL2072;IL2073;IL2104;IL3050;IL2091;IL2090;IL2075;IL2026;IL3000;IL3002;IL3053</NoWarn>
+    <NoWarn>$(NoWarn);IL2050;IL2062;IL2072;IL2073;IL2104;IL3050;IL2091;IL2090;IL2075;IL2026;IL3000;IL3002;IL3053;NU1901;NU1902;NU1903;NU1904</NoWarn>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
   </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)' != 'Debug' And !$(MSBuildProjectName.Contains('Test')) And !$(MSBuildProjectName.Contains('Demo'))">

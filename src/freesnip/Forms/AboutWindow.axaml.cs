@@ -13,11 +13,12 @@ public partial class AboutWindow : Window
     public AboutWindow()
     {
         InitializeComponent();
+        Title = $"About FreeSnip v{RuntimePathHelper.ProductVersion}";
 
         var versionText = this.FindControl<TextBlock>("VersionText");
         if (versionText != null)
         {
-            versionText.Text = $"Version {RuntimePathHelper.ProductVersion}";
+            versionText.Text = $"Version {RuntimePathHelper.ProductVersion}" + (RuntimePathHelper.CommitSha != "unknown" ? $" ({RuntimePathHelper.CommitSha})" : "");
         }
 
         var flavorText = this.FindControl<TextBlock>("FlavorText");

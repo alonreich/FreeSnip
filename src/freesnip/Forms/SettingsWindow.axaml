@@ -268,31 +268,43 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Region:" Classes="field-label"/>
                                     <TextBox Name="TxtRegionKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Region capture hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                    <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                    <TextBox Name="TxtRegionKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                 </StackPanel>
                                 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Window:" Classes="field-label"/>
                                     <TextBox Name="TxtWindowKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Active window capture hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                    <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                    <TextBox Name="TxtWindowKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Fullscreen:" Classes="field-label"/>
                                     <TextBox Name="TxtFullscreenKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Fullscreen capture hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                    <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                    <TextBox Name="TxtFullscreenKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Last Region:" Classes="field-label"/>
                                     <TextBox Name="TxtLastRegionKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Repeat last region hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                    <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                    <TextBox Name="TxtLastRegionKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Clipboard:" Classes="field-label"/>
                                     <TextBox Name="TxtClipboardKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Open from clipboard hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                    <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                    <TextBox Name="TxtClipboardKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="Scroll Delimiter:" Classes="field-label"/>
                                     <TextBox Name="TxtScrollCaptureDelimiterKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Scroll capture delimiter hotkey" ToolTip.Tip="Key used to finish scroll capture (default: Enter). Click, then press the key you want."/>
+                                    <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                    <TextBox Name="TxtScrollCaptureDelimiterKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                 </StackPanel>
 
                             </StackPanel>
@@ -304,26 +316,38 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Arrow:" Classes="field-label"/>
                                             <TextBox Name="TxtArrowKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Arrow tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtArrowKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Line:" Classes="field-label"/>
                                             <TextBox Name="TxtLineKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Line tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtLineKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Freehand:" Classes="field-label"/>
                                             <TextBox Name="TxtFreehandKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Freehand tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtFreehandKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Highlight:" Classes="field-label"/>
                                             <TextBox Name="TxtHighlightKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Highlight tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtHighlightKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Pixelate 1:" Classes="field-label"/>
                                             <TextBox Name="TxtPixelate1Key" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="First pixelate tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtPixelate1KeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Pixelate 2:" Classes="field-label"/>
                                             <TextBox Name="TxtPixelate2Key" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Second pixelate tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtPixelate2KeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                     </WrapPanel>
                                 </StackPanel>
@@ -334,14 +358,20 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Text Box:" Classes="field-label"/>
                                             <TextBox Name="TxtTextKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Text tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtTextKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Emoji:" Classes="field-label"/>
                                             <TextBox Name="TxtEmojiKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Emoji tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtEmojiKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Counter:" Classes="field-label"/>
                                             <TextBox Name="TxtCounterKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Counter tool hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtCounterKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                     </WrapPanel>
                                 </StackPanel>
@@ -352,18 +382,26 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Resize:" Classes="field-label"/>
                                             <TextBox Name="TxtResizeKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Resize image hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtResizeKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Crop:" Classes="field-label"/>
                                             <TextBox Name="TxtCropKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Crop image hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtCropKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Rotate CW:" Classes="field-label"/>
                                             <TextBox Name="TxtRotateCwKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Rotate clockwise hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtRotateCwKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Rotate CCW:" Classes="field-label"/>
                                             <TextBox Name="TxtRotateCcwKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Rotate counter-clockwise hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtRotateCcwKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                     </WrapPanel>
                                 </StackPanel>
@@ -374,10 +412,14 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Duplicate:" Classes="field-label"/>
                                             <TextBox Name="TxtDuplicateObjectKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Duplicate object hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtDuplicateObjectKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,15,10">
                                             <TextBlock Text="Delete:" Classes="field-label"/>
                                             <TextBox Name="TxtDeleteObjectKey" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Delete object hotkey" ToolTip.Tip="Click, then press the key combination you want."/>
+                                            <TextBlock Text="Alt:" VerticalAlignment="Center" Margin="8,0,4,0" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="11"/>
+                                            <TextBox Name="TxtDeleteObjectKeyAlt" Classes="hotkey" IsReadOnly="True" KeyDown="OnHotkeyTextBoxKeyDown" AutomationProperties.Name="Alternate shortcut" ToolTip.Tip="Optional alternate shortcut for the same action. Click, then press the key combination you want."/>
                                         </StackPanel>
                                     </WrapPanel>
                                 </StackPanel>

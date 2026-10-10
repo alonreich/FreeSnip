@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using freesnip.helpers;
 using SixLabors.ImageSharp;
@@ -13,13 +13,13 @@ namespace freesnip.tests
         [Fact]
         public void ScrollFrameStitcher_DefaultConstants_MatchSpecifications()
         {
-            Assert.Equal(int.MaxValue, ScrollFrameStitcher.MaxSegments);
-            Assert.Equal(180L * 1024L * 1024L, ScrollFrameStitcher.MaxCompositePixels);
-            Assert.Equal(int.MaxValue, ScrollCaptureRecorder.MaxSegments);
+            Assert.Equal(512, ScrollFrameStitcher.MaxSegments);
+            Assert.Equal(48L * 1024L * 1024L, ScrollFrameStitcher.MaxCompositePixels);
+            Assert.Equal(512, ScrollCaptureRecorder.MaxSegments);
         }
 
         [Fact]
-        public void ContinuousScrolling_Beyond120Segments_SucceedsWithoutHardCap()
+        public void ContinuousScrolling_Beyond120Segments_SucceedsBelowBoundedCap()
         {
             const int frameWidth = 100;
             const int frameHeight = 200;
@@ -153,7 +153,6 @@ namespace freesnip.tests
             await recorder.DisposeAsync();
         }
 
-        // ===== Overlap Verification & Axis Consensus Regression Tests =====
 
         /// <summary>
         /// Helper to create synthetic scroll frames with deterministic unique pixel content.
@@ -184,11 +183,65 @@ namespace freesnip.tests
             return frame;
         }
 
+        private static (int dx, int dy)? InvokeOverlapVerifier(
+            ScrollFrameStitcher stitcher, FrameLuma previous, FrameLuma current, Rectangle viewport, int coarseDx, int coarseDy)
+        {
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var viewportDetectedField = typeof(ScrollFrameStitcher).GetField("_viewportDetected", flags);
+            var viewportField = typeof(ScrollFrameStitcher).GetField("_viewport", flags);
+            var verifyMethod = typeof(ScrollFrameStitcher).GetMethod("VerifyOverlapDisplacement", flags);
+
+            Assert.NotNull(viewportDetectedField);
+            Assert.NotNull(viewportField);
+            Assert.NotNull(verifyMethod);
+
+            viewportDetectedField!.SetValue(stitcher, true);
+            viewportField!.SetValue(stitcher, viewport);
+            object? result = verifyMethod!.Invoke(stitcher, new object[] { previous, current, coarseDx, coarseDy });
+            return result is ValueTuple<int, int> displacement ? displacement : null;
+        }
+
+        [Fact]
+        public void OverlapVerifier_DirectlyCorrectsPlus1CoarseDelta()
+        {
+            const int width = 300;
+            const int height = 400;
+            var viewport = new Rectangle(0, 0, width, height);
+
+            using var previousImage = CreateVerificationFrame(width, height, viewport, 0, 0);
+            using var currentImage = CreateVerificationFrame(width, height, viewport, 20, 0);
+            using var previous = new FrameLuma(previousImage);
+            using var current = new FrameLuma(currentImage);
+            using var stitcher = new ScrollFrameStitcher();
+
+            var verified = InvokeOverlapVerifier(stitcher, previous, current, viewport, 0, 21);
+            Assert.NotNull(verified);
+            Assert.Equal(0, verified!.Value.dx);
+            Assert.Equal(20, verified.Value.dy);
+        }
+
+        [Fact]
+        public void OverlapVerifier_DirectlyCorrectsMinus2CoarseDelta()
+        {
+            const int width = 300;
+            const int height = 400;
+            var viewport = new Rectangle(0, 0, width, height);
+
+            using var previousImage = CreateVerificationFrame(width, height, viewport, 0, 0);
+            using var currentImage = CreateVerificationFrame(width, height, viewport, 20, 0);
+            using var previous = new FrameLuma(previousImage);
+            using var current = new FrameLuma(currentImage);
+            using var stitcher = new ScrollFrameStitcher();
+
+            var verified = InvokeOverlapVerifier(stitcher, previous, current, viewport, 0, 18);
+            Assert.NotNull(verified);
+            Assert.Equal(0, verified!.Value.dx);
+            Assert.Equal(20, verified.Value.dy);
+        }
+
         [Fact]
         public void OverlapVerification_CoarseEstimateOffByPlus1_NoDuplicatedRow()
         {
-            // Vertical scroll with 20px actual movement per frame.
-            // The overlap verifier should correct any ±1px coarse estimate error.
             const int width = 300;
             const int height = 400;
             var viewport = new Rectangle(0, 0, width, height);
@@ -208,8 +261,6 @@ namespace freesnip.tests
             Assert.NotNull(result);
             Assert.Equal(width, result.Width);
 
-            // Verify no duplicated rows: each row in the scrolling region should have unique content
-            // The composite height should be frameHeight + (N-1)*shift = 400 + 5*20 = 500
             int expectedHeight = height + (stitcher.AcceptedFrames - 1) * 20;
             Assert.Equal(expectedHeight, result.Height);
         }
@@ -217,7 +268,6 @@ namespace freesnip.tests
         [Fact]
         public void OverlapVerification_CoarseEstimateOffByMinus2_NoMissingBand()
         {
-            // Same as above but tests that the verifier corrects underestimates too.
             const int width = 300;
             const int height = 400;
             var viewport = new Rectangle(0, 0, width, height);
@@ -236,18 +286,14 @@ namespace freesnip.tests
             using var result = stitcher.BuildImage();
             Assert.NotNull(result);
 
-            // The composite should be continuous with no gaps
             int expectedHeight = height + (stitcher.AcceptedFrames - 1) * 20;
             Assert.Equal(expectedHeight, result.Height);
 
-            // Verify pixel continuity at a seam boundary: pick world row at y=height (first seam)
-            // This row should have valid world content, not black (missing) pixels
             if (result.Height > height + 5)
             {
                 result.ProcessPixelRows(accessor =>
                 {
                     var row = accessor.GetRowSpan(height + 2);
-                    // Should not be all zeros (black = missing content)
                     bool hasContent = false;
                     for (int x = 10; x < width - 10; x += 10)
                     {
@@ -261,12 +307,10 @@ namespace freesnip.tests
         [Fact]
         public void AxisConsensus_RepetitiveTexture_DoesNotFalselyLockHorizontal()
         {
-            // Vertical scrolling with repetitive horizontal pattern should not be classified as horizontal.
             const int width = 300;
             const int height = 400;
             var viewport = new Rectangle(0, 0, width, height);
 
-            // Create frames where each row is identical (horizontally repetitive) but shifts vertically
             Image<Bgra32> CreateRepetitiveFrame(int scrollY)
             {
                 var frame = new Image<Bgra32>(width, height);
@@ -279,7 +323,6 @@ namespace freesnip.tests
                         byte v = (byte)((worldY * 37) % 256);
                         for (int x = 0; x < width; x++)
                         {
-                            // Horizontally repetitive: same value across x, different per row
                             row[x] = new Bgra32(v, (byte)((v + 80) % 256), (byte)((v + 160) % 256), 255);
                         }
                     }
@@ -300,7 +343,6 @@ namespace freesnip.tests
             using var result = stitcher.BuildImage();
             Assert.NotNull(result);
 
-            // Result width should be the frame width (not abnormally wide from horizontal misclassification)
             Assert.Equal(width, result.Width);
             Assert.True(result.Height > height, "Expected vertical composite taller than single frame.");
         }
@@ -308,23 +350,18 @@ namespace freesnip.tests
         [Fact]
         public void AxisConsensus_NoisyFirstFrameThenVertical_ProducesVerticalComposite()
         {
-            // First frame pair might produce noisy motion estimate.
-            // Subsequent clear vertical frames should result in vertical composite.
             const int width = 300;
             const int height = 400;
             var viewport = new Rectangle(0, 0, width, height);
 
             using var stitcher = new ScrollFrameStitcher();
 
-            // Frame 0: anchor
             using var f0 = CreateVerificationFrame(width, height, viewport, 0, 0);
             stitcher.AddFrame(f0);
 
-            // Frame 1: noise-like (very small shift that could produce ambiguous direction)
             using var f1 = CreateVerificationFrame(width, height, viewport, 3, 0);
             stitcher.AddFrame(f1);
 
-            // Frames 2-5: clear vertical motion
             for (int i = 2; i < 6; i++)
             {
                 using var frame = CreateVerificationFrame(width, height, viewport, i * 20, 0);
@@ -346,7 +383,7 @@ namespace freesnip.tests
             var viewport = new Rectangle(0, 0, width, height);
 
             using var stitcher = new ScrollFrameStitcher();
-            stitcher.AxisHint = false; // hint horizontal
+            stitcher.AxisHint = false;
 
             for (int i = 0; i < 5; i++)
             {
@@ -364,8 +401,6 @@ namespace freesnip.tests
         [Fact]
         public void OverlapVerification_FixedHeader_ExcludedFromOverlapMatching()
         {
-            // A fixed 60px header should be detected as stationary chrome and excluded
-            // from the scrolling viewport overlap matching.
             const int width = 300;
             const int height = 400;
             const int headerHeight = 60;
@@ -380,7 +415,7 @@ namespace freesnip.tests
                         var row = accessor.GetRowSpan(y);
                         for (int x = 0; x < width; x++)
                         {
-                            row[x] = new Bgra32(43, 87, 154, 255); // fixed blue header
+                            row[x] = new Bgra32(43, 87, 154, 255);
                         }
                     }
                 });
@@ -397,21 +432,17 @@ namespace freesnip.tests
 
             Assert.True(stitcher.AcceptedFrames >= 3);
             Assert.True(stitcher.ViewportDetected);
-            // Viewport should exclude the header
             Assert.True(stitcher.Viewport.Top >= headerHeight - 4, $"Viewport top {stitcher.Viewport.Top} should be near header bottom {headerHeight}.");
 
             using var result = stitcher.BuildImage();
             Assert.NotNull(result);
             Assert.Equal(width, result.Width);
-            // Result should include the header once plus the scrolling content
             Assert.True(result.Height > height);
         }
 
         [Fact]
         public void ReAcquisition_StillFunctions_WithOverlapVerification()
         {
-            // Simulate a sequence where one frame is drastically different (occlusion),
-            // followed by a frame that matches a recent frame. Re-acquisition should still work.
             const int width = 300;
             const int height = 400;
             var viewport = new Rectangle(0, 0, width, height);
@@ -419,7 +450,6 @@ namespace freesnip.tests
             using var stitcher = new ScrollFrameStitcher();
             stitcher.AxisHint = true;
 
-            // Frames 0-2: normal vertical scroll
             for (int i = 0; i < 3; i++)
             {
                 using var frame = CreateVerificationFrame(width, height, viewport, i * 20, 0);
@@ -428,7 +458,6 @@ namespace freesnip.tests
             int framesAfterNormal = stitcher.AcceptedFrames;
             Assert.True(framesAfterNormal >= 2);
 
-            // Frame 3: occlusion (completely different content)
             using var occluded = new Image<Bgra32>(width, height);
             occluded.ProcessPixelRows(accessor =>
             {
@@ -437,17 +466,15 @@ namespace freesnip.tests
                     var row = accessor.GetRowSpan(y);
                     for (int x = 0; x < width; x++)
                     {
-                        row[x] = new Bgra32(255, 0, 255, 255); // magenta occlusion
+                        row[x] = new Bgra32(255, 0, 255, 255);
                     }
                 }
             });
             stitcher.AddFrame(occluded.Clone(x => { }));
 
-            // Frame 4: back to normal scroll at offset 3*20 = 60
             using var recovered = CreateVerificationFrame(width, height, viewport, 3 * 20, 0);
             var recoveredStatus = stitcher.AddFrame(recovered);
 
-            // The stitcher should still be functional (either accepted via re-acquisition or rejected gracefully)
             using var result = stitcher.BuildImage();
             Assert.NotNull(result);
             Assert.Equal(width, result.Width);
@@ -496,4 +523,3 @@ namespace freesnip.tests
         }
     }
 }
-

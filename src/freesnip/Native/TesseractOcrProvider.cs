@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using freesnip.native.foundation;
@@ -20,10 +22,9 @@ namespace freesnip.native
         private readonly OcrRequestQueue _queue;
         private int _disposed;
         private static readonly TimeSpan RecognitionTimeout = TimeSpan.FromSeconds(45);
-        private static readonly SemaphoreSlim NativeOcrGate = new SemaphoreSlim(1, 1);
-        private static TesseractEngine _sharedEngine;
-        private static string _sharedEnginePath;
-        private static bool _sharedEngineAdaptive;
+        private const int WorkerMagic = 0x46534F43; // "FSOC"
+        private const int MaxWorkerPngBytes = 128 * 1024 * 1024;
+        private const int MaxWorkerWords = 1_000_000;
 
         public TesseractOcrProvider()
         {
@@ -66,20 +67,11 @@ namespace freesnip.native
             }
 
             await _queue.DisposeAsync().ConfigureAwait(false);
-            await NativeOcrGate.WaitAsync().ConfigureAwait(false);
-            try
-            {
-                DisposeSharedEngine();
-            }
-            finally
-            {
-                NativeOcrGate.Release();
-            }
         }
 
         private static async Task EnsureInitializedAsync(CancellationToken cancellationToken)
         {
-            await OcrInstallationHelper.EnsureTesseractReadyAsync(cancellationToken).ConfigureAwait(false);
+            await OcrInstallationHelper.EnsureTessDataReadyAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private static bool HasTessData(string tessDataPath, string fileName)
@@ -148,77 +140,186 @@ namespace freesnip.native
 
         private static async Task<TesseractRawResult> RecognizePngAsync(string tessDataPath, byte[] pngBytes, PageSegMode segmentation, bool adaptiveThreshold, TimeSpan timeout, CancellationToken cancellationToken)
         {
-            await NativeOcrGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            Task<TesseractRawResult> work = null;
-            try
-            {
-                work = Task.Run(() => RecognizePng(tessDataPath, pngBytes, segmentation, adaptiveThreshold, cancellationToken));
-                return await work.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
-            }
-            finally
-            {
-                if (work == null)
-                {
-                    NativeOcrGate.Release();
-                }
-                else
-                {
-                    _ = work.ContinueWith(completed =>
-                    {
-                        _ = completed.Exception;
-                        NativeOcrGate.Release();
-                    }, TaskScheduler.Default);
-                }
-            }
-        }
+            if (pngBytes == null || pngBytes.Length == 0) return null;
+            if (pngBytes.Length > MaxWorkerPngBytes) throw new InvalidDataException("OCR image exceeds the worker IPC payload limit.");
 
-        private static TesseractRawResult RecognizePng(string tessDataPath, byte[] pngBytes, PageSegMode segmentation, bool adaptiveThreshold, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            TesseractEngine engine = AcquireSharedEngine(tessDataPath, adaptiveThreshold);
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = RuntimePathHelper.ExecutablePath,
+                Arguments = "--tesseract-ocr-worker",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+            if (!process.Start()) throw new IOException("Could not start the isolated Tesseract worker process.");
+
+            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+            Task writeTask = Task.Run(() => WriteWorkerRequest(process.StandardInput.BaseStream, tessDataPath, pngBytes, segmentation, adaptiveThreshold), CancellationToken.None);
+            Task<TesseractRawResult> readTask = Task.Run(() => ReadWorkerResponse(process.StandardOutput.BaseStream), CancellationToken.None);
+
             try
             {
-                using Pix pix = Pix.LoadFromMemory(pngBytes);
-                using Page page = engine.Process(pix, segmentation);
-                return ReadPage(page);
+                await writeTask.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+                process.StandardInput.Close();
+
+                TesseractRawResult result = await readTask.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+                await process.WaitForExitAsync(cancellationToken).WaitAsync(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+                if (process.ExitCode != 0 && result == null)
+                {
+                    string stderr = await stderrTask.ConfigureAwait(false);
+                    throw new IOException($"Tesseract worker exited with code {process.ExitCode}: {stderr}");
+                }
+                return result;
             }
-            catch
+            catch (Exception ex) when (ex is TimeoutException || ex is OperationCanceledException)
             {
-                DisposeSharedEngine();
+                TryKillWorker(process);
+                if (ex is TimeoutException) throw;
                 throw;
             }
-        }
-
-        private static TesseractEngine AcquireSharedEngine(string tessDataPath, bool adaptiveThreshold)
-        {
-            if (_sharedEngine != null
-                && string.Equals(_sharedEnginePath, tessDataPath, StringComparison.OrdinalIgnoreCase)
-                && _sharedEngineAdaptive == adaptiveThreshold)
-            {
-                return _sharedEngine;
-            }
-
-            DisposeSharedEngine();
-            _sharedEngine = CreateEngine(tessDataPath, adaptiveThreshold);
-            _sharedEnginePath = tessDataPath;
-            _sharedEngineAdaptive = adaptiveThreshold;
-            return _sharedEngine;
-        }
-
-        private static void DisposeSharedEngine()
-        {
-            try
-            {
-                _sharedEngine?.Dispose();
-            }
             catch
             {
+                TryKillWorker(process);
+                throw;
             }
             finally
             {
-                _sharedEngine = null;
-                _sharedEnginePath = null;
+                try { process.StandardInput.Close(); } catch { }
+                if (!process.HasExited) TryKillWorker(process);
             }
+        }
+
+        private static void WriteWorkerRequest(Stream stream, string tessDataPath, byte[] pngBytes, PageSegMode segmentation, bool adaptiveThreshold)
+        {
+            using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+            writer.Write(WorkerMagic);
+            writer.Write(tessDataPath ?? string.Empty);
+            writer.Write((int)segmentation);
+            writer.Write(adaptiveThreshold);
+            writer.Write(pngBytes.Length);
+            writer.Write(pngBytes);
+            writer.Flush();
+        }
+
+        private static TesseractRawResult ReadWorkerResponse(Stream stream)
+        {
+            using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
+            int magic = reader.ReadInt32();
+            if (magic != WorkerMagic) throw new InvalidDataException("Invalid response from Tesseract worker.");
+            bool success = reader.ReadBoolean();
+            if (!success)
+            {
+                string workerError = reader.ReadString();
+                throw new IOException("Tesseract worker failed: " + workerError);
+            }
+
+            var result = new TesseractRawResult
+            {
+                Text = reader.ReadString(),
+                Words = new List<TesseractRawWord>()
+            };
+            int count = reader.ReadInt32();
+            if (count < 0 || count > MaxWorkerWords) throw new InvalidDataException("Invalid Tesseract worker word count.");
+            for (int i = 0; i < count; i++)
+            {
+                result.Words.Add(new TesseractRawWord
+                {
+                    Text = reader.ReadString(),
+                    X = reader.ReadInt32(),
+                    Y = reader.ReadInt32(),
+                    Width = reader.ReadInt32(),
+                    Height = reader.ReadInt32(),
+                    Confidence = reader.ReadSingle()
+                });
+            }
+            return result;
+        }
+
+        private static void WriteWorkerResponse(Stream stream, TesseractRawResult result)
+        {
+            using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+            writer.Write(WorkerMagic);
+            writer.Write(true);
+            writer.Write(result?.Text ?? string.Empty);
+            int count = result?.Words?.Count ?? 0;
+            writer.Write(count);
+            if (result?.Words != null)
+            {
+                foreach (var word in result.Words)
+                {
+                    writer.Write(word.Text ?? string.Empty);
+                    writer.Write(word.X);
+                    writer.Write(word.Y);
+                    writer.Write(word.Width);
+                    writer.Write(word.Height);
+                    writer.Write(word.Confidence);
+                }
+            }
+            writer.Flush();
+        }
+
+        private static void WriteWorkerError(Stream stream, Exception ex)
+        {
+            using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+            writer.Write(WorkerMagic);
+            writer.Write(false);
+            writer.Write(ex?.Message ?? "Unknown OCR worker failure.");
+            writer.Flush();
+        }
+
+        internal static async Task<int> RunWorkerAsync(Stream input, Stream output, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await OcrInstallationHelper.EnsureTesseractReadyAsync(cancellationToken).ConfigureAwait(false);
+                using var reader = new BinaryReader(input, Encoding.UTF8, leaveOpen: true);
+                int magic = reader.ReadInt32();
+                if (magic != WorkerMagic) throw new InvalidDataException("Invalid Tesseract worker request.");
+                string tessDataPath = reader.ReadString();
+                var segmentation = (PageSegMode)reader.ReadInt32();
+                bool adaptiveThreshold = reader.ReadBoolean();
+                int length = reader.ReadInt32();
+                if (length <= 0 || length > MaxWorkerPngBytes) throw new InvalidDataException("Invalid Tesseract worker image length.");
+                byte[] pngBytes = reader.ReadBytes(length);
+                if (pngBytes.Length != length) throw new EndOfStreamException("Incomplete Tesseract worker image payload.");
+
+                TesseractRawResult raw = RecognizePngInWorker(tessDataPath, pngBytes, segmentation, adaptiveThreshold, cancellationToken);
+                WriteWorkerResponse(output, raw);
+                await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    WriteWorkerError(output, ex);
+                    await output.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch { }
+                return 1;
+            }
+        }
+
+        private static TesseractRawResult RecognizePngInWorker(string tessDataPath, byte[] pngBytes, PageSegMode segmentation, bool adaptiveThreshold, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using TesseractEngine engine = CreateEngine(tessDataPath, adaptiveThreshold);
+            using Pix pix = Pix.LoadFromMemory(pngBytes);
+            using Page page = engine.Process(pix, segmentation);
+            return ReadPage(page);
+        }
+
+        private static void TryKillWorker(Process process)
+        {
+            try
+            {
+                if (process != null && !process.HasExited) process.Kill(entireProcessTree: true);
+            }
+            catch { }
         }
 
         private static PageSegMode ResolveSegmentation(int width, int height)
@@ -343,4 +444,3 @@ namespace freesnip.native
         }
     }
 }
-

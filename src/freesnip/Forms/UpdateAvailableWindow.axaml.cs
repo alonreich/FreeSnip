@@ -25,6 +25,7 @@ public partial class UpdateAvailableWindow : Window
         InitializeComponent();
 
         Wire("UpdateNowBtn", UpdateChoice.UpdateNow);
+        Wire("RemindLaterBtn", UpdateChoice.NotNow);
         Wire("SkipBtn", UpdateChoice.SkipThisVersion);
         Wire("NeverBtn", UpdateChoice.NeverTellMeAgain);
 

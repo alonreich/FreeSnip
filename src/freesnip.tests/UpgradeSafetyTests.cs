@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Xml.Linq;
 using Microsoft.Win32;
 using freesnip.foundation.core;
@@ -405,9 +405,6 @@ public class UpgradeSafetyTests
         }
     }
 
-    // ---------------------------------------------------------------------------------------------
-    // Upgrade persistence: original-user identity, deterministic selection, exact restore, ownership
-    // ---------------------------------------------------------------------------------------------
 
     private const string UserASid = "S-1-5-21-1111111111-2222222222-3333333333-1001";
 
@@ -589,7 +586,6 @@ public class UpgradeSafetyTests
             string staging = Path.Combine(files.Root, "Staging_1234");
             string manifest = await userA.WriteManifestAsync(staging);
 
-            // Elevated worker runs as user B: its own folders hold a different, valid configuration.
             string userBConfig = Path.Combine(files.Root, "userB", "AppData", "Roaming", "FreeSnip");
             StartupTaskHelper.ConfigurationFolder = userBConfig;
             WriteIni(Path.Combine(userBConfig, "freesnip.ini"), "[Core]\r\nRegionHotkey=ADMIN B\r\n");
@@ -607,7 +603,6 @@ public class UpgradeSafetyTests
             Assert.Equal(Path.GetFullPath(userA.CanonicalSettingsPath), txn.Selection.Selected!.Path);
             Assert.StartsWith(userA.LocalAppData, txn.BackupFolder!, StringComparison.OrdinalIgnoreCase);
 
-            // Manifest validation: wrong folder, tampering and staleness are rejected.
             Assert.Throws<InvalidDataException>(() => UpgradeUserContext.LoadManifest(manifest, files.Root, DateTime.UtcNow));
             Assert.Throws<InvalidDataException>(() => UpgradeUserContext.LoadManifest(manifest, staging, DateTime.UtcNow.AddDays(2)));
             await File.WriteAllTextAsync(manifest, (await File.ReadAllTextAsync(manifest)).Replace(UserASid, "not-a-sid"));

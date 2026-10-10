@@ -5,6 +5,8 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Linq;
 using System.Threading;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace freesnip.helpers
 {
@@ -12,6 +14,7 @@ namespace freesnip.helpers
     {
         private const string PayloadName = "payload.zip";
         private static string _nativeDependencyDirectory;
+        private static readonly List<IntPtr> LoadedNativeHandles = new();
 
         public static bool HasEmbeddedPayload()
         {
@@ -34,7 +37,7 @@ namespace freesnip.helpers
             _nativeDependencyDirectory = Path.Combine(
                 DeploymentFootprint.TempAppFolder,
                 "Runtime",
-                Process.GetCurrentProcess().Id.ToString());
+                $"{Process.GetCurrentProcess().Id}_{Guid.NewGuid():N}");
             Directory.CreateDirectory(_nativeDependencyDirectory);
             NativeDllSearchPath.Register(_nativeDependencyDirectory);
             return _nativeDependencyDirectory;
@@ -42,50 +45,43 @@ namespace freesnip.helpers
 
         public static void ExtractCriticalDependencies()
         {
-            string[] criticalDlls = { "libSkiaSharp.dll", "libHarfBuzzSharp.dll", "av_libglesv2.dll" };
+            string[] criticalDlls = { "av_libglesv2.dll", "libHarfBuzzSharp.dll", "libSkiaSharp.dll" };
             string targetDir = GetNativeDependencyDirectory();
 
-            string resourceName = Assembly.GetExecutingAssembly().GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(PayloadName, StringComparison.OrdinalIgnoreCase));
-            if (resourceName == null)
+            // Installed files live below Program Files and are protected by installation ACLs.
+            // Portable/bootstrap execution uses a unique per-process directory so native code is
+            // never trusted from a predictable user-writable temp path.
+            if (StartupTaskHelper.IsRunningFromInstallPath())
             {
                 return;
             }
 
-            try
+            string resourceName = Assembly.GetExecutingAssembly().GetManifestResourceNames()
+                .FirstOrDefault(n => n.EndsWith(PayloadName, StringComparison.OrdinalIgnoreCase));
+            if (resourceName == null) return;
+
+            using Stream zipStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+            if (zipStream == null) throw new InvalidDataException("Embedded payload stream is unavailable.");
+
+            using ZipArchive archive = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: false);
+            foreach (string dll in criticalDlls)
             {
-                using Stream zipStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
-                if (zipStream == null)
-                {
-                    return;
-                }
+                ZipArchiveEntry entry = archive.GetEntry(dll)
+                    ?? throw new InvalidDataException($"Embedded payload is missing required dependency '{dll}'.");
+                string destination = Path.Combine(targetDir, dll);
 
-                using ZipArchive archive = new ZipArchive(zipStream);
-                foreach (string dll in criticalDlls)
-                {
-                    string destination = Path.Combine(targetDir, dll);
-                    if (File.Exists(destination))
-                    {
-                        continue;
-                    }
-
-                    ZipArchiveEntry entry = archive.GetEntry(dll);
-                    if (entry == null)
-                    {
-                        continue;
-                    }
-
-                    try
-                    {
-                        entry.ExtractToFile(destination, true);
-                    }
-                    catch
-                    {
-                    }
-                }
+                using Stream input = entry.Open();
+                using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 81920, FileOptions.WriteThrough);
+                input.CopyTo(output);
+                output.Flush(flushToDisk: true);
             }
-            catch (Exception ex)
+
+            NativeDllSearchPath.Register(targetDir);
+            foreach (string dll in criticalDlls)
             {
-                BootstrapDebug.Log($"Failed to extract critical dependencies: {ex.Message}");
+                string fullPath = Path.Combine(targetDir, dll);
+                IntPtr handle = NativeLibrary.Load(fullPath);
+                lock (LoadedNativeHandles) LoadedNativeHandles.Add(handle);
             }
         }
 

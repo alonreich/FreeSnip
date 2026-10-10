@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -56,6 +57,7 @@ internal static class DeploymentLifecycle
         return args.Any(arg => arg.Equals("--uninstall", StringComparison.OrdinalIgnoreCase)
                              || arg.Equals("--install", StringComparison.OrdinalIgnoreCase)
                              || arg.Equals("--install-worker", StringComparison.OrdinalIgnoreCase)
+                             || arg.Equals("--stage-cleanup-worker", StringComparison.OrdinalIgnoreCase)
                              || arg.Equals("--cleanup-worker", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -63,13 +65,16 @@ internal static class DeploymentLifecycle
     {
         if (args == null || args.Length == 0) return false;
         return args.Any(arg => arg.Equals("--uninstall", StringComparison.OrdinalIgnoreCase))
-            && !args.Any(arg => arg.Equals("--cleanup-worker", StringComparison.OrdinalIgnoreCase));
+            && !args.Any(arg => arg.Equals("--cleanup-worker", StringComparison.OrdinalIgnoreCase))
+            && !args.Any(arg => arg.Equals("--stage-cleanup-worker", StringComparison.OrdinalIgnoreCase));
     }
 
     public static async Task<int> RunLifecycleCommandAsync(string[] args, CancellationToken ct = default)
     {
         try
         {
+            if (args != null && args.Any(arg => arg.Equals("--stage-cleanup-worker", StringComparison.OrdinalIgnoreCase)))
+                return await StageProtectedUninstallWorkerAsync(args, ct).ConfigureAwait(false);
             if (IsUninstallLauncherCommand(args)) return await RunUninstallLauncherAsync(args, ct).ConfigureAwait(false);
             if (args != null && args.Any(arg => arg.Equals("--cleanup-worker", StringComparison.OrdinalIgnoreCase)))
                 return await RunUninstallAsync(args, ct).ConfigureAwait(false);
@@ -87,6 +92,14 @@ internal static class DeploymentLifecycle
     {
         string[] cmdArgs = Environment.GetCommandLineArgs();
         bool isAutoUpdate = cmdArgs.Any(a => a.Equals("--auto-update", StringComparison.OrdinalIgnoreCase));
+        string deltaPackagePath = null;
+        for (int i = 0; i < cmdArgs.Length; i++)
+        {
+            if (cmdArgs[i].Equals("--delta", StringComparison.OrdinalIgnoreCase) && i + 1 < cmdArgs.Length)
+            {
+                deltaPackagePath = cmdArgs[i + 1].Trim('"');
+            }
+        }
 
         for (int i = 0; i < cmdArgs.Length; i++)
         {
@@ -97,7 +110,16 @@ internal static class DeploymentLifecycle
                     try
                     {
                         using var p = Process.GetProcessById(waitPid);
-                        p.WaitForExit(15000);
+                        if (!p.HasExited)
+                        {
+                            if (isAutoUpdate)
+                            {
+                                try { _ = InstanceIpcClient.SendMessageAsync(InstanceIpcRelay.MessageShutdown, 1000); } catch { }
+                            }
+                            using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                            waitCts.CancelAfter(TimeSpan.FromSeconds(30));
+                            await p.WaitForExitAsync(waitCts.Token).ConfigureAwait(false);
+                        }
                     }
                     catch { }
                 }
@@ -107,7 +129,7 @@ internal static class DeploymentLifecycle
         bool isWorker = isWorkerOverride ?? cmdArgs.Any(a => a.Equals("--install-worker", StringComparison.OrdinalIgnoreCase));
         if (!isWorker)
         {
-            await RelaunchInstallFromTempAsync(ct).ConfigureAwait(false);
+            await RelaunchInstallElevatedAsync(ct).ConfigureAwait(false);
             return 0;
         }
 
@@ -115,6 +137,7 @@ internal static class DeploymentLifecycle
         {
             string elevArgs = "--install --install-worker";
             if (isAutoUpdate) elevArgs += " --auto-update";
+            if (!string.IsNullOrWhiteSpace(deltaPackagePath)) elevArgs += $" --delta \"{deltaPackagePath}\"";
             for (int i = 0; i < cmdArgs.Length; i++)
             {
                 if (cmdArgs[i].Equals("--wait-pid", StringComparison.OrdinalIgnoreCase) && i + 1 < cmdArgs.Length)
@@ -122,8 +145,16 @@ internal static class DeploymentLifecycle
                     elevArgs += $" --wait-pid {cmdArgs[i + 1]}";
                 }
             }
-            string forwardedContext = UpgradeUserContext.GetManifestArgument(cmdArgs);
-            if (!string.IsNullOrWhiteSpace(forwardedContext)) elevArgs += $" {UpgradeUserContext.ArgumentName} \"{forwardedContext}\"";
+            string inlineContext = UpgradeUserContext.GetInlineArgument(cmdArgs);
+            if (!string.IsNullOrWhiteSpace(inlineContext))
+            {
+                elevArgs += $" {UpgradeUserContext.InlineArgumentName} \"{inlineContext}\"";
+            }
+            else
+            {
+                string forwardedContext = UpgradeUserContext.GetManifestArgument(cmdArgs);
+                if (!string.IsNullOrWhiteSpace(forwardedContext)) elevArgs += $" {UpgradeUserContext.ArgumentName} \"{forwardedContext}\"";
+            }
             StartElevated(RuntimePathHelper.ExecutablePath, elevArgs);
             return 0;
         }
@@ -207,7 +238,7 @@ internal static class DeploymentLifecycle
             bool keepUserSettings = decision.KeepUserSettings;
             bool cleanWipeRequested = decision.CleanWipe;
 
-            if (!await WaitForApplicationsToCloseAsync(progress, ct).ConfigureAwait(false)) return 0;
+            if (!await WaitForApplicationsToCloseAsync(progress, ct, isAutoUpdate).ConfigureAwait(false)) return 0;
 
             UpgradeSettingsTransaction settingsTransaction = null;
             bool restoreAdminStartup = false;
@@ -228,42 +259,106 @@ internal static class DeploymentLifecycle
             await logger.LogAsync("UPGRADE", "ELEVATION_PRESCAN", $"restoreAdminStartup={restoreAdminStartup}, keepUserSettings={keepUserSettings}, originalSid={userContext?.UserSid ?? "n/a"}", ct).ConfigureAwait(false);
             StartupTaskHelper.LogInstallationElevationState($"Pre-cleanup scan: restoreAdminStartup={restoreAdminStartup}, keepUserSettings={keepUserSettings}, originalSid={userContext?.UserSid ?? "n/a"}");
             string settingsBackupFolder = settingsTransaction?.BackupFolder;
+            string shadowDir = Path.Combine(SessionTempFolder, "ShadowStaging_" + Guid.NewGuid().ToString("N"));
+            string rollbackDir = Path.Combine(SessionTempFolder, "Rollback_" + Guid.NewGuid().ToString("N"));
             try
             {
                 StartupTaskHelper.RequireInstalledApplicationsClosed();
-                await PerformFullHostCleanupAsync(progress, logger, "Pre-Install Cleanup", 5, 60, requireZeroFootprint: false, purgeUserArtifacts: cleanWipeRequested, ct).ConfigureAwait(false);
 
-                await ReportAsync(progress, logger, 65, "DEPLOY", "PAYLOAD", "Extracting assets...", ct).ConfigureAwait(false);
-                await InstallFreshAsync(progress, logger, ct).ConfigureAwait(false);
-                if (settingsTransaction != null)
+                // Phase 1: Shadow Staging and probe verification
+                await ReportAsync(progress, logger, 50, "STAGE", "SHADOW", "Staging new assets into shadow folder...", ct).ConfigureAwait(false);
+                await PopulateStagingDirectoryAsync(shadowDir, deltaPackagePath, logger, ct).ConfigureAwait(false);
+
+                string stagedExe = Path.Combine(shadowDir, DeploymentFootprint.AppName + ".exe");
+                if (File.Exists(stagedExe))
                 {
-                    await settingsTransaction.RestoreAsync(ct).ConfigureAwait(false);
-                    await logger.LogAsync("UPGRADE", "RESTORED", $"Settings restored to {userContext.CanonicalSettingsPath}", ct).ConfigureAwait(false);
-                    var startup = await StartupTaskHelper.RestoreStartupForUpgradeAsync(userContext, restoreAdminStartup).ConfigureAwait(false);
-                    await settingsTransaction.VerifyAsync(startup.RunAsAdministratorOnStartup, ct).ConfigureAwait(false);
-                    await logger.LogAsync("UPGRADE", "VERIFIED", $"Settings verified (sha256={settingsTransaction.ExpectedSha256 ?? "n/a"}, startupElevated={startup.RunAsAdministratorOnStartup}, modified={startup.SettingsFileModified})", ct).ConfigureAwait(false);
+                    await logger.LogAsync("STAGE", "PROBE", $"Verifying staged binary with --test-probe: {stagedExe}", ct).ConfigureAwait(false);
+                    int probeCode = await RunHiddenProcessAsync(stagedExe, "--test-probe", 10000, logger, ct).ConfigureAwait(false);
+                    if (probeCode != 0)
+                    {
+                        throw new InvalidOperationException($"Staged FreeSnip binary probe verification failed (exit code {probeCode}). Existing installation was preserved.");
+                    }
+                    await logger.LogAsync("STAGE", "PROBE_SUCCESS", "Staged binary passed probe verification.", ct).ConfigureAwait(false);
                 }
-                else
+
+                // Phase 2: Rollback backup of existing installation
+                if (existingFreeSnip && !cleanWipeRequested && Directory.Exists(StartupTaskHelper.InstallFolder))
                 {
-                    await StartupTaskHelper.RestoreStartupAfterInstallAsync(keepUserSettings, restoreAdminStartup).ConfigureAwait(false);
+                    await ReportAsync(progress, logger, 60, "BACKUP", "ROLLBACK", "Creating rollback backup of existing installation...", ct).ConfigureAwait(false);
+                    await CopyDirectoryRecursiveAsync(StartupTaskHelper.InstallFolder, rollbackDir, logger, ct).ConfigureAwait(false);
+                    await logger.LogAsync("UPGRADE", "ROLLBACK_PREPARED", $"Rollback backup created at {rollbackDir}", ct).ConfigureAwait(false);
                 }
-                await LaunchInstalledApplicationAsync().ConfigureAwait(false);
-                settingsTransaction?.Commit();
-                await ReportAsync(progress, logger, 100, "SUCCESS", "COMPLETE", "Deployment finalized.", ct).ConfigureAwait(false);
-                if (isAutoUpdate)
+
+                // Pre-install host cleanup; if upgrading, preserve the existing install folder until swap
+                await PerformFullHostCleanupAsync(progress, logger, "Pre-Install Cleanup", 65, 80,
+                    requireZeroFootprint: false,
+                    purgeUserArtifacts: cleanWipeRequested,
+                    includeInstallFolder: cleanWipeRequested || !existingFreeSnip,
+                    ct: ct).ConfigureAwait(false);
+
+                // Phase 3: Atomic swap with rollback safety
+                try
                 {
-                    await Task.Delay(1000, ct).ConfigureAwait(false);
+                    await ReportAsync(progress, logger, 85, "DEPLOY", "SWAP", "Deploying verified assets...", ct).ConfigureAwait(false);
+                    Directory.CreateDirectory(StartupTaskHelper.InstallFolder);
+                    await CopyDirectoryRecursiveAsync(shadowDir, StartupTaskHelper.InstallFolder, logger, ct).ConfigureAwait(false);
+
+                    await InitializeInstalledConfigurationAsync(logger, ct).ConfigureAwait(false);
+                    await WriteUninstallRegistryAsync(logger, ct).ConfigureAwait(false);
+                    await RegisterFileAssociationsAsync(logger, ct).ConfigureAwait(false);
+                    await CreateStartMenuShortcutAsync(logger, ct).ConfigureAwait(false);
+                    NotifyShellAssociationsChanged();
+
+                    if (settingsTransaction != null)
+                    {
+                        await settingsTransaction.RestoreAsync(ct).ConfigureAwait(false);
+                        await logger.LogAsync("UPGRADE", "RESTORED", $"Settings restored to {userContext.CanonicalSettingsPath}", ct).ConfigureAwait(false);
+                        var startup = await StartupTaskHelper.RestoreStartupForUpgradeAsync(userContext, restoreAdminStartup).ConfigureAwait(false);
+                        await settingsTransaction.VerifyAsync(startup.RunAsAdministratorOnStartup, ct).ConfigureAwait(false);
+                        await logger.LogAsync("UPGRADE", "VERIFIED", $"Settings verified (sha256={settingsTransaction.ExpectedSha256 ?? "n/a"}, startupElevated={startup.RunAsAdministratorOnStartup}, modified={startup.SettingsFileModified})", ct).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await StartupTaskHelper.RestoreStartupAfterInstallAsync(keepUserSettings, restoreAdminStartup).ConfigureAwait(false);
+                    }
+
+                    await LaunchInstalledApplicationAsync().ConfigureAwait(false);
+                    settingsTransaction?.Commit();
+                    await ReportAsync(progress, logger, 100, "SUCCESS", "COMPLETE", "Deployment finalized.", ct).ConfigureAwait(false);
+                    if (isAutoUpdate)
+                    {
+                        await Task.Delay(1000, ct).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await AwaitUserAcknowledgementAsync(progress, logger, "Installation complete. Click Finish to close.", ct).ConfigureAwait(false);
+                    }
                 }
-                else
+                catch (Exception swapEx)
                 {
-                    await AwaitUserAcknowledgementAsync(progress, logger, "Installation complete. Click Finish to close.", ct).ConfigureAwait(false);
+                    await logger.LogAsync("UPGRADE", "SWAP_ERROR", $"Swap failed: {swapEx.Message}. Initiating rollback...", ct, swapEx).ConfigureAwait(false);
+                    if (Directory.Exists(rollbackDir) && Directory.EnumerateFileSystemEntries(rollbackDir).Any())
+                    {
+                        try
+                        {
+                            await CopyDirectoryRecursiveAsync(rollbackDir, StartupTaskHelper.InstallFolder, logger, ct).ConfigureAwait(false);
+                            await logger.LogAsync("UPGRADE", "ROLLBACK_RESTORED", "Rollback snapshot successfully restored previous installation.", ct).ConfigureAwait(false);
+                        }
+                        catch (Exception rbEx)
+                        {
+                            await logger.LogAsync("UPGRADE", "ROLLBACK_ERROR", $"Failed to restore rollback snapshot: {rbEx.Message}", ct, rbEx).ConfigureAwait(false);
+                        }
+                    }
+
+                    if (settingsBackupFolder != null && settingsTransaction?.IsCommitted != true)
+                        throw new IOException("Upgrade failed. Previous installation was restored, and settings recovery copy is kept at: " + settingsBackupFolder, swapEx);
+                    throw;
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                if (settingsBackupFolder != null && settingsTransaction?.IsCommitted != true)
-                    throw new IOException("Upgrade failed. Your settings recovery copy is kept at: " + settingsBackupFolder, ex);
-                throw;
+                try { if (Directory.Exists(shadowDir)) Directory.Delete(shadowDir, true); } catch { }
+                try { if (Directory.Exists(rollbackDir)) Directory.Delete(rollbackDir, true); } catch { }
             }
             return 0;
         }
@@ -313,6 +408,23 @@ internal static class DeploymentLifecycle
     /// </summary>
     private static async Task<UpgradeUserContext> ResolveUpgradeUserContextAsync(string[] cmdArgs, DeploymentLogger logger, CancellationToken ct)
     {
+        string inlineContext = UpgradeUserContext.GetInlineArgument(cmdArgs);
+        if (!string.IsNullOrWhiteSpace(inlineContext))
+        {
+            UpgradeUserContext loaded;
+            try
+            {
+                loaded = UpgradeUserContext.LoadInline(inlineContext, DateTime.UtcNow);
+            }
+            catch (InvalidDataException ex)
+            {
+                await logger.LogAsync("UPGRADE", "CONTEXT_INVALID", ex.Message, ct).ConfigureAwait(false);
+                throw new IOException("The original user upgrade context could not be validated. No files were changed. " + ex.Message, ex);
+            }
+            await logger.LogAsync("UPGRADE", "CONTEXT", $"Original user SID={loaded.UserSid} AppData='{loaded.AppData}' LocalAppData='{loaded.LocalAppData}' hadElevatedTask={loaded.HadElevatedStartupTask}", ct).ConfigureAwait(false);
+            return loaded;
+        }
+
         string manifest = UpgradeUserContext.GetManifestArgument(cmdArgs);
         if (!string.IsNullOrWhiteSpace(manifest))
         {
@@ -647,9 +759,9 @@ internal static class DeploymentLifecycle
         }
     }
 
-    internal static List<string> ComputeCleanupDirectoryTargets(bool purgeUserArtifacts)
+    internal static List<string> ComputeCleanupDirectoryTargets(bool purgeUserArtifacts, bool includeInstallFolder = true)
     {
-        var targets = DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: true).ToList();
+        var targets = DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: includeInstallFolder).ToList();
         var allowedRoots = new[]
         {
             DeploymentFootprint.InstallFolder,
@@ -672,15 +784,15 @@ internal static class DeploymentLifecycle
         return targets;
     }
 
-    private static async Task PerformFullHostCleanupAsync(DeploymentProgress progress, DeploymentLogger logger, string op, int start, int end, bool requireZeroFootprint, bool purgeUserArtifacts, CancellationToken ct)
+    private static async Task PerformFullHostCleanupAsync(DeploymentProgress progress, DeploymentLogger logger, string op, int start, int end, bool requireZeroFootprint, bool purgeUserArtifacts, CancellationToken ct, bool includeInstallFolder = true)
     {
         Interlocked.Exchange(ref _pendingRebootDeletes, 0);
-        await logger.LogAsync("CLEANUP", "START", $"Performing Scorched Earth for: {op}", ct).ConfigureAwait(false);
+        await logger.LogAsync("CLEANUP", "START", $"Performing host cleanup for: {op}", ct).ConfigureAwait(false);
 
         await ReportAsync(progress, logger, start + 10, "CLEANUP", "TASKS", "Removing triggers...", ct).ConfigureAwait(false);
         await RunHiddenProcessAsync("schtasks.exe", $"/Delete /TN \"{DeploymentFootprint.ScheduledTaskName}\" /F", 5000, logger, ct).ConfigureAwait(false);
-        var targets = ComputeCleanupDirectoryTargets(purgeUserArtifacts);
-        foreach (string skipped in DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: true).Except(targets, StringComparer.OrdinalIgnoreCase))
+        var targets = ComputeCleanupDirectoryTargets(purgeUserArtifacts, includeInstallFolder);
+        foreach (string skipped in DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: includeInstallFolder).Except(targets, StringComparer.OrdinalIgnoreCase))
         {
             await logger.LogAsync("FILESYSTEM", "SKIP_GUARD", $"Refusing to purge outside owned roots: {skipped}", ct).ConfigureAwait(false);
         }
@@ -1131,56 +1243,81 @@ internal static class DeploymentLifecycle
 
     private static async Task<int> RelaunchUninstallElevatedAsync(CancellationToken ct)
     {
-        Directory.CreateDirectory(SessionTempFolder);
+        int pid = Process.GetCurrentProcess().Id;
+        string stageArgs = $"--uninstall --stage-cleanup-worker {pid}";
+
+        if (!StartupTaskHelper.IsElevated())
+        {
+            bool started = TryStartElevated(RuntimePathHelper.ExecutablePath, stageArgs);
+            await Task.CompletedTask;
+            return started ? 0 : 1;
+        }
+
+        return await StageProtectedUninstallWorkerAsync(new[] { "--uninstall", "--stage-cleanup-worker", pid.ToString(CultureInfo.InvariantCulture) }, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<int> StageProtectedUninstallWorkerAsync(string[] args, CancellationToken ct)
+    {
+        if (!StartupTaskHelper.IsElevated())
+        {
+            return 1;
+        }
+
+        int parentPid = ParseParentPid(args);
+        string stageRoot = Path.Combine(DeploymentFootprint.ProgramDataFolder, "Lifecycle", "Uninstall_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(stageRoot);
+
         string src = RuntimePathHelper.ExecutablePath;
-        string srcDir = Path.GetDirectoryName(src);
-        string temp = Path.Combine(SessionTempFolder, "Uninstall.exe");
-        
-        BootstrapDebug.Log($"Relaunching: Copying {src} -> {temp}");
-        File.Copy(src, temp, true);
-        
+        string srcDir = Path.GetDirectoryName(src) ?? AppContext.BaseDirectory;
+        string stagedExe = Path.Combine(stageRoot, "Uninstall.exe");
+
+        await CopyAndVerifyStagedFileAsync(src, stagedExe, ct).ConfigureAwait(false);
         if (Directory.Exists(srcDir))
         {
             foreach (string dll in Directory.GetFiles(srcDir, "*.dll"))
             {
-                try 
-                { 
-                    string dest = Path.Combine(SessionTempFolder, Path.GetFileName(dll));
-                    File.Copy(dll, dest, true); 
-                } 
-                catch (Exception ex)
-                {
-                    LogSwallowed("RelaunchUninstallElevatedAsync", $"Copy {dll} -> {SessionTempFolder}", ex);
-                }
+                ct.ThrowIfCancellationRequested();
+                string destination = Path.Combine(stageRoot, Path.GetFileName(dll));
+                await CopyAndVerifyStagedFileAsync(dll, destination, ct).ConfigureAwait(false);
             }
         }
 
-        int pid = Process.GetCurrentProcess().Id;
-        string newArgs = $"--uninstall --cleanup-worker {pid}";
-
-        bool started = false;
-        try
+        string workerArgs = $"--uninstall --cleanup-worker {parentPid}";
+        Process.Start(new ProcessStartInfo
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = temp,
-                Arguments = newArgs,
-                UseShellExecute = false,
-                CreateNoWindow = false
-            };
-            Process.Start(psi);
-            started = true;
-        }
-        catch (Exception ex)
-        {
-            BootstrapDebug.Log("Relaunch fallback to TryStartElevated: " + ex.Message);
-            started = TryStartElevated(temp, newArgs);
-        }
-
-        if (!started) return 1;
-
-        await Task.CompletedTask;
+            FileName = stagedExe,
+            Arguments = workerArgs,
+            UseShellExecute = false,
+            CreateNoWindow = false
+        });
         return 0;
+    }
+
+    private static async Task CopyAndVerifyStagedFileAsync(string source, string destination, CancellationToken ct)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 128, FileOptions.Asynchronous | FileOptions.SequentialScan))
+        await using (var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 128, FileOptions.Asynchronous | FileOptions.WriteThrough))
+        {
+            await input.CopyToAsync(output, 1024 * 128, ct).ConfigureAwait(false);
+            await output.FlushAsync(ct).ConfigureAwait(false);
+            output.Flush(flushToDisk: true);
+        }
+
+        string sourceHash = Convert.ToHexString(await ComputeSha256Async(source, ct).ConfigureAwait(false));
+        string destinationHash = Convert.ToHexString(await ComputeSha256Async(destination, ct).ConfigureAwait(false));
+        if (!string.Equals(sourceHash, destinationHash, StringComparison.OrdinalIgnoreCase))
+        {
+            try { File.Delete(destination); } catch { }
+            throw new IOException("Protected uninstall staging verification failed for " + Path.GetFileName(source));
+        }
+    }
+
+    private static async Task<byte[]> ComputeSha256Async(string path, CancellationToken ct)
+    {
+        using var sha = SHA256.Create();
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 128, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return await sha.ComputeHashAsync(stream, ct).ConfigureAwait(false);
     }
 
     private static async Task<List<string>> CollectResidualFootprintAsync(DeploymentLogger logger, CancellationToken ct)
@@ -1457,6 +1594,73 @@ internal static class DeploymentLifecycle
         }
     }
 
+    private static async Task CopyDirectoryRecursiveAsync(string sourceDir, string targetDir, DeploymentLogger logger, CancellationToken ct)
+    {
+        if (!Directory.Exists(sourceDir)) return;
+        Directory.CreateDirectory(targetDir);
+
+        foreach (string dir in Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            ct.ThrowIfCancellationRequested();
+            string rel = Path.GetRelativePath(sourceDir, dir);
+            Directory.CreateDirectory(Path.Combine(targetDir, rel));
+        }
+
+        foreach (string file in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            ct.ThrowIfCancellationRequested();
+            string rel = Path.GetRelativePath(sourceDir, file);
+            string destination = Path.Combine(targetDir, rel);
+            await CopyFileAggressiveAsync(file, destination, logger, ct).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task PopulateStagingDirectoryAsync(string shadowDir, string deltaPackagePath, DeploymentLogger logger, CancellationToken ct)
+    {
+        Directory.CreateDirectory(shadowDir);
+        string shadowExe = Path.Combine(shadowDir, DeploymentFootprint.AppName + ".exe");
+        string shadowUninstall = Path.Combine(shadowDir, "Uninstall.exe");
+
+        if (!string.IsNullOrWhiteSpace(deltaPackagePath) && File.Exists(deltaPackagePath))
+        {
+            await logger.LogAsync("STAGE", "DELTA_APPLY", $"Applying delta package: {deltaPackagePath}", ct).ConfigureAwait(false);
+            if (Directory.Exists(StartupTaskHelper.InstallFolder))
+            {
+                await CopyDirectoryRecursiveAsync(StartupTaskHelper.InstallFolder, shadowDir, logger, ct).ConfigureAwait(false);
+            }
+            await Task.Run(() => ZipFile.ExtractToDirectory(deltaPackagePath, shadowDir, overwriteFiles: true), ct).ConfigureAwait(false);
+            if (File.Exists(shadowExe))
+            {
+                File.Copy(shadowExe, shadowUninstall, true);
+            }
+        }
+        else
+        {
+            await CopyFileAggressiveAsync(RuntimePathHelper.ExecutablePath, shadowExe, logger, ct).ConfigureAwait(false);
+            if (PayloadExtractor.HasEmbeddedPayload())
+            {
+                await PayloadExtractor.ExtractToAsync(shadowDir, ct).ConfigureAwait(false);
+                await CopyFileAggressiveAsync(shadowExe, shadowUninstall, logger, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                await CopyFileAggressiveAsync(RuntimePathHelper.ExecutablePath, shadowUninstall, logger, ct).ConfigureAwait(false);
+                string srcDir = Path.GetDirectoryName(RuntimePathHelper.ExecutablePath);
+                if (!string.IsNullOrEmpty(srcDir) && Directory.Exists(srcDir) && !string.Equals(srcDir, shadowDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (string dll in Directory.GetFiles(srcDir, "*.dll"))
+                    {
+                        string dest = Path.Combine(shadowDir, Path.GetFileName(dll));
+                        if (!File.Exists(dest))
+                        {
+                            File.Copy(dll, dest, true);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private static async Task LaunchInstalledApplicationAsync()
     {
         const int launchAttempts = 3;
@@ -1556,8 +1760,18 @@ internal static class DeploymentLifecycle
         return false;
     }
 
-    private static async Task<bool> WaitForApplicationsToCloseAsync(DeploymentProgress progress, CancellationToken ct)
+    private static async Task<bool> WaitForApplicationsToCloseAsync(DeploymentProgress progress, CancellationToken ct, bool isAutoUpdate = false)
     {
+        if (isAutoUpdate && StartupTaskHelper.FindRunningInstalledProcesses().Length != 0)
+        {
+            try { _ = InstanceIpcClient.SendMessageAsync(InstanceIpcRelay.MessageShutdown, 1000); } catch { }
+            for (int i = 0; i < 30; i++)
+            {
+                if (StartupTaskHelper.FindRunningInstalledProcesses().Length == 0) break;
+                await Task.Delay(100, ct).ConfigureAwait(false);
+            }
+        }
+
         while (StartupTaskHelper.FindRunningInstalledProcesses().Length != 0)
         {
             ct.ThrowIfCancellationRequested();
@@ -1624,13 +1838,9 @@ internal static class DeploymentLifecycle
         return p.ExitCode;
     }
 
-    private static async Task RelaunchInstallFromTempAsync(CancellationToken ct)
+    private static async Task RelaunchInstallElevatedAsync(CancellationToken ct)
     {
-        Directory.CreateDirectory(SessionTempFolder);
-        string temp = Path.Combine(SessionTempFolder, "Setup.exe");
-        File.Copy(RuntimePathHelper.ExecutablePath, temp, true);
-
-        string extraArgs = "";
+        string extraArgs = string.Empty;
         string[] currentArgs = Environment.GetCommandLineArgs();
         if (currentArgs.Any(a => a.Equals("--auto-update", StringComparison.OrdinalIgnoreCase)))
             extraArgs += " --auto-update";
@@ -1644,11 +1854,19 @@ internal static class DeploymentLifecycle
 
         bool hadElevatedTask = await StartupTaskHelper.HasElevatedStartupTaskAsync().ConfigureAwait(false);
         var originalUser = UpgradeUserContext.CaptureCurrent(hadElevatedTask);
-        string manifest = await originalUser.WriteManifestAsync(SessionTempFolder, ct).ConfigureAwait(false);
-        extraArgs += $" {UpgradeUserContext.ArgumentName} \"{manifest}\"";
-        BootstrapDebug.Log($"Captured original upgrade user SID={originalUser.UserSid} before elevation; manifest={manifest}");
+        string inlineContext = originalUser.ToInlineArgumentValue();
+        extraArgs += $" {UpgradeUserContext.InlineArgumentName} \"{inlineContext}\"";
+        BootstrapDebug.Log($"Captured original upgrade user SID={originalUser.UserSid} before elevation using inline context.");
 
-        Process.Start(new ProcessStartInfo { FileName = temp, Arguments = "--install --install-worker" + extraArgs, UseShellExecute = true, Verb = "runas" });
+        // Elevate the already-open source executable directly. Do not copy executable code into
+        // a user-writable temp directory before crossing the UAC boundary.
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = RuntimePathHelper.ExecutablePath,
+            Arguments = "--install --install-worker" + extraArgs,
+            UseShellExecute = true,
+            Verb = "runas"
+        });
     }
 
     internal sealed class DeploymentProgress : IDisposable

@@ -494,6 +494,7 @@ public static class StartupTaskHelper
             list.Add(Path.Combine(defaultAppData, "SnapVox", "snapvox.ini"));
             list.Add(Path.Combine(defaultLocalAppData, "SnapVox", "snapvox.ini"));
             list.Add(Path.Combine(defaultLocalAppData, "FreeSnip", "freesnip.ini"));
+            list.Add(Path.Combine(defaultLocalAppData, "Temp", "FreeSnip", "Config", "freesnip.ini"));
             list.Add(Path.Combine(defaultProgFiles, "SnapVox", "snapvox.ini"));
             string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
             if (!string.IsNullOrEmpty(progFilesX86))
@@ -533,6 +534,7 @@ public static class StartupTaskHelper
             list.Add(new(Path.Combine(defaultAppData, "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile));
             list.Add(new(Path.Combine(defaultLocalAppData, "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile));
             list.Add(new(Path.Combine(defaultLocalAppData, "FreeSnip", "freesnip.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+            list.Add(new(Path.Combine(defaultLocalAppData, "Temp", "FreeSnip", "Config", "freesnip.ini"), SettingsCandidateOrigin.LegacyUserProfile));
         }
         list.AddRange(GetProgramFilesSettingsCandidates(isDefaultFolder));
         return list.ToArray();
@@ -987,5 +989,3 @@ public static class StartupTaskHelper
         }
     }
 }
-
-

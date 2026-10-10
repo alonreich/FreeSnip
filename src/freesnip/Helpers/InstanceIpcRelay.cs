@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
@@ -15,46 +16,71 @@ namespace freesnip.helpers
         public const string PipeName = @"Local\FreeSnip_Instance_IpcPipe";
         public const string MessageActivate = "ACTIVATE";
         public const string MessageOpenFilePrefix = "OPEN_FILE:";
+        public const string MessageShutdown = "SHUTDOWN";
         public const string Acknowledgment = "ACK";
+        public const int MaxMessageBytes = 32 * 1024;
+        public static readonly TimeSpan ClientReadTimeout = TimeSpan.FromSeconds(5);
 
         internal static async Task<string> ReadLineAsync(PipeStream stream, CancellationToken ct)
         {
-            using var ms = new MemoryStream();
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(ClientReadTimeout);
+            CancellationToken readToken = timeoutCts.Token;
+
+            using var ms = new MemoryStream(capacity: 512);
             var buffer = new byte[256];
-            while (!ct.IsCancellationRequested && stream.IsConnected)
+            while (!readToken.IsCancellationRequested && stream.IsConnected)
             {
-                int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false);
+                int bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), readToken).ConfigureAwait(false);
                 if (bytesRead <= 0) break;
 
                 for (int i = 0; i < bytesRead; i++)
                 {
-                    if (buffer[i] == (byte)'\n')
+                    byte value = buffer[i];
+                    if (value == (byte)'\n')
                     {
-                        return Encoding.UTF8.GetString(ms.ToArray()).Trim();
+                        return Encoding.UTF8.GetString(ms.GetBuffer(), 0, checked((int)ms.Length)).Trim();
                     }
-                    if (buffer[i] != (byte)'\r')
+
+                    if (value == (byte)'\r') continue;
+                    if (ms.Length >= MaxMessageBytes)
                     {
-                        ms.WriteByte(buffer[i]);
+                        throw new InvalidDataException($"IPC command exceeds the {MaxMessageBytes}-byte protocol limit.");
                     }
+                    ms.WriteByte(value);
                 }
             }
-            return ms.Length > 0 ? Encoding.UTF8.GetString(ms.ToArray()).Trim() : null;
+
+            return ms.Length > 0
+                ? Encoding.UTF8.GetString(ms.GetBuffer(), 0, checked((int)ms.Length)).Trim()
+                : null;
         }
 
         internal static async Task WriteLineAsync(PipeStream stream, string text, CancellationToken ct)
         {
+            text ??= string.Empty;
             byte[] bytes = Encoding.UTF8.GetBytes(text + "\n");
-            await stream.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+            if (bytes.Length > MaxMessageBytes + 1)
+            {
+                throw new InvalidDataException($"IPC command exceeds the {MaxMessageBytes}-byte protocol limit.");
+            }
+
+            await stream.WriteAsync(bytes.AsMemory(0, bytes.Length), ct).ConfigureAwait(false);
             await stream.FlushAsync(ct).ConfigureAwait(false);
         }
     }
 
     public sealed class InstanceIpcServer : IDisposable, IAsyncDisposable
     {
+        private const int MaxConcurrentClients = 8;
+
         private readonly Func<string, Task> _messageHandler;
         private readonly string _pipeName;
         private readonly CancellationTokenSource _cts = new();
+        private readonly SemaphoreSlim _clientSlots = new(MaxConcurrentClients, MaxConcurrentClients);
+        private readonly ConcurrentDictionary<int, Task> _activeClients = new();
         private Task _listenerTask;
+        private int _nextClientId;
         private int _isDisposed;
 
         public InstanceIpcServer(Func<string, Task> messageHandler, string pipeName = InstanceIpcRelay.PipeName)
@@ -66,7 +92,7 @@ namespace freesnip.helpers
         public void Start()
         {
             if (Volatile.Read(ref _isDisposed) == 1) return;
-            _listenerTask = Task.Run(() => ListenLoopAsync(_cts.Token));
+            _listenerTask ??= Task.Run(() => ListenLoopAsync(_cts.Token));
         }
 
         private async Task ListenLoopAsync(CancellationToken ct)
@@ -74,20 +100,37 @@ namespace freesnip.helpers
             while (!ct.IsCancellationRequested)
             {
                 NamedPipeServerStream server = null;
+                bool slotAcquired = false;
                 try
                 {
+                    await _clientSlots.WaitAsync(ct).ConfigureAwait(false);
+                    slotAcquired = true;
+
                     server = new NamedPipeServerStream(
                         _pipeName,
                         PipeDirection.InOut,
-                        NamedPipeServerStream.MaxAllowedServerInstances,
+                        MaxConcurrentClients,
                         PipeTransmissionMode.Byte,
-                        PipeOptions.Asynchronous);
+                        PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
                     await server.WaitForConnectionAsync(ct).ConfigureAwait(false);
 
-                    var connectedServer = server;
+                    int clientId = Interlocked.Increment(ref _nextClientId);
+                    NamedPipeServerStream connectedServer = server;
                     server = null;
-                    _ = HandleClientConnectionAsync(connectedServer, ct);
+
+                    Task clientTask = HandleClientConnectionAsync(connectedServer, ct);
+                    _activeClients[clientId] = clientTask;
+                    _ = clientTask.ContinueWith(
+                        _ =>
+                        {
+                            _activeClients.TryRemove(clientId, out _);
+                            _clientSlots.Release();
+                        },
+                        CancellationToken.None,
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                    slotAcquired = false;
                 }
                 catch (OperationCanceledException)
                 {
@@ -109,6 +152,7 @@ namespace freesnip.helpers
                 finally
                 {
                     server?.Dispose();
+                    if (slotAcquired) _clientSlots.Release();
                 }
             }
         }
@@ -141,6 +185,10 @@ namespace freesnip.helpers
                 }
                 catch (OperationCanceledException) { }
                 catch (IOException) { }
+                catch (InvalidDataException ex)
+                {
+                    LogHelper.GetLogger(typeof(InstanceIpcServer)).Warn("Rejected malformed/oversized IPC command", ex);
+                }
                 catch (Exception ex)
                 {
                     LogHelper.GetLogger(typeof(InstanceIpcServer)).Error("Error handling IPC client connection", ex);
@@ -156,35 +204,32 @@ namespace freesnip.helpers
         {
             if (Interlocked.Exchange(ref _isDisposed, 1) != 0) return;
 
-            try
-            {
-                _cts.Cancel();
-            }
-            catch { }
+            try { _cts.Cancel(); } catch { }
 
-            if (_listenerTask != null)
+            var waits = new List<Task>();
+            if (_listenerTask != null) waits.Add(_listenerTask);
+            waits.AddRange(_activeClients.Values);
+
+            if (waits.Count > 0)
             {
                 try
                 {
-                    await Task.WhenAny(_listenerTask, Task.Delay(500)).ConfigureAwait(false);
+                    await Task.WhenAny(Task.WhenAll(waits), Task.Delay(1500)).ConfigureAwait(false);
                 }
                 catch { }
             }
 
+            // Do not dispose _clientSlots here: a timed-out client task may still reach its
+            // continuation and release the slot after the shutdown grace period.
             _cts.Dispose();
         }
 
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _isDisposed, 1) != 0) return;
-
-            try
-            {
-                _cts.Cancel();
-            }
-            catch { }
-
-            _cts.Dispose();
+            try { _cts.Cancel(); } catch { }
+            // Synchronous disposal never blocks the caller. Active handlers observe cancellation and
+            // own/dispose their pipe instances; async callers should prefer DisposeAsync().
         }
     }
 
@@ -210,7 +255,7 @@ namespace freesnip.helpers
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(timeoutMs);
 
-                using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+                using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 await client.ConnectAsync(timeoutMs, cts.Token).ConfigureAwait(false);
 
                 foreach (var message in messages)
@@ -255,10 +300,8 @@ namespace freesnip.helpers
                 });
                 return await SendMessagesAsync(messages, timeoutMs, pipeName, cancellationToken).ConfigureAwait(false);
             }
-            else
-            {
-                return await SendMessagesAsync(new[] { InstanceIpcRelay.MessageActivate }, timeoutMs, pipeName, cancellationToken).ConfigureAwait(false);
-            }
+
+            return await SendMessagesAsync(new[] { InstanceIpcRelay.MessageActivate }, timeoutMs, pipeName, cancellationToken).ConfigureAwait(false);
         }
     }
 }

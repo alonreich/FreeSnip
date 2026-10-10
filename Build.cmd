@@ -94,11 +94,15 @@ if not defined BUILD_VERSION (
   echo ERROR: could not compute a build version.
   exit /b 1
 )
+set "GIT_COMMIT="
+for /f "usebackq delims=" %%G in (`git rev-parse --short HEAD 2^>nul`) do set "GIT_COMMIT=%%G"
+if not defined GIT_COMMIT set "GIT_COMMIT=unknown"
+set "INFORMATIONAL_VERSION=!BUILD_VERSION!+!GIT_COMMIT!"
 set "TAG=v!BUILD_VERSION!"
-set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!BUILD_VERSION! -p:InformationalVersion=!BUILD_VERSION!"
-echo Build version: !BUILD_VERSION!  ^(tag !TAG!^)
+set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!BUILD_VERSION! -p:InformationalVersion=!INFORMATIONAL_VERSION!"
+echo Build version: !BUILD_VERSION!  ^(tag !TAG!, commit !GIT_COMMIT!^)
 
-powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value ('<Project>`r`n  <PropertyGroup>`r`n    <Version>!BUILD_VERSION!</Version>`r`n    <AssemblyVersion>!BUILD_VERSION!</AssemblyVersion>`r`n    <FileVersion>!BUILD_VERSION!</FileVersion>`r`n    <InformationalVersion>!BUILD_VERSION!</InformationalVersion>`r`n    <ProductVersion>!BUILD_VERSION!</ProductVersion>`r`n  </PropertyGroup>`r`n</Project>')" <nul
+powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value ('<Project>`r`n  <PropertyGroup>`r`n    <Version>!BUILD_VERSION!</Version>`r`n    <AssemblyVersion>!BUILD_VERSION!</AssemblyVersion>`r`n    <FileVersion>!BUILD_VERSION!</FileVersion>`r`n    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>`r`n    <ProductVersion>!BUILD_VERSION!</ProductVersion>`r`n  </PropertyGroup>`r`n</Project>')" <nul
 
 echo ###########################################################
 

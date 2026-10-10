@@ -38,6 +38,7 @@ namespace freesnip.forms
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
             InitializeComponent();
+            Title = $"FreeSnip Settings v{RuntimePathHelper.ProductVersion}";
             UiLayoutDirection.Apply(this);
             _config = IniConfig.GetIniSection<CoreConfiguration>();
             LoadSettings();
@@ -89,7 +90,7 @@ namespace freesnip.forms
             if (chkAutoUpdate != null) chkAutoUpdate.IsChecked = _config.AutoUpdateChecks;
 
             var txtAboutVersion = this.FindControl<TextBlock>("TxtAboutVersion");
-            if (txtAboutVersion != null) txtAboutVersion.Text = $"Version {RuntimePathHelper.ProductVersion}";
+            if (txtAboutVersion != null) txtAboutVersion.Text = $"Version {RuntimePathHelper.ProductVersion}" + (RuntimePathHelper.CommitSha != "unknown" ? $" ({RuntimePathHelper.CommitSha})" : "");
 
             var txtAboutFlavor = this.FindControl<TextBlock>("TxtAboutFlavor");
             var txtAboutPlatform = this.FindControl<TextBlock>("TxtAboutPlatform");
@@ -229,27 +230,48 @@ namespace freesnip.forms
             _ = UpdateAdminButtonStateAsync();
 
             SetHotkeyTextBox("TxtArrowKey", _config.ArrowHotkey);
+            SetHotkeyTextBox("TxtArrowKeyAlt", _config.ArrowHotkeyAlt);
             SetHotkeyTextBox("TxtLineKey", _config.LineHotkey);
+            SetHotkeyTextBox("TxtLineKeyAlt", _config.LineHotkeyAlt);
             SetHotkeyTextBox("TxtTextKey", _config.TextHotkey);
+            SetHotkeyTextBox("TxtTextKeyAlt", _config.TextHotkeyAlt);
             SetHotkeyTextBox("TxtResizeKey", _config.ResizeHotkey);
+            SetHotkeyTextBox("TxtResizeKeyAlt", _config.ResizeHotkeyAlt);
             SetHotkeyTextBox("TxtFreehandKey", _config.FreehandHotkey);
+            SetHotkeyTextBox("TxtFreehandKeyAlt", _config.FreehandHotkeyAlt);
             SetHotkeyTextBox("TxtEmojiKey", _config.EmojiHotkey);
+            SetHotkeyTextBox("TxtEmojiKeyAlt", _config.EmojiHotkeyAlt);
             SetHotkeyTextBox("TxtCounterKey", _config.CounterHotkey);
+            SetHotkeyTextBox("TxtCounterKeyAlt", _config.CounterHotkeyAlt);
             SetHotkeyTextBox("TxtHighlightKey", _config.HighlightHotkey);
+            SetHotkeyTextBox("TxtHighlightKeyAlt", _config.HighlightHotkeyAlt);
             SetHotkeyTextBox("TxtPixelate1Key", _config.PixelateHotkey1);
+            SetHotkeyTextBox("TxtPixelate1KeyAlt", _config.PixelateHotkey1Alt);
             SetHotkeyTextBox("TxtPixelate2Key", _config.PixelateHotkey2);
+            SetHotkeyTextBox("TxtPixelate2KeyAlt", _config.PixelateHotkey2Alt);
             SetHotkeyTextBox("TxtCropKey", _config.CropHotkey);
+            SetHotkeyTextBox("TxtCropKeyAlt", _config.CropHotkeyAlt);
             SetHotkeyTextBox("TxtRotateCwKey", _config.RotateCwHotkey);
+            SetHotkeyTextBox("TxtRotateCwKeyAlt", _config.RotateCwHotkeyAlt);
             SetHotkeyTextBox("TxtRotateCcwKey", _config.RotateCcwHotkey);
+            SetHotkeyTextBox("TxtRotateCcwKeyAlt", _config.RotateCcwHotkeyAlt);
             SetHotkeyTextBox("TxtDuplicateObjectKey", _config.DuplicateObjectHotkey);
+            SetHotkeyTextBox("TxtDuplicateObjectKeyAlt", _config.DuplicateObjectHotkeyAlt);
             SetHotkeyTextBox("TxtDeleteObjectKey", _config.DeleteObjectHotkey);
+            SetHotkeyTextBox("TxtDeleteObjectKeyAlt", _config.DeleteObjectHotkeyAlt);
             
             SetHotkeyTextBox("TxtRegionKey", _config.RegionHotkey);
+            SetHotkeyTextBox("TxtRegionKeyAlt", _config.RegionHotkeyAlt);
             SetHotkeyTextBox("TxtWindowKey", _config.WindowHotkey);
+            SetHotkeyTextBox("TxtWindowKeyAlt", _config.WindowHotkeyAlt);
             SetHotkeyTextBox("TxtFullscreenKey", _config.FullscreenHotkey);
+            SetHotkeyTextBox("TxtFullscreenKeyAlt", _config.FullscreenHotkeyAlt);
             SetHotkeyTextBox("TxtLastRegionKey", _config.LastregionHotkey);
+            SetHotkeyTextBox("TxtLastRegionKeyAlt", _config.LastregionHotkeyAlt);
             SetHotkeyTextBox("TxtClipboardKey", _config.ClipboardHotkey);
+            SetHotkeyTextBox("TxtClipboardKeyAlt", _config.ClipboardHotkeyAlt);
             SetHotkeyTextBox("TxtScrollCaptureDelimiterKey", _config.ScrollCaptureDelimiterHotkey);
+            SetHotkeyTextBox("TxtScrollCaptureDelimiterKeyAlt", _config.ScrollCaptureDelimiterHotkeyAlt);
 
             UpdatePrintScreenConflictWarning();
             _ = Task.Run(async () =>
@@ -552,39 +574,70 @@ namespace freesnip.forms
                 }
 
                 _config.ArrowHotkey = this.FindControl<TextBox>("TxtArrowKey")?.Text ?? _config.ArrowHotkey;
+                _config.ArrowHotkeyAlt = this.FindControl<TextBox>("TxtArrowKeyAlt")?.Text ?? _config.ArrowHotkeyAlt;
                 _config.LineHotkey = this.FindControl<TextBox>("TxtLineKey")?.Text ?? _config.LineHotkey;
+                _config.LineHotkeyAlt = this.FindControl<TextBox>("TxtLineKeyAlt")?.Text ?? _config.LineHotkeyAlt;
                 _config.TextHotkey = this.FindControl<TextBox>("TxtTextKey")?.Text ?? _config.TextHotkey;
+                _config.TextHotkeyAlt = this.FindControl<TextBox>("TxtTextKeyAlt")?.Text ?? _config.TextHotkeyAlt;
                 _config.ResizeHotkey = this.FindControl<TextBox>("TxtResizeKey")?.Text ?? _config.ResizeHotkey;
+                _config.ResizeHotkeyAlt = this.FindControl<TextBox>("TxtResizeKeyAlt")?.Text ?? _config.ResizeHotkeyAlt;
                 _config.FreehandHotkey = this.FindControl<TextBox>("TxtFreehandKey")?.Text ?? _config.FreehandHotkey;
+                _config.FreehandHotkeyAlt = this.FindControl<TextBox>("TxtFreehandKeyAlt")?.Text ?? _config.FreehandHotkeyAlt;
                 _config.EmojiHotkey = this.FindControl<TextBox>("TxtEmojiKey")?.Text ?? _config.EmojiHotkey;
+                _config.EmojiHotkeyAlt = this.FindControl<TextBox>("TxtEmojiKeyAlt")?.Text ?? _config.EmojiHotkeyAlt;
                 _config.CounterHotkey = this.FindControl<TextBox>("TxtCounterKey")?.Text ?? _config.CounterHotkey;
+                _config.CounterHotkeyAlt = this.FindControl<TextBox>("TxtCounterKeyAlt")?.Text ?? _config.CounterHotkeyAlt;
                 _config.HighlightHotkey = this.FindControl<TextBox>("TxtHighlightKey")?.Text ?? _config.HighlightHotkey;
+                _config.HighlightHotkeyAlt = this.FindControl<TextBox>("TxtHighlightKeyAlt")?.Text ?? _config.HighlightHotkeyAlt;
                 _config.PixelateHotkey1 = this.FindControl<TextBox>("TxtPixelate1Key")?.Text ?? _config.PixelateHotkey1;
+                _config.PixelateHotkey1Alt = this.FindControl<TextBox>("TxtPixelate1KeyAlt")?.Text ?? _config.PixelateHotkey1Alt;
                 _config.PixelateHotkey2 = this.FindControl<TextBox>("TxtPixelate2Key")?.Text ?? _config.PixelateHotkey2;
+                _config.PixelateHotkey2Alt = this.FindControl<TextBox>("TxtPixelate2KeyAlt")?.Text ?? _config.PixelateHotkey2Alt;
                 _config.CropHotkey = this.FindControl<TextBox>("TxtCropKey")?.Text ?? _config.CropHotkey;
+                _config.CropHotkeyAlt = this.FindControl<TextBox>("TxtCropKeyAlt")?.Text ?? _config.CropHotkeyAlt;
                 _config.RotateCwHotkey = this.FindControl<TextBox>("TxtRotateCwKey")?.Text ?? _config.RotateCwHotkey;
+                _config.RotateCwHotkeyAlt = this.FindControl<TextBox>("TxtRotateCwKeyAlt")?.Text ?? _config.RotateCwHotkeyAlt;
                 _config.RotateCcwHotkey = this.FindControl<TextBox>("TxtRotateCcwKey")?.Text ?? _config.RotateCcwHotkey;
+                _config.RotateCcwHotkeyAlt = this.FindControl<TextBox>("TxtRotateCcwKeyAlt")?.Text ?? _config.RotateCcwHotkeyAlt;
                 _config.DuplicateObjectHotkey = this.FindControl<TextBox>("TxtDuplicateObjectKey")?.Text ?? _config.DuplicateObjectHotkey;
+                _config.DuplicateObjectHotkeyAlt = this.FindControl<TextBox>("TxtDuplicateObjectKeyAlt")?.Text ?? _config.DuplicateObjectHotkeyAlt;
                 _config.DeleteObjectHotkey = this.FindControl<TextBox>("TxtDeleteObjectKey")?.Text ?? _config.DeleteObjectHotkey;
+                _config.DeleteObjectHotkeyAlt = this.FindControl<TextBox>("TxtDeleteObjectKeyAlt")?.Text ?? _config.DeleteObjectHotkeyAlt;
                 
                 string oldRegion = _config.RegionHotkey;
+                string oldRegionAlt = _config.RegionHotkeyAlt;
                 string oldWindow = _config.WindowHotkey;
+                string oldWindowAlt = _config.WindowHotkeyAlt;
                 string oldFull = _config.FullscreenHotkey;
+                string oldFullAlt = _config.FullscreenHotkeyAlt;
                 string oldLast = _config.LastregionHotkey;
+                string oldLastAlt = _config.LastregionHotkeyAlt;
                 string oldClip = _config.ClipboardHotkey;
+                string oldClipAlt = _config.ClipboardHotkeyAlt;
                 
                 _config.RegionHotkey = this.FindControl<TextBox>("TxtRegionKey")?.Text ?? _config.RegionHotkey;
+                _config.RegionHotkeyAlt = this.FindControl<TextBox>("TxtRegionKeyAlt")?.Text ?? _config.RegionHotkeyAlt;
                 _config.WindowHotkey = this.FindControl<TextBox>("TxtWindowKey")?.Text ?? _config.WindowHotkey;
+                _config.WindowHotkeyAlt = this.FindControl<TextBox>("TxtWindowKeyAlt")?.Text ?? _config.WindowHotkeyAlt;
                 _config.FullscreenHotkey = this.FindControl<TextBox>("TxtFullscreenKey")?.Text ?? _config.FullscreenHotkey;
+                _config.FullscreenHotkeyAlt = this.FindControl<TextBox>("TxtFullscreenKeyAlt")?.Text ?? _config.FullscreenHotkeyAlt;
                 _config.LastregionHotkey = this.FindControl<TextBox>("TxtLastRegionKey")?.Text ?? _config.LastregionHotkey;
+                _config.LastregionHotkeyAlt = this.FindControl<TextBox>("TxtLastRegionKeyAlt")?.Text ?? _config.LastregionHotkeyAlt;
                 _config.ClipboardHotkey = this.FindControl<TextBox>("TxtClipboardKey")?.Text ?? _config.ClipboardHotkey;
+                _config.ClipboardHotkeyAlt = this.FindControl<TextBox>("TxtClipboardKeyAlt")?.Text ?? _config.ClipboardHotkeyAlt;
                 _config.ScrollCaptureDelimiterHotkey = this.FindControl<TextBox>("TxtScrollCaptureDelimiterKey")?.Text ?? _config.ScrollCaptureDelimiterHotkey;
+                _config.ScrollCaptureDelimiterHotkeyAlt = this.FindControl<TextBox>("TxtScrollCaptureDelimiterKeyAlt")?.Text ?? _config.ScrollCaptureDelimiterHotkeyAlt;
 
                 bool hotkeysChanged = oldRegion != _config.RegionHotkey ||
+                                      oldRegionAlt != _config.RegionHotkeyAlt ||
                                       oldWindow != _config.WindowHotkey ||
+                                      oldWindowAlt != _config.WindowHotkeyAlt ||
                                       oldFull != _config.FullscreenHotkey ||
+                                      oldFullAlt != _config.FullscreenHotkeyAlt ||
                                       oldLast != _config.LastregionHotkey ||
-                                      oldClip != _config.ClipboardHotkey;
+                                      oldLastAlt != _config.LastregionHotkeyAlt ||
+                                      oldClip != _config.ClipboardHotkey ||
+                                      oldClipAlt != _config.ClipboardHotkeyAlt;
 
                 await _settingsService.SaveSettingsAsync(_config, hotkeysChanged).ConfigureAwait(true);
                 

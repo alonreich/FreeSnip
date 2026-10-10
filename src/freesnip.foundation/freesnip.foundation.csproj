@@ -5,6 +5,7 @@
     <RootNamespace>freesnip.foundation</RootNamespace>
     <AssemblyName>freesnip.foundation</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <CustomResourceTypesSupport>true</CustomResourceTypesSupport>
     <NoWarn>$(NoWarn);WFO1000</NoWarn>

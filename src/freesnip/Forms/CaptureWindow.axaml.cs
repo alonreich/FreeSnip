@@ -322,7 +322,6 @@ namespace freesnip.forms
                 _captureSessionActive = false;
             }
 
-            App.ForceRedTrayIcon(false, "CaptureSession");
             App.ClearAllTrayHolds();
         }
 
@@ -850,7 +849,6 @@ namespace freesnip.forms
             {
                 App.ForceRedTrayIcon(false, "RubberbandDrag");
                 App.ForceRedTrayIcon(false, "CaptureOcr");
-                App.ForceRedTrayIcon(false, "CaptureSession");
                 e.Handled = true;
                 CloseAllCaptureOverlays();
                 return;
@@ -1046,7 +1044,6 @@ namespace freesnip.forms
             {
                 App.ForceRedTrayIcon(false, "RubberbandDrag");
                 App.ForceRedTrayIcon(false, "CaptureOcr");
-                App.ForceRedTrayIcon(false, "CaptureSession");
                 CloseAllCaptureOverlays();
                 return;
             }
@@ -1055,7 +1052,6 @@ namespace freesnip.forms
             if (!_isPainterMode)
             {
                 Cursor = CrossCursor;
-                App.ForceRedTrayIcon(true, "RubberbandDrag");
             }
             if (_instructionBorder != null) _instructionBorder.IsVisible = false;
             var pos = e.GetPosition(this);
@@ -1177,6 +1173,14 @@ namespace freesnip.forms
             double y = Math.Min(_startPoint.Y, snappedY);
             double w = Math.Abs(_startPoint.X - snappedX);
             double h = Math.Abs(_startPoint.Y - snappedY);
+            if (w > 5 || h > 5)
+            {
+                App.ForceRedTrayIcon(true, "RubberbandDrag");
+            }
+            else
+            {
+                App.ForceRedTrayIcon(false, "RubberbandDrag");
+            }
             Canvas.SetLeft(_rubberband, x);
             Canvas.SetTop(_rubberband, y);
             _rubberband.Width = w;

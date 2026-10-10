@@ -49,6 +49,17 @@ public class FreeSnipMain
     public static async Task Main(string[] args)
     {
         args ??= Array.Empty<string>();
+#if USE_TESSERACT
+        if (args.Any(a => string.Equals(a, "--tesseract-ocr-worker", StringComparison.OrdinalIgnoreCase)))
+        {
+            int workerExitCode = await TesseractOcrProvider.RunWorkerAsync(
+                Console.OpenStandardInput(),
+                Console.OpenStandardOutput(),
+                CancellationToken.None).ConfigureAwait(false);
+            Environment.ExitCode = workerExitCode;
+            return;
+        }
+#endif
         if (args.Any(a => string.Equals(a, "--test-probe", StringComparison.OrdinalIgnoreCase)))
         {
             Console.WriteLine("FreeSnip binary probe succeeded.");
@@ -112,34 +123,15 @@ public class FreeSnipMain
             if (!StartupTaskHelper.IsRunningFromInstallPath()
                 && !DeploymentLifecycle.IsLifecycleCommand(args))
             {
-                BootstrapDebug.Log("Stage 1: Relocating installer to temporary directory.");
-                string tempInstallerPath = Path.Combine(DeploymentFootprint.DeploymentTempRoot, "Install", Path.GetFileName(RuntimePathHelper.ExecutablePath));
-                string tempDir = Path.GetDirectoryName(tempInstallerPath);
-                if (!string.IsNullOrEmpty(tempDir)) Directory.CreateDirectory(tempDir);
-
-                for (int attempt = 0; attempt < 5; attempt++)
-                {
-                    try
-                    {
-                        if (File.Exists(tempInstallerPath))
-                        {
-                            File.SetAttributes(tempInstallerPath, FileAttributes.Normal);
-                        }
-                        File.Copy(RuntimePathHelper.ExecutablePath, tempInstallerPath, true);
-                        File.SetAttributes(tempInstallerPath, FileAttributes.Normal);
-                        break;
-                    }
-                    catch
-                    {
-                        if (attempt == 4) throw;
-                        Thread.Sleep(150);
-                    }
-                }
+                BootstrapDebug.Log("Stage 1: Elevating the source installer directly (no executable temp staging).");
+                bool hadElevatedTask = await StartupTaskHelper.HasElevatedStartupTaskAsync().ConfigureAwait(false);
+                UpgradeUserContext originalUser = UpgradeUserContext.CaptureCurrent(hadElevatedTask);
+                string inlineContext = originalUser.ToInlineArgumentValue();
 
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = tempInstallerPath,
-                    Arguments = "--install --install-worker",
+                    FileName = RuntimePathHelper.ExecutablePath,
+                    Arguments = $"--install --install-worker {UpgradeUserContext.InlineArgumentName} \"{inlineContext}\"",
                     UseShellExecute = true,
                     Verb = "runas"
                 });
