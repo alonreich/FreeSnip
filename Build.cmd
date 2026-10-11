@@ -271,6 +271,8 @@ call :STRIP_STAGING_BLOAT "%STAGING_DIR%" "%DROP_STAGED_EXE%"
 echo [%BRANCH_NAME%] 3. Zipping payload...
 
 powershell -NoProfile -Command "Compress-Archive -Path '%STAGING_DIR%\*' -DestinationPath 'src\freesnip\payload.zip' -Force" <nul
+if errorlevel 1 exit /b 1
+timeout /t 2 /nobreak >nul
 
 echo [%BRANCH_NAME%] 4. Publishing standalone installer...
 dotnet publish "%PROJECT_FILE%" -c Release -r win-x64 %PUBLISH_BASE_ARGS% -p:PublishAot=true -p:EmbedOcrPayload=false -p:USE_TESSERACT=false !VERSION_ARGS! -o "%FINAL_DIR%" %DOTNET_LOG_ARGS%
