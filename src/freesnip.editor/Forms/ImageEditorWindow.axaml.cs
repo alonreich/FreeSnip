@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -326,6 +326,11 @@ namespace freesnip.editor.forms
                 if (_emojiTool?.Flyout is Flyout emojiFlyout)
                 {
                     emojiFlyout.Placement = PlacementMode.Left;
+                }
+                var leftBorder = this.FindControl<Border>("LeftToolbarBorder");
+                if (leftBorder != null)
+                {
+                    leftBorder.BorderThickness = new Thickness(1, 0, 0, 0);
                 }
             }
 
@@ -936,7 +941,7 @@ namespace freesnip.editor.forms
                     if (_currentTool == EditorTool.None)
                         SetEditorCursor(HandCursor);
                     else
-                        SetEditorCursor(CrossCursor);
+                        SetEditorCursor(_currentTool == EditorTool.Text ? IbeamCursor : CrossCursor);
                 }
                 e.Handled = true;
                 return;
@@ -2304,11 +2309,14 @@ namespace freesnip.editor.forms
                     char first = text.FirstOrDefault(c => char.IsLetter(c));
                     if (first != default && ((first >= 0x0590 && first <= 0x05FF) || (first >= 0x0600 && first <= 0x06FF))) {
                         textBox.FlowDirection = FlowDirection.RightToLeft;
+                        textBox.TextAlignment = Avalonia.Media.TextAlignment.Right;
+                        textBox.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Right;
                     } else {
                         textBox.FlowDirection = FlowDirection.LeftToRight;
+                        textBox.TextAlignment = Avalonia.Media.TextAlignment.Left;
+                        textBox.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Left;
                     }
                 }
-                textBox.TextAlignment = Avalonia.Media.TextAlignment.Center;
 
                 double bW = !double.IsNaN(border.Width) && border.Width > 0 ? border.Width : border.Bounds.Width;
                 double bH = !double.IsNaN(border.Height) && border.Height > 0 ? border.Height : border.Bounds.Height;
@@ -2373,7 +2381,7 @@ namespace freesnip.editor.forms
                     bool isEdge = p.X <= edgeThreshold || p.X >= bW - edgeThreshold ||
                                   p.Y <= edgeThreshold || p.Y >= bH - edgeThreshold;
 
-                    if (textBox.IsReadOnly || isEdge)
+                    if (isEdge)
                     {
                         var canvasPos = e.GetPosition(_canvas);
                         _selectedControl = border;
@@ -2394,6 +2402,12 @@ namespace freesnip.editor.forms
                         UpdateThicknessPanelVisibility();
                         e.Handled = true;
                     }
+                    else if (textBox.IsReadOnly)
+                    {
+                        EnableTextBoxEditing(border, textBox);
+                        _selectedControl = border;
+                        UpdateSelectionIndicator();
+                    }
                 }
             }, RoutingStrategies.Tunnel);
             border.PointerMoved += (s, e) =>
@@ -2405,7 +2419,7 @@ namespace freesnip.editor.forms
                 double edgeThreshold = Math.Max(8, Math.Max(border.BorderThickness.Left, border.Padding.Left) + 4);
                 bool isEdge = p.X <= edgeThreshold || p.X >= bW - edgeThreshold ||
                               p.Y <= edgeThreshold || p.Y >= bH - edgeThreshold;
-                border.Cursor = isEdge ? SizeAllCursor : (textBox.IsReadOnly ? HandCursor : IbeamCursor);
+                border.Cursor = isEdge ? SizeAllCursor : IbeamCursor;
             };
             textBox.AddHandler(InputElement.PointerPressedEvent, (object s, PointerPressedEventArgs e) =>
             {
@@ -2420,18 +2434,37 @@ namespace freesnip.editor.forms
                 if (e.Key == Key.Escape) { _canvas?.Focus(); OnWindowKeyDown(this, new KeyEventArgs { Key = Key.Escape, RoutedEvent = InputElement.KeyDownEvent }); e.Handled = true; }
                 else if (e.Key == Key.Enter)
                 {
-                    if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
-                    {
-                        _canvas?.Focus();
-                        OnWindowKeyDown(this, new KeyEventArgs { Key = Key.Escape, RoutedEvent = InputElement.KeyDownEvent });
-                        e.Handled = true;
-                    }
-                    else
+                    if (e.KeyModifiers.HasFlag(KeyModifiers.Control) ||
+                        e.KeyModifiers.HasFlag(KeyModifiers.Shift) ||
+                        e.KeyModifiers.HasFlag(KeyModifiers.Alt))
                     {
                         int caret = textBox.CaretIndex;
                         string currentText = textBox.Text ?? "";
                         textBox.Text = currentText.Insert(caret, Environment.NewLine);
                         textBox.CaretIndex = caret + Environment.NewLine.Length;
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        if (string.IsNullOrWhiteSpace(textBox.Text))
+                        {
+                            DisposeAnnotationResources(border);
+                            _canvas?.Children.Remove(border);
+                            if (ReferenceEquals(_selectedControl, border))
+                            {
+                                _selectedControl = null;
+                            }
+                        }
+                        else
+                        {
+                            SetTextBoxBoundsToBorder(border, textBox);
+                            textBox.IsReadOnly = true;
+                            textBox.CaretBrush = Brushes.Transparent;
+                            textBox.Cursor = SizeAllCursor;
+                            _selectedControl = border;
+                        }
+                        UpdateSelectionIndicator();
+                        _canvas?.Focus();
                         e.Handled = true;
                     }
                 }
@@ -2624,6 +2657,9 @@ namespace freesnip.editor.forms
             var (targetWidth, targetHeight) = EditorWindowFitter.CalculateInitialSize(
                 _document.Width, _document.Height, _zoomFactor, maxAllowedWidth, maxAllowedHeight, FreeSnipFrameThickness);
 
+            targetWidth = Math.Max(MinWidth, targetWidth);
+            targetHeight = Math.Max(MinHeight, targetHeight);
+
             Width = targetWidth; Height = targetHeight;
 
             Position = EditorWindowFitter.CalculateCenteredPosition(targetScreen.WorkingArea, Width, Height, scaling, _cascadeOffset++);
@@ -2647,8 +2683,20 @@ namespace freesnip.editor.forms
                 return;
             }
 
-            Width = newSize.Width;
-            Height = newSize.Height;
+            double actualWidth = Math.Max(MinWidth, newSize.Width);
+            double actualHeight = Math.Max(MinHeight, newSize.Height);
+
+            if (Math.Abs(actualWidth - newSize.Width) > 0.5 || Math.Abs(actualHeight - newSize.Height) > 0.5)
+            {
+                var screen = Screens.ScreenFromPoint(Position) ?? Screens.Primary;
+                if (screen != null)
+                {
+                    newPos = EditorWindowFitter.CalculateCenteredPosition(screen.WorkingArea, actualWidth, actualHeight, screen.Scaling, 0);
+                }
+            }
+
+            Width = actualWidth;
+            Height = actualHeight;
             Position = newPos;
             _initialCenterPending = true;
             Dispatcher.UIThread.Post(CenterImageInScrollViewer, DispatcherPriority.Render);
@@ -2804,7 +2852,46 @@ namespace freesnip.editor.forms
 
             if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed) { OnWindowKeyDown(this, new KeyEventArgs { Key = Key.Escape }); e.Handled = true; return; }
 
+            var focusManager = this.FocusManager;
+            var focusedElement = focusManager?.GetFocusedElement();
+            bool wasEditingText = (focusedElement is TextBox fTb && !fTb.IsReadOnly) ||
+                                  (_selectedControl is Border selBorder && selBorder.Child is TextBox sTb && !sTb.IsReadOnly);
+
             var clicked = FindSelectableControlAt(pos);
+
+            if (clicked == null && wasEditingText)
+            {
+                var textBorder = (focusedElement as TextBox)?.Parent as Border
+                    ?? (_selectedControl as Border);
+                var activeTb = (focusedElement as TextBox)
+                    ?? ((_selectedControl as Border)?.Child as TextBox);
+
+                if (textBorder != null && activeTb != null)
+                {
+                    if (string.IsNullOrWhiteSpace(activeTb.Text))
+                    {
+                        DisposeAnnotationResources(textBorder);
+                        _canvas?.Children.Remove(textBorder);
+                        if (ReferenceEquals(_selectedControl, textBorder))
+                        {
+                            _selectedControl = null;
+                        }
+                    }
+                    else
+                    {
+                        SetTextBoxBoundsToBorder(textBorder, activeTb);
+                        activeTb.IsReadOnly = true;
+                        activeTb.CaretBrush = Brushes.Transparent;
+                        activeTb.Cursor = SizeAllCursor;
+                        _selectedControl = textBorder;
+                    }
+                    UpdateSelectionIndicator();
+                    _canvas?.Focus();
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (_selectedControl != null && !ReferenceEquals(clicked, _selectedControl))
             {
                 UngroupMultiSelectGroup(_selectedControl);
@@ -2831,7 +2918,7 @@ namespace freesnip.editor.forms
                 _selectedControl = clicked; 
                 if (clicked is Border b && b.Child is TextBox tb)
                 {
-                    if (e.ClickCount == 2)
+                    if (e.ClickCount >= 2)
                     {
                         EnableTextBoxEditing(b, tb);
                         _isDraggingSelected = false;
@@ -2853,8 +2940,12 @@ namespace freesnip.editor.forms
                                              relY <= edgeThreshold || relY >= bHeight - edgeThreshold ||
                                              ReferenceEquals(e.Source, b);
 
-                    if (!tb.IsReadOnly && !isBorderFrameGrab)
+                    if (!isBorderFrameGrab)
                     {
+                        if (tb.IsReadOnly)
+                        {
+                            EnableTextBoxEditing(b, tb);
+                        }
                         _isDraggingSelected = false;
                         UpdateSelectionIndicator();
                         return;
@@ -4818,7 +4909,7 @@ namespace freesnip.editor.forms
             if (_toolGhost == null)
             {
                 HideToolGhost();
-                SetEditorCursor(CrossCursor);
+                SetEditorCursor(_currentTool == EditorTool.Text ? IbeamCursor : CrossCursor);
                 return;
             }
 
@@ -5028,7 +5119,7 @@ namespace freesnip.editor.forms
                         double edgeThreshold = Math.Max(8, Math.Max(hb.BorderThickness.Left, hb.Padding.Left) + 4);
                         bool isEdge = relX <= edgeThreshold || relX >= bWidth - edgeThreshold ||
                                       relY <= edgeThreshold || relY >= bHeight - edgeThreshold;
-                        SetEditorCursor(isEdge ? SizeAllCursor : (htb.IsReadOnly ? HandCursor : IbeamCursor));
+                        SetEditorCursor(isEdge ? SizeAllCursor : IbeamCursor);
                     }
                     else
                     {
@@ -5038,7 +5129,7 @@ namespace freesnip.editor.forms
                 }
                 else
                 {
-                    SetEditorCursor(_currentTool == EditorTool.None ? (GetUserAnnotations().Count == 0 ? HandCursor : CrossCursor) : CrossCursor);
+                    SetEditorCursor(_currentTool == EditorTool.None ? (GetUserAnnotations().Count == 0 ? HandCursor : CrossCursor) : (_currentTool == EditorTool.Text ? IbeamCursor : CrossCursor));
                     UpdateHoverIndicator(null);
                     
                     if (_currentTool != EditorTool.None)
@@ -5932,17 +6023,19 @@ namespace freesnip.editor.forms
                 clone.Width = origBounds.Width;
                 clone.Height = origBounds.Height;
 
-                double canvasW = _canvas.Bounds.Width;
-                double canvasH = _canvas.Bounds.Height;
+                double canvasW = _canvas.Bounds.Width > 0 ? _canvas.Bounds.Width : (_image?.Width ?? 800);
+                double canvasH = _canvas.Bounds.Height > 0 ? _canvas.Bounds.Height : (_image?.Height ?? 600);
                 
-                bool isLeft = (origBounds.Center.X < canvasW / 2);
-                bool isTop = (origBounds.Center.Y < canvasH / 2);
+                bool isLeft = (origBounds.Center.X < canvasW / 2.0);
+                bool isTop = (origBounds.Center.Y < canvasH / 2.0);
                 
-                double dirX = isLeft ? 1 : -1;
-                double dirY = isTop ? 1 : -1;
-                double offset = 85;
+                double dirX = isLeft ? 1.0 : -1.0;
+                double dirY = isTop ? 1.0 : -1.0;
+                double offset = 50.0;
                 double targetL = Canvas.GetLeft(_selectedControl);
+                if (double.IsNaN(targetL)) targetL = origBounds.X;
                 double targetT = Canvas.GetTop(_selectedControl);
+                if (double.IsNaN(targetT)) targetT = origBounds.Y;
 
                 if (IsVectorControl(_selectedControl) && TryGetVectorAbsolutePoints(_selectedControl, out var start, out var end))
                 {
@@ -7013,7 +7106,7 @@ namespace freesnip.editor.forms
             else
             {
                 SetCurrentTool(tool);
-                SetEditorCursor(CrossCursor);
+                SetEditorCursor(tool == EditorTool.Text ? IbeamCursor : CrossCursor);
 
                 if (_leftToolbar != null)
                 {
@@ -7490,6 +7583,7 @@ namespace freesnip.editor.forms
             {
                 bool fillRelevant = tool == EditorTool.Rectangle || tool == EditorTool.Ellipse || tool == EditorTool.Text;
                 fillBtn.IsVisible = fillRelevant;
+                if (fillRelevant) UpdateFillToggleVisual();
             }
 
             if (resetCounterBtn != null)
@@ -7648,8 +7742,22 @@ namespace freesnip.editor.forms
         {
             var fillBtn = _fillToggleBtn;
             var fillText = _fillToggleText;
+            var tool = _selectedControl != null ? GetToolFromControl(_selectedControl) : _currentTool;
+            bool isText = tool == EditorTool.Text;
+
             if (_isFillMode) fillBtn?.Classes.Add("selected"); else fillBtn?.Classes.Remove("selected");
-            if (fillText != null) fillText.Text = _isFillMode ? "Fill: On" : "Fill: Off";
+            if (fillText != null)
+            {
+                if (isText)
+                    fillText.Text = _isFillMode ? "Frame: On" : "Frame: Off";
+                else
+                    fillText.Text = _isFillMode ? "Fill: On" : "Fill: Off";
+            }
+            if (fillBtn != null)
+            {
+                ToolTip.SetTip(fillBtn, isText ? "Toggle Text Frame" : "Toggle Shape Fill");
+                Avalonia.Automation.AutomationProperties.SetName(fillBtn, isText ? "Toggle text frame" : "Toggle shape fill");
+            }
         }
 
         private void UpdateControlThickness(AvaloniaControl control, double val)
@@ -7746,8 +7854,8 @@ namespace freesnip.editor.forms
 
             if (isSingleClick)
             {
-                width = config != null && config.LastTextBoxWidth > 0 ? config.LastTextBoxWidth : 160;
-                height = config != null && config.LastTextBoxHeight > 0 ? config.LastTextBoxHeight : 50;
+                width = 160;
+                height = 42;
                 fontSize = config != null && config.LastTextSize > 0 ? config.LastTextSize : 20;
             }
             else
@@ -7767,8 +7875,19 @@ namespace freesnip.editor.forms
                 UpdatePersistedTextBoxDimensions(width, height);
             }
 
-            double originX = isSingleClick ? start.X : Math.Min(start.X, end.X);
-            double originY = isSingleClick ? start.Y : Math.Min(start.Y, end.Y);
+            bool isRtl = freesnip.foundation.core.UiLayoutDirection.IsRightToLeft;
+            double originX;
+            double originY;
+            if (isSingleClick)
+            {
+                originX = isRtl ? (start.X - width) : start.X;
+                originY = start.Y - (height / 2.0);
+            }
+            else
+            {
+                originX = Math.Min(start.X, end.X);
+                originY = Math.Min(start.Y, end.Y);
+            }
 
             var textBox = new TextBox
             {
@@ -7784,10 +7903,10 @@ namespace freesnip.editor.forms
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.Wrap,
                 Tag = new TextAnnotationProperties { PreferredFontSize = fontSize },
-                TextAlignment = Avalonia.Media.TextAlignment.Center,
+                TextAlignment = isRtl ? Avalonia.Media.TextAlignment.Right : Avalonia.Media.TextAlignment.Left,
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
                 VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                HorizontalContentAlignment = isRtl ? Avalonia.Layout.HorizontalAlignment.Right : Avalonia.Layout.HorizontalAlignment.Left,
                 VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center
             };
 
@@ -7813,6 +7932,9 @@ namespace freesnip.editor.forms
             }
             AttachTextBoxBehavior(border, textBox, config);
             AddAnnotation(border);
+            _selectedControl = border;
+            UpdateSelectionIndicator();
+            UpdateThicknessPanelVisibility();
             PlayStampIn(border);
             Dispatcher.UIThread.Post(() => textBox.Focus());
         }
@@ -7948,8 +8070,28 @@ namespace freesnip.editor.forms
             double canvasW = _canvas?.Bounds.Width > 0 ? _canvas.Bounds.Width : (_image?.Width ?? 800);
             double canvasH = _canvas?.Bounds.Height > 0 ? _canvas.Bounds.Height : (_image?.Height ?? 600);
 
-            double offsetDeltaX = 20.0 * _clipboardPasteIteration;
-            double offsetDeltaY = 20.0 * _clipboardPasteIteration;
+            double centerX;
+            double centerY;
+            if (_annotationClipboard.IsVector)
+            {
+                centerX = (_annotationClipboard.VectorStart.X + _annotationClipboard.VectorEnd.X) / 2.0;
+                centerY = (_annotationClipboard.VectorStart.Y + _annotationClipboard.VectorEnd.Y) / 2.0;
+            }
+            else
+            {
+                double w = _annotationClipboard.Width > 0 ? _annotationClipboard.Width : 50;
+                double h = _annotationClipboard.Height > 0 ? _annotationClipboard.Height : 50;
+                centerX = _annotationClipboard.SourceLeft + w / 2.0;
+                centerY = _annotationClipboard.SourceTop + h / 2.0;
+            }
+
+            bool isLeft = centerX < canvasW / 2.0;
+            bool isTop = centerY < canvasH / 2.0;
+            double dirX = isLeft ? 1.0 : -1.0;
+            double dirY = isTop ? 1.0 : -1.0;
+
+            double offsetDeltaX = dirX * 50.0 * _clipboardPasteIteration;
+            double offsetDeltaY = dirY * 50.0 * _clipboardPasteIteration;
             _clipboardPasteIteration++;
 
             if (_annotationClipboard.IsVector)

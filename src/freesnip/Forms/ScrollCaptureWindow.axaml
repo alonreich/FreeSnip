@@ -15,31 +15,32 @@
         <Canvas Name="MainCanvas" Background="Transparent" PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed" PointerWheelChanged="OnPointerWheelChanged">
             <Border Name="HighlightBorder" BorderBrush="{DynamicResource FreeSnipScrollAccentBrush}" BorderThickness="4" IsVisible="False" IsHitTestVisible="False">
                 <Border.Background>
-                    <SolidColorBrush Color="{StaticResource FreeSnipScrollAccentColor}" Opacity="0.13" />
+                    <SolidColorBrush Color="{DynamicResource FreeSnipScrollAccentColor}" Opacity="0.13" />
                 </Border.Background>
             </Border>
             <Border Name="InstructionBorder" CornerRadius="8" Padding="14,8" BorderBrush="{DynamicResource FreeSnipScrollAccentBrush}" BorderThickness="1" IsHitTestVisible="False">
                 <Border.Background>
-                    <SolidColorBrush Color="{StaticResource FreeSnipCanvasColor}" Opacity="0.93" />
+                    <SolidColorBrush Color="{DynamicResource FreeSnipCanvasColor}" Opacity="0.93" />
                 </Border.Background>
-                <StackPanel Orientation="Horizontal" Spacing="14">
-                    <!-- ISSUE_019: pulse animation attaches directly via the class, no code-behind required. -->
-                    <Ellipse Name="RecordingDot" Classes="pulse" Width="12" Height="12" Fill="{DynamicResource FreeSnipDestructiveHoverBrush}" IsVisible="False" VerticalAlignment="Center">
-                        <Ellipse.Styles>
-                            <Style Selector="Ellipse.pulse">
-                                <Style.Animations>
-                                    <Animation Duration="0:0:1" IterationCount="Infinite">
-                                        <KeyFrame KeyTime="0:0:0"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
-                                        <KeyFrame KeyTime="0:0:0.5"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
-                                        <KeyFrame KeyTime="0:0:1"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
-                                    </Animation>
-                                </Style.Animations>
-                            </Style>
-                        </Ellipse.Styles>
-                    </Ellipse>
-                    <TextBlock Name="InstructionText" Text="Point at a window" Foreground="{DynamicResource FreeSnipScrollAccentBrush}" FontSize="18" FontWeight="Bold"/>
-                    <TextBlock Name="StatusText" Text="Left-click or Space to start" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" FontSize="16" FontWeight="SemiBold"/>
-                    <TextBlock Text="Esc/right-click = exit" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="14"/>
+                <StackPanel Orientation="Vertical" Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <!-- ISSUE_019: pulse animation attaches directly via the class, no code-behind required. -->
+                        <Ellipse Name="RecordingDot" Classes="pulse" Width="10" Height="10" Fill="{DynamicResource FreeSnipDestructiveHoverBrush}" IsVisible="False" VerticalAlignment="Center">
+                            <Ellipse.Styles>
+                                <Style Selector="Ellipse.pulse">
+                                    <Style.Animations>
+                                        <Animation Duration="0:0:1" IterationCount="Infinite">
+                                            <KeyFrame KeyTime="0:0:0"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                                            <KeyFrame KeyTime="0:0:0.5"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                            <KeyFrame KeyTime="0:0:1"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                                        </Animation>
+                                    </Style.Animations>
+                                </Style>
+                            </Ellipse.Styles>
+                        </Ellipse>
+                        <TextBlock Name="InstructionText" Text="Point at a window" Foreground="{DynamicResource FreeSnipScrollAccentBrush}" FontSize="15" FontWeight="Bold" MaxWidth="520" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <TextBlock Name="StatusText" Text="Left-click window or press Enter to start · Esc exits" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" FontSize="12.5" FontWeight="SemiBold"/>
                 </StackPanel>
             </Border>
         </Canvas>

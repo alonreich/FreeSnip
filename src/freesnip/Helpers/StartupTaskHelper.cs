@@ -905,12 +905,26 @@ public static class StartupTaskHelper
                 if (process.Id == Environment.ProcessId) continue;
                 try
                 {
-                    if (IsInstalledExecutable(process.MainModule?.FileName)) ids.Add(process.Id);
+                    if (IsInstalledExecutable(process.MainModule?.FileName))
+                    {
+                        ids.Add(process.Id);
+                        continue;
+                    }
                 }
                 catch (Exception ex) when (IsExpectedProcessInspectionException(ex)) { }
+
+                try
+                {
+                    if (string.Equals(process.ProcessName, "FreeSnip", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(process.ProcessName, "FreeSnip_tesseract", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ids.Add(process.Id);
+                    }
+                }
+                catch { }
             }
         }
-        return ids.ToArray();
+        return ids.Distinct().ToArray();
     }
 
     internal static void RequireInstalledApplicationsClosed()

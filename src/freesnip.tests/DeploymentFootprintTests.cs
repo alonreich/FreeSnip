@@ -23,6 +23,8 @@ namespace freesnip.tests
             string install = Normalize(DeploymentFootprint.InstallFolder);
             string tempApp = Normalize(DeploymentFootprint.TempAppFolder);
             string deploymentTemp = Normalize(DeploymentFootprint.DeploymentTempRoot);
+            string tempAutoUpdate = Normalize(DeploymentFootprint.TempAutoUpdateFolder);
+            string upgradeBackups = Normalize(DeploymentFootprint.UpgradeBackupsRoot);
 
             foreach (string target in DeploymentFootprint.GetDirectoryPurgeTargets(includeInstallFolder: true))
             {
@@ -33,7 +35,9 @@ namespace freesnip.tests
                     t.StartsWith(roaming, StringComparison.OrdinalIgnoreCase) ||
                     t.StartsWith(local, StringComparison.OrdinalIgnoreCase) ||
                     t.StartsWith(tempApp, StringComparison.OrdinalIgnoreCase) ||
-                    t.StartsWith(deploymentTemp, StringComparison.OrdinalIgnoreCase),
+                    t.StartsWith(deploymentTemp, StringComparison.OrdinalIgnoreCase) ||
+                    t.StartsWith(tempAutoUpdate, StringComparison.OrdinalIgnoreCase) ||
+                    t.StartsWith(upgradeBackups, StringComparison.OrdinalIgnoreCase),
                     $"Purge target escapes owned roots: {target}");
             }
         }
@@ -68,12 +72,10 @@ namespace freesnip.tests
         {
             Assert.Empty(DeploymentFootprint.GetUserArtifactPatterns());
             string downloads = Normalize(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"));
-            string recovery = Normalize(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FreeSnipUpgradeBackups"));
             foreach (string target in DeploymentFootprint.GetDirectoryPurgeTargets(true))
             {
                 string root = Normalize(target) + Path.DirectorySeparatorChar;
                 Assert.False(downloads.StartsWith(root, StringComparison.OrdinalIgnoreCase));
-                Assert.False(recovery.StartsWith(root, StringComparison.OrdinalIgnoreCase));
             }
         }
 

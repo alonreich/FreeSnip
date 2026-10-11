@@ -13,6 +13,7 @@ public partial class AboutWindow : Window
     public AboutWindow()
     {
         InitializeComponent();
+        freesnip.foundation.core.UiLayoutDirection.Apply(this);
         Title = $"About FreeSnip v{RuntimePathHelper.ProductVersion}";
 
         var versionText = this.FindControl<TextBlock>("VersionText");

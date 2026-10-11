@@ -25,7 +25,7 @@ internal static class DeploymentFootprint
 
     public static readonly string InstallFolder = StartupTaskHelper.InstallFolder;
 
-    public static readonly string TempInstallationLogPath = Path.Combine(Path.GetTempPath(), "FreeSnip_Installation.log");
+    public static readonly string TempInstallationLogPath = Path.Combine(Path.GetTempPath(), "SnapVox_Installation.log");
     public static readonly string InstallLogPath = TempInstallationLogPath;
 
     public static readonly string RoamingAppDataFolder = Path.Combine(
@@ -38,6 +38,7 @@ internal static class DeploymentFootprint
 
     public static readonly string TempAppFolder = Path.Combine(Path.GetTempPath(), AppName);
     public static readonly string DeploymentTempRoot = Path.Combine(TempAppFolder, "Lifecycle");
+    public static readonly string TempAutoUpdateFolder = Path.Combine(Path.GetTempPath(), "FreeSnip_AutoUpdate");
     public static readonly string UpgradeBackupsRoot = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "FreeSnipUpgradeBackups");
@@ -136,6 +137,8 @@ internal static class DeploymentFootprint
         dirs.Add(LocalAppDataFolder);
         dirs.Add(TempAppFolder);
         dirs.Add(DeploymentTempRoot);
+        dirs.Add(TempAutoUpdateFolder);
+        dirs.Add(UpgradeBackupsRoot);
 
         return dirs.Distinct(StringComparer.OrdinalIgnoreCase);
     }
@@ -152,6 +155,8 @@ internal static class DeploymentFootprint
     {
         foreach (string target in GetVerificationTargets()) yield return target;
         yield return TempAppFolder;
+        yield return TempAutoUpdateFolder;
+        yield return UpgradeBackupsRoot;
     }
 
     public static IEnumerable<(RegistryHive Hive, RegistryView View, string SubKeyPath)> GetFileAssociationVerificationTargets()

@@ -679,7 +679,7 @@ internal static class DeploymentLifecycle
 
         using var uninstallGate = new Semaphore(1, 1, DeploymentFootprint.InstallerMutexName + "_v2");
         bool lockAcquired = false;
-        string logPath = Path.Combine(SessionTempFolder, "freesnip_Uninstall.log");
+        string logPath = DeploymentFootprint.InstallLogPath;
         DeploymentLogger logger = null;
         DeploymentProgress progress = null;
 
@@ -769,7 +769,9 @@ internal static class DeploymentLifecycle
             DeploymentFootprint.RoamingAppDataFolder,
             DeploymentFootprint.LocalAppDataFolder,
             DeploymentFootprint.TempAppFolder,
-            DeploymentFootprint.DeploymentTempRoot
+            DeploymentFootprint.DeploymentTempRoot,
+            DeploymentFootprint.TempAutoUpdateFolder,
+            DeploymentFootprint.UpgradeBackupsRoot
         };
         targets.RemoveAll(t => !allowedRoots.Any(root =>
             t.StartsWith(root, StringComparison.OrdinalIgnoreCase) || string.Equals(t, root, StringComparison.OrdinalIgnoreCase)));
@@ -778,8 +780,10 @@ internal static class DeploymentLifecycle
             targets.RemoveAll(t =>
                 string.Equals(t, DeploymentFootprint.RoamingAppDataFolder, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(t, DeploymentFootprint.LocalAppDataFolder, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t, DeploymentFootprint.UpgradeBackupsRoot, StringComparison.OrdinalIgnoreCase) ||
                 t.StartsWith(DeploymentFootprint.RoamingAppDataFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                t.StartsWith(DeploymentFootprint.LocalAppDataFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+                t.StartsWith(DeploymentFootprint.LocalAppDataFolder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                t.StartsWith(DeploymentFootprint.UpgradeBackupsRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
         }
         return targets;
     }
@@ -806,11 +810,6 @@ internal static class DeploymentLifecycle
         await ReportAsync(progress, logger, end - 20, "CLEANUP", "REGISTRY", "Scrubbing all hives...", ct).ConfigureAwait(false);
         await DeleteRegistryFootprintAsync(logger, ct).ConfigureAwait(false);
 
-        if (!string.Equals(op, "Pre-Install Cleanup", StringComparison.OrdinalIgnoreCase))
-        {
-            await DeleteFileWithRetryAsync(DeploymentFootprint.TempInstallationLogPath, logger, ct).ConfigureAwait(false);
-        }
-
         await ReportAsync(progress, logger, end - 10, "CLEANUP", "SHELL", "Cleaning links...", ct).ConfigureAwait(false);
         await DeleteKnownShortcutsAsync(logger, ct).ConfigureAwait(false);
 
@@ -830,7 +829,7 @@ internal static class DeploymentLifecycle
 
     private static async Task PurgeDirectoryRecursiveAsync(string dir, DeploymentLogger logger, CancellationToken ct)
     {
-        if (!Directory.Exists(dir)) return;
+        if (!await Task.Run(() => Directory.Exists(dir), ct).ConfigureAwait(false)) return;
 
         try
         {
@@ -839,7 +838,7 @@ internal static class DeploymentLifecycle
             string[] files;
             try
             {
-                files = Directory.GetFiles(dir, "*", SearchOption.AllDirectories);
+                files = await Task.Run(() => Directory.GetFiles(dir, "*", SearchOption.AllDirectories), ct).ConfigureAwait(false);
             }
             catch (Exception enumEx)
             {
@@ -880,7 +879,7 @@ internal static class DeploymentLifecycle
             string[] subDirs;
             try
             {
-                subDirs = Directory.GetDirectories(dir, "*", SearchOption.AllDirectories);
+                subDirs = await Task.Run(() => Directory.GetDirectories(dir, "*", SearchOption.AllDirectories), ct).ConfigureAwait(false);
             }
             catch (Exception enumEx)
             {
@@ -904,13 +903,13 @@ internal static class DeploymentLifecycle
 
     private static async Task DeleteDirectoryWithRetryAsync(string path, DeploymentLogger logger, CancellationToken ct)
     {
-        if (!Directory.Exists(path)) return;
+        if (!await Task.Run(() => Directory.Exists(path), ct).ConfigureAwait(false)) return;
 
         for (int i = 0; i < DeleteRetries; i++)
         {
             try
             {
-                File.SetAttributes(path, FileAttributes.Normal);
+                await Task.Run(() => File.SetAttributes(path, FileAttributes.Normal), ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -920,7 +919,7 @@ internal static class DeploymentLifecycle
 
             try
             {
-                Directory.Delete(path, true);
+                await Task.Run(() => Directory.Delete(path, true), ct).ConfigureAwait(false);
                 await logger.LogAsync("FILESYSTEM", "DELETE_DIR", path, ct).ConfigureAwait(false);
                 return;
             }
@@ -942,14 +941,17 @@ internal static class DeploymentLifecycle
     {
         try
         {
-            foreach (string file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+            string[] files = await Task.Run(() => Directory.GetFiles(path, "*", SearchOption.AllDirectories), ct).ConfigureAwait(false);
+            foreach (string file in files)
             {
+                if (string.Equals(Path.GetFullPath(file), Path.GetFullPath(DeploymentFootprint.TempInstallationLogPath), StringComparison.OrdinalIgnoreCase)) continue;
                 if (!MoveFileEx(file, null, MoveFileFlags.DelayUntilReboot)) continue;
                 Interlocked.Increment(ref _pendingRebootDeletes);
                 await logger.LogAsync("FILESYSTEM", "REBOOT_DELETE", file, ct).ConfigureAwait(false);
             }
 
-            foreach (string sub in Directory.GetDirectories(path, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
+            string[] subDirs = await Task.Run(() => Directory.GetDirectories(path, "*", SearchOption.AllDirectories), ct).ConfigureAwait(false);
+            foreach (string sub in subDirs.OrderByDescending(d => d.Length))
             {
                 if (!MoveFileEx(sub, null, MoveFileFlags.DelayUntilReboot)) continue;
                 Interlocked.Increment(ref _pendingRebootDeletes);
@@ -974,14 +976,22 @@ internal static class DeploymentLifecycle
 
     private static async Task<bool> DeleteFileWithRetryAsync(string path, DeploymentLogger logger, CancellationToken ct)
     {
-        if (!File.Exists(path)) return false;
+        if (string.Equals(Path.GetFullPath(path), Path.GetFullPath(DeploymentFootprint.TempInstallationLogPath), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!await Task.Run(() => File.Exists(path), ct).ConfigureAwait(false)) return false;
 
         for (int i = 0; i < DeleteRetries; i++)
         {
             try
             {
-                File.SetAttributes(path, FileAttributes.Normal);
-                File.Delete(path);
+                await Task.Run(() =>
+                {
+                    File.SetAttributes(path, FileAttributes.Normal);
+                    File.Delete(path);
+                }, ct).ConfigureAwait(false);
                 await logger.LogAsync("FILESYSTEM", "DELETE", path, ct).ConfigureAwait(false);
                 return true;
             }
@@ -994,10 +1004,19 @@ internal static class DeploymentLifecycle
                     continue;
                 }
 
-                if (MoveFileEx(path, null, MoveFileFlags.DelayUntilReboot))
+                string targetToSchedule = path;
+                try
+                {
+                    string renamed = path + ".del." + Guid.NewGuid().ToString("N");
+                    File.Move(path, renamed);
+                    targetToSchedule = renamed;
+                }
+                catch { }
+
+                if (MoveFileEx(targetToSchedule, null, MoveFileFlags.DelayUntilReboot))
                 {
                     Interlocked.Increment(ref _pendingRebootDeletes);
-                    await logger.LogAsync("FILESYSTEM", "REBOOT_DELETE", path, ct).ConfigureAwait(false);
+                    await logger.LogAsync("FILESYSTEM", "REBOOT_DELETE", targetToSchedule, ct).ConfigureAwait(false);
                 }
                 else
                 {
@@ -1561,7 +1580,7 @@ internal static class DeploymentLifecycle
         string destDir = Path.GetDirectoryName(dest);
         if (!string.IsNullOrEmpty(destDir))
         {
-            Directory.CreateDirectory(destDir);
+            await Task.Run(() => Directory.CreateDirectory(destDir), ct).ConfigureAwait(false);
         }
 
         const int maxRetries = 5;
@@ -1569,13 +1588,48 @@ internal static class DeploymentLifecycle
         {
             try
             {
-                if (File.Exists(dest))
+                if (await Task.Run(() => File.Exists(dest), ct).ConfigureAwait(false))
                 {
-                    File.SetAttributes(dest, FileAttributes.Normal);
-                    File.Delete(dest);
+                    try
+                    {
+                        await Task.Run(() =>
+                        {
+                            File.SetAttributes(dest, FileAttributes.Normal);
+                            File.Delete(dest);
+                        }, ct).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        string lockedTemp = dest + ".locked." + Guid.NewGuid().ToString("N");
+                        try
+                        {
+                            await Task.Run(() => File.Move(dest, lockedTemp), ct).ConfigureAwait(false);
+                            if (MoveFileEx(lockedTemp, null, MoveFileFlags.DelayUntilReboot))
+                            {
+                                Interlocked.Increment(ref _pendingRebootDeletes);
+                                await logger.LogAsync("FILESYSTEM", "REBOOT_DELETE", lockedTemp, ct).ConfigureAwait(false);
+                            }
+                        }
+                        catch
+                        {
+                            // Could not delete or rename locked file; fallback to stream overwrite or pending reboot swap below
+                        }
+                    }
                 }
-                File.Copy(src, dest, true);
-                File.SetAttributes(dest, FileAttributes.Normal);
+
+                await using (var inStream = new FileStream(src, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                await using (var outStream = new FileStream(dest, FileMode.Create, FileAccess.Write, FileShare.None, 81920, FileOptions.Asynchronous | FileOptions.WriteThrough))
+                {
+                    await inStream.CopyToAsync(outStream, 81920, ct).ConfigureAwait(false);
+                    await outStream.FlushAsync(ct).ConfigureAwait(false);
+                }
+
+                try
+                {
+                    await Task.Run(() => File.SetAttributes(dest, FileAttributes.Normal), ct).ConfigureAwait(false);
+                }
+                catch { }
+
                 await logger.LogAsync("FILESYSTEM", "COPY", dest, ct).ConfigureAwait(false);
                 return;
             }
@@ -1583,6 +1637,28 @@ internal static class DeploymentLifecycle
             {
                 if (attempt == maxRetries)
                 {
+                    try
+                    {
+                        string pendingPath = dest + ".pending." + Guid.NewGuid().ToString("N");
+                        await using (var inStream = new FileStream(src, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                        await using (var outStream = new FileStream(pendingPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, FileOptions.Asynchronous | FileOptions.WriteThrough))
+                        {
+                            await inStream.CopyToAsync(outStream, 81920, ct).ConfigureAwait(false);
+                            await outStream.FlushAsync(ct).ConfigureAwait(false);
+                        }
+
+                        if (MoveFileEx(pendingPath, dest, MoveFileFlags.DelayUntilReboot | MoveFileFlags.ReplaceExisting))
+                        {
+                            Interlocked.Increment(ref _pendingRebootDeletes);
+                            await logger.LogAsync("FILESYSTEM", "REBOOT_REPLACE", $"{pendingPath} -> {dest}", ct).ConfigureAwait(false);
+                            return;
+                        }
+                    }
+                    catch (Exception rebootEx)
+                    {
+                        await logger.LogAsync("FILESYSTEM", "REBOOT_SCHEDULE_FAIL", $"{dest} :: {rebootEx.Message}", ct, rebootEx).ConfigureAwait(false);
+                    }
+
                     await logger.LogAsync("FILESYSTEM", "COPY_FAIL", $"{dest} :: {ex.Message}", ct, ex).ConfigureAwait(false);
                     throw;
                 }
@@ -1596,17 +1672,19 @@ internal static class DeploymentLifecycle
 
     private static async Task CopyDirectoryRecursiveAsync(string sourceDir, string targetDir, DeploymentLogger logger, CancellationToken ct)
     {
-        if (!Directory.Exists(sourceDir)) return;
-        Directory.CreateDirectory(targetDir);
+        if (!await Task.Run(() => Directory.Exists(sourceDir), ct).ConfigureAwait(false)) return;
+        await Task.Run(() => Directory.CreateDirectory(targetDir), ct).ConfigureAwait(false);
 
-        foreach (string dir in Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories))
+        string[] dirs = await Task.Run(() => Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories), ct).ConfigureAwait(false);
+        foreach (string dir in dirs)
         {
             ct.ThrowIfCancellationRequested();
             string rel = Path.GetRelativePath(sourceDir, dir);
-            Directory.CreateDirectory(Path.Combine(targetDir, rel));
+            await Task.Run(() => Directory.CreateDirectory(Path.Combine(targetDir, rel)), ct).ConfigureAwait(false);
         }
 
-        foreach (string file in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+        string[] files = await Task.Run(() => Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories), ct).ConfigureAwait(false);
+        foreach (string file in files)
         {
             ct.ThrowIfCancellationRequested();
             string rel = Path.GetRelativePath(sourceDir, file);
@@ -1617,21 +1695,21 @@ internal static class DeploymentLifecycle
 
     private static async Task PopulateStagingDirectoryAsync(string shadowDir, string deltaPackagePath, DeploymentLogger logger, CancellationToken ct)
     {
-        Directory.CreateDirectory(shadowDir);
+        await Task.Run(() => Directory.CreateDirectory(shadowDir), ct).ConfigureAwait(false);
         string shadowExe = Path.Combine(shadowDir, DeploymentFootprint.AppName + ".exe");
         string shadowUninstall = Path.Combine(shadowDir, "Uninstall.exe");
 
-        if (!string.IsNullOrWhiteSpace(deltaPackagePath) && File.Exists(deltaPackagePath))
+        if (!string.IsNullOrWhiteSpace(deltaPackagePath) && await Task.Run(() => File.Exists(deltaPackagePath), ct).ConfigureAwait(false))
         {
             await logger.LogAsync("STAGE", "DELTA_APPLY", $"Applying delta package: {deltaPackagePath}", ct).ConfigureAwait(false);
-            if (Directory.Exists(StartupTaskHelper.InstallFolder))
+            if (await Task.Run(() => Directory.Exists(StartupTaskHelper.InstallFolder), ct).ConfigureAwait(false))
             {
                 await CopyDirectoryRecursiveAsync(StartupTaskHelper.InstallFolder, shadowDir, logger, ct).ConfigureAwait(false);
             }
             await Task.Run(() => ZipFile.ExtractToDirectory(deltaPackagePath, shadowDir, overwriteFiles: true), ct).ConfigureAwait(false);
-            if (File.Exists(shadowExe))
+            if (await Task.Run(() => File.Exists(shadowExe), ct).ConfigureAwait(false))
             {
-                File.Copy(shadowExe, shadowUninstall, true);
+                await CopyFileAggressiveAsync(shadowExe, shadowUninstall, logger, ct).ConfigureAwait(false);
             }
         }
         else
@@ -1646,14 +1724,15 @@ internal static class DeploymentLifecycle
             {
                 await CopyFileAggressiveAsync(RuntimePathHelper.ExecutablePath, shadowUninstall, logger, ct).ConfigureAwait(false);
                 string srcDir = Path.GetDirectoryName(RuntimePathHelper.ExecutablePath);
-                if (!string.IsNullOrEmpty(srcDir) && Directory.Exists(srcDir) && !string.Equals(srcDir, shadowDir, StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrEmpty(srcDir) && await Task.Run(() => Directory.Exists(srcDir), ct).ConfigureAwait(false) && !string.Equals(srcDir, shadowDir, StringComparison.OrdinalIgnoreCase))
                 {
-                    foreach (string dll in Directory.GetFiles(srcDir, "*.dll"))
+                    string[] dlls = await Task.Run(() => Directory.GetFiles(srcDir, "*.dll"), ct).ConfigureAwait(false);
+                    foreach (string dll in dlls)
                     {
                         string dest = Path.Combine(shadowDir, Path.GetFileName(dll));
-                        if (!File.Exists(dest))
+                        if (!await Task.Run(() => File.Exists(dest), ct).ConfigureAwait(false))
                         {
-                            File.Copy(dll, dest, true);
+                            await CopyFileAggressiveAsync(dll, dest, logger, ct).ConfigureAwait(false);
                         }
                     }
                 }
@@ -1762,13 +1841,53 @@ internal static class DeploymentLifecycle
 
     private static async Task<bool> WaitForApplicationsToCloseAsync(DeploymentProgress progress, CancellationToken ct, bool isAutoUpdate = false)
     {
-        if (isAutoUpdate && StartupTaskHelper.FindRunningInstalledProcesses().Length != 0)
+        int[] running = StartupTaskHelper.FindRunningInstalledProcesses();
+        if (running.Length != 0)
         {
+            BootstrapDebug.Log($"WaitForApplicationsToClose: Found {running.Length} running FreeSnip process(es). Requesting clean shutdown via IPC...");
             try { _ = InstanceIpcClient.SendMessageAsync(InstanceIpcRelay.MessageShutdown, 1000); } catch { }
+
+            foreach (int pid in running)
+            {
+                try
+                {
+                    using var p = Process.GetProcessById(pid);
+                    if (!p.HasExited) p.CloseMainWindow();
+                }
+                catch { }
+            }
+
             for (int i = 0; i < 30; i++)
             {
                 if (StartupTaskHelper.FindRunningInstalledProcesses().Length == 0) break;
                 await Task.Delay(100, ct).ConfigureAwait(false);
+            }
+
+            running = StartupTaskHelper.FindRunningInstalledProcesses();
+            if (running.Length != 0)
+            {
+                BootstrapDebug.Log($"WaitForApplicationsToClose: {running.Length} process(es) still active after 3s grace period. Terminating for upgrade/lifecycle...");
+                foreach (int pid in running)
+                {
+                    try
+                    {
+                        using var p = Process.GetProcessById(pid);
+                        if (!p.HasExited)
+                        {
+                            p.Kill(entireProcessTree: true);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        BootstrapDebug.Log($"WaitForApplicationsToClose: Process.Kill failed for PID {pid}: {ex.Message}");
+                    }
+                }
+
+                for (int i = 0; i < 15; i++)
+                {
+                    if (StartupTaskHelper.FindRunningInstalledProcesses().Length == 0) break;
+                    await Task.Delay(100, ct).ConfigureAwait(false);
+                }
             }
         }
 
@@ -1776,9 +1895,9 @@ internal static class DeploymentLifecycle
         {
             ct.ThrowIfCancellationRequested();
             var result = await ShowBlockingPromptAsync(progress,
-                "FreeSnip is still running. Save your open pictures and exit FreeSnip using its tray menu.\r\n\r\n" +
-                "Choose Retry after closing it, or Cancel to leave setup. Setup will not force-close your work.",
-                "Save your work before continuing", MessageBoxButtons.RetryCancel, MessageBoxIcon.Information).ConfigureAwait(false);
+                "FreeSnip is still running and could not be closed automatically.\r\n\r\n" +
+                "Please close FreeSnip from its tray menu or Task Manager, then choose Retry.",
+                "Close FreeSnip before continuing", MessageBoxButtons.RetryCancel, MessageBoxIcon.Information).ConfigureAwait(false);
             if (result != DialogResult.Retry) return false;
         }
         return true;

@@ -80,29 +80,41 @@ set "DO_PUBLISH=1"
 if /I "%~1"=="--no-publish" set "DO_PUBLISH=0"
 
 rem ---------------------------------------------------------------------------
-rem  VERSION STAMP (pattern ported from the reference build script): every
-rem  release used to report an unstamped version, so a bug report could not be
-rem  tied to a binary and two builds on the same day collided on one tag. The
-rem  version is computed ONCE here so both exes, the release tag and the
-rem  release notes all say the same thing.
-rem    yyyy.MM.dd.HHmm - each part must stay under 65535 for a Windows version
-rem    resource. HHmm does; HHmmss does not.
+rem  SEMANTIC VERSION STAMP:
+rem  Reads semantic version from .\version.txt (e.g., 3.0.0).
+rem  Supports bumping via: Build.cmd --patch
+rem  Supports explicit override via: Build.cmd 3.0.1
 rem ---------------------------------------------------------------------------
 set "BUILD_VERSION="
-for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "Get-Date -Format yyyy.MM.dd.HHmm"`) do set "BUILD_VERSION=%%V"
-if not defined BUILD_VERSION (
-  echo ERROR: could not compute a build version.
-  exit /b 1
+if exist ".\version.txt" (
+  for /f "usebackq delims=" %%V in (".\version.txt") do if not defined BUILD_VERSION set "BUILD_VERSION=%%V"
 )
+if not defined BUILD_VERSION set "BUILD_VERSION=3.0.0"
+
+set "USER_ARG=%~1"
+if /I "!USER_ARG!"=="--patch" (
+  for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "$v = [version]'!BUILD_VERSION!'; if ($v.Build -ge 0) { '{0}.{1}.{2}' -f $v.Major, $v.Minor, ($v.Build + 1) } else { '{0}.{1}.1' -f $v.Major, ($v.Minor + 1) }"`) do set "BUILD_VERSION=%%V"
+  shift
+) else (
+  if defined USER_ARG if /I not "!USER_ARG!"=="--no-publish" (
+    set "BUILD_VERSION=!USER_ARG!"
+    shift
+  )
+)
+
+set "FILE_VERSION="
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "$v = [version]'!BUILD_VERSION!'; if ($v.Build -lt 0) { '!BUILD_VERSION!.0.0' } elseif ($v.Revision -lt 0) { '!BUILD_VERSION!.0' } else { '!BUILD_VERSION!' }"`) do set "FILE_VERSION=%%V"
+if not defined FILE_VERSION set "FILE_VERSION=!BUILD_VERSION!.0"
+
 set "GIT_COMMIT="
 for /f "usebackq delims=" %%G in (`git rev-parse --short HEAD 2^>nul`) do set "GIT_COMMIT=%%G"
 if not defined GIT_COMMIT set "GIT_COMMIT=unknown"
 set "INFORMATIONAL_VERSION=!BUILD_VERSION!+!GIT_COMMIT!"
 set "TAG=v!BUILD_VERSION!"
-set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!BUILD_VERSION! -p:InformationalVersion=!INFORMATIONAL_VERSION!"
-echo Build version: !BUILD_VERSION!  ^(tag !TAG!, commit !GIT_COMMIT!^)
+set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!FILE_VERSION! -p:AssemblyVersion=!FILE_VERSION! -p:InformationalVersion=!INFORMATIONAL_VERSION!"
+echo Build version: !BUILD_VERSION!  ^(tag !TAG!, fileversion !FILE_VERSION!, commit !GIT_COMMIT!^)
 
-powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value ('<Project>`r`n  <PropertyGroup>`r`n    <Version>!BUILD_VERSION!</Version>`r`n    <AssemblyVersion>!BUILD_VERSION!</AssemblyVersion>`r`n    <FileVersion>!BUILD_VERSION!</FileVersion>`r`n    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>`r`n    <ProductVersion>!BUILD_VERSION!</ProductVersion>`r`n  </PropertyGroup>`r`n</Project>')" <nul
+powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value ('<Project>`r`n  <PropertyGroup>`r`n    <Version>!BUILD_VERSION!</Version>`r`n    <AssemblyVersion>!FILE_VERSION!</AssemblyVersion>`r`n    <FileVersion>!FILE_VERSION!</FileVersion>`r`n    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>`r`n    <ProductVersion>!BUILD_VERSION!</ProductVersion>`r`n  </PropertyGroup>`r`n</Project>')" <nul
 
 echo ###########################################################
 
@@ -167,6 +179,10 @@ if errorlevel 1 exit /b 1
 
 copy /y "LICENSE.txt" ".\compiled\LICENSE.txt" >nul
 call :VALIDATE_COMPILED_OUTPUT
+
+if errorlevel 1 exit /b 1
+
+call :SIGN_BINARIES
 
 if errorlevel 1 exit /b 1
 
@@ -339,6 +355,23 @@ if "!INVALID!"=="1" (
 echo Verified .\compiled contains exactly 2 EXE files and LICENSE.txt.
 exit /b 0
 
+:SIGN_BINARIES
+echo.
+echo ###########################################################
+echo DIGITALLY SIGNING COMPILED BINARIES (AUTHENTICODE)...
+echo ###########################################################
+where pwsh >nul 2>&1
+if not errorlevel 1 (
+  pwsh -NoProfile -ExecutionPolicy Bypass -File ".\developer_tools\SignBinaries.ps1" -TargetFolder ".\compiled" <nul
+) else (
+  powershell -ExecutionPolicy Bypass -File ".\developer_tools\SignBinaries.ps1" -TargetFolder ".\compiled" <nul
+)
+if errorlevel 1 (
+  echo ERROR: Digital signature process failed.
+  exit /b 1
+)
+exit /b 0
+
 :DETECT_NATIVE_AOT
 
 where link.exe >nul 2>&1
@@ -461,42 +494,24 @@ set "HASH_TESS=!SHA256_OUT!"
 echo [PUBLISH] 3/7 Both built exes fingerprinted, tag !TAG! ready.   [OK]
 
 rem ---------------------------------------------------------------------------
-rem  THERE IS EXACTLY ONE RELEASE, EVERYWHERE, ALWAYS - NO EXCEPTIONS.
-rem    local : :VALIDATE_COMPILED_OUTPUT proves .\compiled holds exactly the
-rem           three shipped files, and the purge at the top of this run wiped
-rem           the folder before anything was written into it.
-rem    cloud : EVERY previous release is deleted below, whatever its tag.
-rem    git   : and every tag with it. `--cleanup-tag` only removes a tag owned
-rem           by the release being deleted; a tag created by hand, or one left
-rem           behind when a release delete half-failed, survives it and still
-rem           shows up as another "version". The sweep below removes every
-rem           remaining tag remotely AND locally. The slate is then RE-READ
-rem           before publishing onto it: a delete that silently failed must
-rem           not be counted as a success.
+rem  RELEASE RETENTION POLICY:
+rem    Keep all releases from the last 90 days.
+rem    Always keep at least the latest 3 releases, regardless of age.
+rem    Only prune releases that are BOTH older than 90 days AND outside top 3.
 rem ---------------------------------------------------------------------------
-set "REMOVED=0"
-for /f "usebackq delims=" %%T in (`gh release list --repo !REPO! --limit 200 --json tagName --jq ".[].tagName" 2^>nul`) do (
-  echo [PUBLISH]     removing previous release %%T
-  gh release delete %%T --repo !REPO! --cleanup-tag --yes >nul 2>&1
-  set /a REMOVED+=1
+echo [PUBLISH] 4/7 Applying release retention policy ^(keep 90 days or top 3^)...
+powershell -NoProfile -Command "$releases = gh release list --repo !REPO! --limit 200 --json tagName,createdAt | ConvertFrom-Json; $now = [DateTime]::UtcNow; $cutoff = $now.AddDays(-90); $idx = 0; $pruned = 0; foreach ($r in $releases) { $idx++; $created = [DateTime]::Parse($r.createdAt).ToUniversalTime(); if ($idx -le 3 -or $created -ge $cutoff) { Write-Host ('[PUBLISH]     keeping release ' + $r.tagName + ' (created ' + $r.createdAt + ', rank ' + $idx + ')') } else { Write-Host ('[PUBLISH]     pruning expired release ' + $r.tagName + ' (created ' + $r.createdAt + ')'); gh release delete $r.tagName --repo !REPO! --cleanup-tag --yes >$null 2>&1; $pruned++ } }; Write-Host ('[PUBLISH]     Retention completed. Pruned ' + $pruned + ' expired release(s).')" <nul
+echo [PUBLISH] 4/7 Release retention check finished.                      [OK]
+
+gh release view !TAG! --repo !REPO! >nul 2>&1
+if not errorlevel 1 (
+  echo [PUBLISH]     Release !TAG! already exists; refreshing release assets...
+  gh release delete !TAG! --repo !REPO! --cleanup-tag --yes >nul 2>&1
+  git push origin --delete "!TAG!" >nul 2>&1
+  git tag -d "!TAG!" >nul 2>&1
 )
 
-git fetch --tags --prune --prune-tags >nul 2>&1
-for /f "usebackq delims=" %%T in (`git tag --list 2^>nul`) do (
-  git push origin --delete "%%T" >nul 2>&1
-  git tag -d "%%T" >nul 2>&1
-)
-
-set "SURVIVORS="
-for /f "usebackq delims=" %%T in (`gh release list --repo !REPO! --limit 200 --json tagName --jq ".[].tagName" 2^>nul`) do set "SURVIVORS=!SURVIVORS! %%T"
-if defined SURVIVORS (
-  echo [PUBLISH] STOPPED: these releases could not be removed:!SURVIVORS!
-  echo [PUBLISH] Publishing now would leave more than one release live. Remove them by hand.
-  exit /b 1
-)
-echo [PUBLISH] 4/7 Removed !REMOVED! previous release^(s^) and all tags.    [OK]
-
-gh release create !TAG! ".\compiled\FreeSnip.exe#FreeSnip.exe - Native AOT" ".\compiled\FreeSnip_tesseract.exe#FreeSnip_tesseract.exe - with OCR" ".\compiled\LICENSE.txt#LICENSE.txt" --repo !REPO! --title "FreeSnip !TAG!" --notes "Automated release published by Build.cmd on !TAG!. This is the only release: every previous release and tag is deleted on each publish. FreeSnip.exe SHA256 !HASH_NATIVE! / FreeSnip_tesseract.exe SHA256 !HASH_TESS!." --latest >nul 2>&1
+gh release create !TAG! ".\compiled\FreeSnip.exe#FreeSnip.exe - Native AOT" ".\compiled\FreeSnip_tesseract.exe#FreeSnip_tesseract.exe - with OCR" ".\compiled\LICENSE.txt#LICENSE.txt" --repo !REPO! --title "FreeSnip !TAG!" --notes "Release !TAG!. Digitally signed with Authenticode and RFC 3161 timestamp. FreeSnip.exe SHA256 !HASH_NATIVE! / FreeSnip_tesseract.exe SHA256 !HASH_TESS!." --latest >nul 2>&1
 if errorlevel 1 (
   echo [PUBLISH] STOPPED: creating release !TAG! failed.
   echo [PUBLISH] Your build is fine - only the upload failed. Retry, or publish by hand.
@@ -519,13 +534,24 @@ if errorlevel 1 (
 )
 echo [PUBLISH] 6/7 Both uploaded exe hashes match the built files.    [OK]
 
-echo [PUBLISH] 7/7 Done. https://github.com/!REPO!/releases now holds exactly one release.
+echo [PUBLISH] 7/7 Done. Release !TAG! published.
 
 echo.
 echo ###########################################################
-echo SUCCESS: release !TAG! is live and is the only release.
+echo SUCCESS: Release !TAG! is live.
 echo Download: https://github.com/!REPO!/releases/latest/download/FreeSnip.exe
 echo ###########################################################
+echo.
+echo ===========================================================
+echo  DEFENDER WHITELIST SUBMISSION (FAST-TRACK FALSE POSITIVE CLEARANCE):
+echo  To immediately prevent Defender warnings on fresh download:
+echo  1. Open: https://www.microsoft.com/en-us/wdsi/filesubmission
+echo  2. Category: Software Developer -^> Incorrectly detected as malware
+echo  3. Upload .\compiled\FreeSnip.exe
+echo     SHA256: !HASH_NATIVE!
+echo  4. Upload .\compiled\FreeSnip_tesseract.exe
+echo     SHA256: !HASH_TESS!
+echo ===========================================================
 exit /b 0
 
 rem  Fingerprint helper: %1 = file, result lands in SHA256_OUT (UPPERCASE hex).

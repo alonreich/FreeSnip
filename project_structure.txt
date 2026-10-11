@@ -224,6 +224,7 @@ FULL PROJECT MINIMAP & NAVIGATION GUIDE
 |       Find_and_Remove_Comments.py
 |       Pull_Code_Files.py
 |       SetConsoleFont.ps1
+|       SignBinaries.ps1
 |       
 +---docs
 |       CHANGELOG.md

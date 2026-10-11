@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Collections.Generic;
 using Avalonia;
@@ -388,7 +388,7 @@ namespace freesnip.tests
         }
 
         [AvaloniaFact]
-        public void TextTool_TextAlignment_PreservesCenterAcrossLTRAndRTL()
+        public void TextTool_TextAlignment_AlignsLeftForLtrAndRightForRtl()
         {
             var config = new CoreConfiguration();
             var editor = new ImageEditorWindow();
@@ -413,15 +413,15 @@ namespace freesnip.tests
 
                 textBox.Text = "English Text";
                 Assert.Equal(FlowDirection.LeftToRight, textBox.FlowDirection);
-                Assert.Equal(Avalonia.Media.TextAlignment.Center, textBox.TextAlignment);
+                Assert.Equal(Avalonia.Media.TextAlignment.Left, textBox.TextAlignment);
 
                 textBox.Text = "טקסט בעברית";
                 Assert.Equal(FlowDirection.RightToLeft, textBox.FlowDirection);
-                Assert.Equal(Avalonia.Media.TextAlignment.Center, textBox.TextAlignment);
+                Assert.Equal(Avalonia.Media.TextAlignment.Right, textBox.TextAlignment);
 
                 textBox.Text = "مرحبا بالعالم";
                 Assert.Equal(FlowDirection.RightToLeft, textBox.FlowDirection);
-                Assert.Equal(Avalonia.Media.TextAlignment.Center, textBox.TextAlignment);
+                Assert.Equal(Avalonia.Media.TextAlignment.Right, textBox.TextAlignment);
             }
             finally
             {

@@ -3,7 +3,7 @@
         x:Class="freesnip.forms.SettingsWindow"
         Title="FreeSnip Settings"
         SizeToContent="WidthAndHeight"
-        MinWidth="720" MinHeight="520"
+        MinWidth="720" MinHeight="460"
         AutomationProperties.Name="FreeSnip settings"
         Background="{DynamicResource FreeSnipCanvasBrush}"
         Closing="OnSettingsClosing"

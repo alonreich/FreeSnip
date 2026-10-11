@@ -23,6 +23,7 @@
                                TextAlignment="Center" TextWrapping="Wrap"/>
 
                     <ProgressBar Name="Progress" Minimum="0" Maximum="100" Height="14"
+                                 AutomationProperties.Name="Update download progress"
                                  Background="{DynamicResource FreeSnipCanvasBrush}"
                                  Foreground="{DynamicResource FreeSnipAccentBrush}"
                                  HorizontalAlignment="Stretch"/>
@@ -35,6 +36,7 @@
                 <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center"
                             Spacing="15" Margin="0,5,0,0">
                     <Button Name="CancelBtn" Content="CANCEL DOWNLOAD" MinWidth="140"
+                            AutomationProperties.Name="Cancel download"
                             Cursor="Hand" IsCancel="True"
                             Background="{DynamicResource FreeSnipCanvasBrush}"
                             Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"

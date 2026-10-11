@@ -10,22 +10,29 @@
         Focusable="False"
         CanResize="False"
         ShowInTaskbar="False"
-        Width="580"
+        Width="690"
         Height="68"
         WindowStartupLocation="Manual"
         Cursor="Arrow">
-    <Border Background="#F2181A1F"
+    <Border Background="{DynamicResource FreeSnipPanelDarkBrush}"
             BorderBrush="{DynamicResource FreeSnipScrollAccentBrush}"
             BorderThickness="1.5"
             CornerRadius="34"
-            Padding="16,8"
+            Padding="14,6"
             Margin="6"
             BoxShadow="0 8 30 0 #B3000000"
             PointerPressed="OnPillPointerPressed">
-        <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
+            <!-- Grip Drag Handle -->
+            <Border Grid.Column="0" Name="DragHandle" ToolTip.Tip="Click and drag to reposition controller"
+                    Cursor="SizeAll" Padding="4,4" Background="Transparent" VerticalAlignment="Center" Margin="2,0,8,0"
+                    PointerPressed="OnPillPointerPressed">
+                <TextBlock Text="⋮⋮" FontSize="16" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" VerticalAlignment="Center"/>
+            </Border>
+
             <!-- Pulsing REC Indicator -->
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="4,0,14,0">
-                <Ellipse Classes="pulse" Width="12" Height="12" Fill="{DynamicResource FreeSnipDestructiveHoverBrush}" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,12,0">
+                <Ellipse Name="RecDot" Classes="pulse" Width="10" Height="10" Fill="{DynamicResource FreeSnipDestructiveHoverBrush}" VerticalAlignment="Center">
                     <Ellipse.Styles>
                         <Style Selector="Ellipse.pulse">
                             <Style.Animations>
@@ -38,21 +45,40 @@
                         </Style>
                     </Ellipse.Styles>
                 </Ellipse>
-                <TextBlock Text="REC" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource FreeSnipDestructiveHoverBrush}" VerticalAlignment="Center" />
+                <TextBlock Name="RecLabel" Text="REC" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource FreeSnipDestructiveHoverBrush}" VerticalAlignment="Center" />
             </StackPanel>
 
             <!-- Status Indicator & User Guidance -->
-            <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,14,0">
-                <TextBlock Name="ScreensBadge" Text="Recording started. Scroll down now using your mouse wheel." FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Name="SubtextHint" Text="Enter finishes · Esc cancels" FontSize="10.5" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+            <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,12,0">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Name="StatsCounterText" Text="1.0 screens · 0 px · 1 frame" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Name="SpeedWarningText" Text="" FontSize="11.5" FontWeight="Bold" Foreground="#FFA500" IsVisible="False" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Name="SubtextHint" Text="Recording active. Scroll down using your mouse wheel." FontSize="10.5" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
+                <ProgressBar Name="StitchProgressBar" Minimum="0" Maximum="100" Value="0" Height="4" CornerRadius="2" Margin="0,3,0,0" IsVisible="False" Background="#33FFFFFF" Foreground="{DynamicResource FreeSnipSuccessBrush}"/>
             </StackPanel>
 
+            <!-- Pause / Resume Button -->
+            <Button Grid.Column="3" Name="PauseButton" Content="⏸ Pause" Click="OnPauseClick"
+                    AutomationProperties.Name="Pause or resume scroll capture"
+                    ToolTip.Tip="Pause capture to scroll past ads or wait for pages to load (Space/P)"
+                    Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                    FontWeight="SemiBold" FontSize="11.5"
+                    CornerRadius="16" Padding="12,6" Margin="0,0,6,0" Cursor="Hand">
+                <Button.Styles>
+                    <Style Selector="Button#PauseButton:pointerover /template/ ContentPresenter">
+                        <Setter Property="Background" Value="{DynamicResource FreeSnipSecondaryButtonHoverBrush}" />
+                    </Style>
+                </Button.Styles>
+            </Button>
+
             <!-- Green On-Screen Finish Button -->
-            <Button Grid.Column="2" Name="FinishButton" Content="✓ Finish &amp; Open Editor" Click="OnFinishClick"
+            <Button Grid.Column="4" Name="FinishButton" Content="✓ Finish &amp; Open Editor" Click="OnFinishClick"
                     AutomationProperties.Name="Finish scroll capture and open editor"
+                    ToolTip.Tip="Complete capture and open image in editor (Enter)"
                     Background="{DynamicResource FreeSnipSuccessBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
                     FontWeight="Bold" FontSize="11.5"
-                    CornerRadius="16" Padding="14,6" Margin="0,0,8,0" Cursor="Hand">
+                    CornerRadius="16" Padding="14,6" Margin="0,0,6,0" Cursor="Hand">
                 <Button.Styles>
                     <Style Selector="Button#FinishButton:pointerover /template/ ContentPresenter">
                         <Setter Property="Background" Value="{DynamicResource FreeSnipSuccessHoverBrush}" />
@@ -61,8 +87,9 @@
             </Button>
 
             <!-- Red On-Screen Cancel Button -->
-            <Button Grid.Column="3" Name="CancelButton" Content="✕ Cancel (Esc)" Click="OnCancelClick"
+            <Button Grid.Column="5" Name="CancelButton" Content="✕ Cancel (Esc)" Click="OnCancelClick"
                     AutomationProperties.Name="Cancel scroll capture"
+                    ToolTip.Tip="Cancel capture and exit (Esc)"
                     Background="{DynamicResource FreeSnipDestructiveBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
                     FontWeight="Bold" FontSize="11.5"
                     CornerRadius="16" Padding="12,6" Margin="0" Cursor="Hand">

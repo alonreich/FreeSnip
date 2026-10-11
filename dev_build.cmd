@@ -45,23 +45,27 @@ set "DOTNET_LOG_ARGS=-consoleLoggerParameters:Summary;NoItemAndPropertyList"
 set "DO_PUBLISH=0"
 
 rem ---------------------------------------------------------------------------
-rem  VERSION STAMP: computed locally for binary assembly metadata
+rem  SEMANTIC VERSION STAMP: read from .\version.txt (e.g. 3.0.0)
 rem ---------------------------------------------------------------------------
 set "BUILD_VERSION="
-for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "Get-Date -Format yyyy.MM.dd.HHmm"`) do set "BUILD_VERSION=%%V"
-if not defined BUILD_VERSION (
-  echo ERROR: could not compute a build version.
-  exit /b 1
+if exist ".\version.txt" (
+  for /f "usebackq delims=" %%V in (".\version.txt") do if not defined BUILD_VERSION set "BUILD_VERSION=%%V"
 )
+if not defined BUILD_VERSION set "BUILD_VERSION=3.0.0"
+
+set "FILE_VERSION="
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "$v = [version]'!BUILD_VERSION!'; if ($v.Build -lt 0) { '!BUILD_VERSION!.0.0' } elseif ($v.Revision -lt 0) { '!BUILD_VERSION!.0' } else { '!BUILD_VERSION!' }"`) do set "FILE_VERSION=%%V"
+if not defined FILE_VERSION set "FILE_VERSION=!BUILD_VERSION!.0"
+
 set "GIT_COMMIT="
 for /f "usebackq delims=" %%G in (`git rev-parse --short HEAD 2^>nul`) do set "GIT_COMMIT=%%G"
 if not defined GIT_COMMIT set "GIT_COMMIT=unknown"
 set "INFORMATIONAL_VERSION=!BUILD_VERSION!+!GIT_COMMIT!"
 set "TAG=v!BUILD_VERSION!"
-set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!BUILD_VERSION! -p:InformationalVersion=!INFORMATIONAL_VERSION!"
-echo Local Dev Build version: !BUILD_VERSION!  ^(tag !TAG!, commit !GIT_COMMIT!^)
+set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!FILE_VERSION! -p:AssemblyVersion=!FILE_VERSION! -p:InformationalVersion=!INFORMATIONAL_VERSION!"
+echo Local Dev Build version: !BUILD_VERSION!  ^(tag !TAG!, fileversion !FILE_VERSION!, commit !GIT_COMMIT!^)
 
-powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value ('<Project>`r`n  <PropertyGroup>`r`n    <Version>!BUILD_VERSION!</Version>`r`n    <AssemblyVersion>!BUILD_VERSION!</AssemblyVersion>`r`n    <FileVersion>!BUILD_VERSION!</FileVersion>`r`n    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>`r`n    <ProductVersion>!BUILD_VERSION!</ProductVersion>`r`n  </PropertyGroup>`r`n</Project>')" <nul
+powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value ('<Project>`r`n  <PropertyGroup>`r`n    <Version>!BUILD_VERSION!</Version>`r`n    <AssemblyVersion>!FILE_VERSION!</AssemblyVersion>`r`n    <FileVersion>!FILE_VERSION!</FileVersion>`r`n    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>`r`n    <ProductVersion>!BUILD_VERSION!</ProductVersion>`r`n  </PropertyGroup>`r`n</Project>')" <nul
 
 echo ###########################################################
 echo PREPARING LOCAL BUILD ENVIRONMENT...
@@ -110,6 +114,9 @@ if errorlevel 1 exit /b 1
 
 copy /y "LICENSE.txt" ".\compiled\LICENSE.txt" >nul
 call :VALIDATE_COMPILED_OUTPUT
+if errorlevel 1 exit /b 1
+
+call :SIGN_BINARIES
 if errorlevel 1 exit /b 1
 
 echo.
@@ -230,6 +237,18 @@ if "!INVALID!"=="1" (
   exit /b 1
 )
 echo Verified .\compiled contains exactly 2 EXE files and LICENSE.txt.
+exit /b 0
+
+:SIGN_BINARIES
+echo.
+echo ###########################################################
+echo DIGITALLY SIGNING COMPILED BINARIES (AUTHENTICODE)...
+echo ###########################################################
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\developer_tools\SignBinaries.ps1" -TargetFolder ".\compiled" <nul
+if errorlevel 1 (
+  echo ERROR: Digital signature process failed.
+  exit /b 1
+)
 exit /b 0
 
 :TERMINATE_PROCESSES

@@ -38,6 +38,22 @@ namespace freesnip.native
             return null;
         }
 
+        public static string GetWindowProcessName(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero) return null;
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            if (pid == 0) return null;
+            try
+            {
+                using var process = System.Diagnostics.Process.GetProcessById((int)pid);
+                return process.ProcessName;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
 
         [DllImport("user32.dll")]
         public static extern IntPtr WindowFromPoint(POINT Point);

@@ -12,6 +12,7 @@ public partial class UpdateDownloadWindow : Window
     public UpdateDownloadWindow()
     {
         InitializeComponent();
+        freesnip.foundation.core.UiLayoutDirection.Apply(this);
         var cancelBtn = this.FindControl<Button>("CancelBtn");
         if (cancelBtn != null)
         {

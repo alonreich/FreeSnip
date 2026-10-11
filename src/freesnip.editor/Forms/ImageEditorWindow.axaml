@@ -168,9 +168,9 @@
             <Setter Property="BorderBrush" Value="#88000000" />
         </Style>
         <Style Selector="Button.toolbar.selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="#660078D7" />
+            <Setter Property="Background" Value="{DynamicResource FreeSnipSelectedSurfaceBrush}" />
             <Setter Property="BorderThickness" Value="2,2,1,1" />
-            <Setter Property="BorderBrush" Value="#88000000" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}" />
         </Style>
 
         <Style Selector="Button.cropmode">
@@ -197,15 +197,15 @@
         </Style>
         <Style Selector="Button.cropmode:hover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource FreeSnipHoverBrush}" />
-            <Setter Property="BorderBrush" Value="#A0A0A0" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSecondaryTextBrush}" />
         </Style>
         <Style Selector="Button.cropmode:pressed /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource FreeSnipPressedBrush}" />
-            <Setter Property="BorderBrush" Value="#666666" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}" />
         </Style>
         <Style Selector="Button.cropmode.selected /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource FreeSnipAccentBrush}" />
-            <Setter Property="BorderBrush" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
         
@@ -298,7 +298,7 @@
             <Setter Property="BorderThickness" Value="2" />
         </Style>
         <Style Selector=":is(Shape).selection-indicator">
-            <Setter Property="Stroke" Value="Yellow"/>
+            <Setter Property="Stroke" Value="{DynamicResource FreeSnipPaletteYellowBrush}"/>
             <Setter Property="StrokeThickness" Value="1"/>
             <Setter Property="StrokeDashArray" Value="4,2"/>
             <Style.Animations>
@@ -446,7 +446,7 @@
         </Style>
         
         <Style Selector="Border.counter">
-            <Setter Property="Background" Value="Red" />
+            <Setter Property="Background" Value="{DynamicResource FreeSnipPaletteRedBrush}" />
             <Setter Property="CornerRadius" Value="17.5" />
             <Setter Property="Width" Value="35" />
             <Setter Property="Height" Value="35" />
@@ -693,7 +693,7 @@
 
         <!-- Row 2: Work area containing Left Toolbar and EditorScrollViewer -->
         <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
-            <Border Grid.Column="0" Background="{DynamicResource FreeSnipToolbarBrush}" Width="60" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="0,0,1,0" Cursor="Arrow">
+            <Border Name="LeftToolbarBorder" Grid.Column="0" Background="{DynamicResource FreeSnipToolbarBrush}" Width="60" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="0,0,1,0" Cursor="Arrow">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Name="LeftToolBar" Orientation="Vertical" Margin="0,10" HorizontalAlignment="Center" Spacing="5">
                     <Button Classes="toolbar" Name="ArrowTool" AutomationProperties.Name="Arrow tool" ToolTip.Tip="Arrow (A). Esc exits this tool." Click="OnToolClick" Tag="Arrow">
@@ -795,7 +795,7 @@
                                     <Button Classes="action context-apply" Name="ContextApplyButton" Click="OnContextApplyClick" AutomationProperties.Name="Apply" ToolTip.Tip="Apply (Enter)" Focusable="True">
                                         <Path Name="ContextApplyIcon" Width="18" Height="18" Stretch="Uniform"
                                               Data="M9,16.17L4.83,12l-1.42,1.41L9,19L21,7l-1.41,-1.41z"
-                                              Fill="#FFFFFF">
+                                              Fill="{DynamicResource FreeSnipPrimaryTextBrush}">
                                             <Path.Transitions>
                                                 <Transitions>
                                                     <BrushTransition Property="Fill" Duration="0:0:0.4" />
@@ -813,7 +813,7 @@
                                     <Button Classes="action context-duplicate" Name="ContextDuplicateButton" Click="OnDuplicateClick" AutomationProperties.Name="Duplicate object" ToolTip.Tip="Duplicate (Ctrl+D)" Focusable="True">
                                         <Path Name="ContextDuplicateIcon" Width="18" Height="18" Stretch="Uniform"
                                               Data="M16,1H4C2.9,1 2,1.9 2,3v14h2V3h12V1zm3,4H8C6.9,5 6,5.9 6,7v14c0,1.1 0.9,2 2,2h11c1.1,0 2,-0.9 2,-2V7c0,-1.1 -0.9,-2 -2,-2zm0,16H8V7h11v14z"
-                                              Fill="#FFFFFF">
+                                              Fill="{DynamicResource FreeSnipPrimaryTextBrush}">
                                             <Path.Transitions>
                                                 <Transitions>
                                                     <BrushTransition Property="Fill" Duration="0:0:0.4" />
@@ -831,7 +831,7 @@
                                     <Button Classes="action context-delete" Name="ContextDeleteButton" Click="OnDeleteClick" AutomationProperties.Name="Delete object" ToolTip.Tip="Delete (Del) / Cancel (Esc)" Focusable="True">
                                         <Path Name="ContextDeleteIcon" Width="18" Height="18" Stretch="Uniform"
                                               Data="M11.5,-0.031c-1.958,0 -3.531,1.627 -3.531,3.594V4H4c-0.551,0 -1,0.449 -1,1v1H2v2h2v15c0,1.645 1.355,3 3,3h12c1.645,0 3,-1.355 3,-3V8h2V6h-1V5c0,-0.551 -0.449,-1 -1,-1h-3.969v-0.438c0,-1.966 -1.573,-3.593 -3.531,-3.593zm0,2.062h3c0.804,0 1.469,0.656 1.469,1.531V4H10.03v-0.438c0,-0.875 0.665,-1.53 1.469,-1.53zM6,8h5.125c0.124,0.013 0.247,0.031 0.375,0.031h3c0.128,0 0.25,-0.018 0.375,-0.031H20v15c0,0.563 -0.437,1 -1,1H7c-0.563,0 -1,-0.437 -1,-1zm2,2v12h2V10zm4,0v12h2V10zm4,0v12h2V10z"
-                                              Fill="#FFFFFF">
+                                              Fill="{DynamicResource FreeSnipPrimaryTextBrush}">
                                             <Path.Transitions>
                                                 <Transitions>
                                                     <BrushTransition Property="Fill" Duration="0:0:0.4" />
@@ -993,28 +993,28 @@
                                             </Grid>
                                             <Border Height="1" Background="{DynamicResource FreeSnipSeparatorBrush}" Margin="0,2,0,4" />
                                             <WrapPanel Name="ThicknessFlyoutPanel" Width="244" HorizontalAlignment="Center">
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="1" ToolTip.Tip="1px"><TextBlock Text="1" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="2" ToolTip.Tip="2px"><TextBlock Text="2" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="3" ToolTip.Tip="3px"><TextBlock Text="3" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="4" ToolTip.Tip="4px"><TextBlock Text="4" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="5" ToolTip.Tip="5px"><TextBlock Text="5" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="6" ToolTip.Tip="6px"><TextBlock Text="6" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="7" ToolTip.Tip="7px"><TextBlock Text="7" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="8" ToolTip.Tip="8px"><TextBlock Text="8" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="9" ToolTip.Tip="9px"><TextBlock Text="9" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="10" ToolTip.Tip="10px"><TextBlock Text="10" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="12" ToolTip.Tip="12px"><TextBlock Text="12" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="14" ToolTip.Tip="14px"><TextBlock Text="14" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="16" ToolTip.Tip="16px"><TextBlock Text="16" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="18" ToolTip.Tip="18px"><TextBlock Text="18" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="20" ToolTip.Tip="20px"><TextBlock Text="20" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="24" ToolTip.Tip="24px"><TextBlock Text="24" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="28" ToolTip.Tip="28px"><TextBlock Text="28" FontSize="11" FontWeight="SemiBold"/></Button>
-                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="32" ToolTip.Tip="32px"><TextBlock Text="32" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="1" AutomationProperties.Name="1 pixel line thickness" ToolTip.Tip="1px"><TextBlock Text="1" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="2" AutomationProperties.Name="2 pixel line thickness" ToolTip.Tip="2px"><TextBlock Text="2" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="3" AutomationProperties.Name="3 pixel line thickness" ToolTip.Tip="3px"><TextBlock Text="3" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="4" AutomationProperties.Name="4 pixel line thickness" ToolTip.Tip="4px"><TextBlock Text="4" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="5" AutomationProperties.Name="5 pixel line thickness" ToolTip.Tip="5px"><TextBlock Text="5" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="6" AutomationProperties.Name="6 pixel line thickness" ToolTip.Tip="6px"><TextBlock Text="6" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="7" AutomationProperties.Name="7 pixel line thickness" ToolTip.Tip="7px"><TextBlock Text="7" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="8" AutomationProperties.Name="8 pixel line thickness" ToolTip.Tip="8px"><TextBlock Text="8" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="9" AutomationProperties.Name="9 pixel line thickness" ToolTip.Tip="9px"><TextBlock Text="9" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="10" AutomationProperties.Name="10 pixel line thickness" ToolTip.Tip="10px"><TextBlock Text="10" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="12" AutomationProperties.Name="12 pixel line thickness" ToolTip.Tip="12px"><TextBlock Text="12" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="14" AutomationProperties.Name="14 pixel line thickness" ToolTip.Tip="14px"><TextBlock Text="14" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="16" AutomationProperties.Name="16 pixel line thickness" ToolTip.Tip="16px"><TextBlock Text="16" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="18" AutomationProperties.Name="18 pixel line thickness" ToolTip.Tip="18px"><TextBlock Text="18" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="20" AutomationProperties.Name="20 pixel line thickness" ToolTip.Tip="20px"><TextBlock Text="20" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="24" AutomationProperties.Name="24 pixel line thickness" ToolTip.Tip="24px"><TextBlock Text="24" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="28" AutomationProperties.Name="28 pixel line thickness" ToolTip.Tip="28px"><TextBlock Text="28" FontSize="11" FontWeight="SemiBold"/></Button>
+                                                <Button Classes="flyout-thickness" Click="OnThicknessClick" Tag="32" AutomationProperties.Name="32 pixel line thickness" ToolTip.Tip="32px"><TextBlock Text="32" FontSize="11" FontWeight="SemiBold"/></Button>
                                             </WrapPanel>
                                             <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,2" VerticalAlignment="Center" ClipToBounds="False">
                                                 <TextBlock Text="Custom:" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" Margin="0,0,8,0"/>
-                                                <Slider Grid.Column="1" Name="ThicknessFlyoutSlider" Classes="thickness-slider" Minimum="1" Maximum="40" ValueChanged="OnThicknessSliderChanged" ToolTip.Tip="Fine-tune thickness" ClipToBounds="False">
+                                                <Slider Grid.Column="1" Name="ThicknessFlyoutSlider" Classes="thickness-slider" Minimum="1" Maximum="40" ValueChanged="OnThicknessSliderChanged" AutomationProperties.Name="Fine-tune line thickness" ToolTip.Tip="Fine-tune thickness" ClipToBounds="False">
                                                     <Slider.Resources>
                                                         <GridLength x:Key="SliderPreContentMargin">0</GridLength>
                                                         <GridLength x:Key="SliderPostContentMargin">0</GridLength>
@@ -1080,7 +1080,7 @@
                         <Button Classes="toolbar" Name="ZoomOutButton" AutomationProperties.Name="Zoom out" Click="OnZoomOutClick" ToolTip.Tip="Zoom Out">
                             <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/zoom-out.svg" />
                         </Button>
-                        <Button Classes="zoom-text" Name="ZoomText" Content="100%" AutomationProperties.Name="Current zoom level, click to reset to 100 percent" ToolTip.Tip="Reset zoom to 100%" Click="OnZoomResetButtonClick" />
+                        <Button Classes="zoom-text" Name="ZoomText" Content="100%" AutomationProperties.Name="Current zoom level" ToolTip.Tip="Current zoom level" Click="OnZoomResetButtonClick" />
                         <Button Classes="toolbar" Name="ZoomInButton" AutomationProperties.Name="Zoom in" Click="OnZoomInClick" ToolTip.Tip="Zoom In">
                             <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/zoom-in.svg" />
                         </Button>

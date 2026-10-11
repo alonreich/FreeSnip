@@ -23,6 +23,7 @@ public partial class UpdateAvailableWindow : Window
     public UpdateAvailableWindow()
     {
         InitializeComponent();
+        freesnip.foundation.core.UiLayoutDirection.Apply(this);
 
         Wire("UpdateNowBtn", UpdateChoice.UpdateNow);
         Wire("RemindLaterBtn", UpdateChoice.NotNow);

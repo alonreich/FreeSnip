@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -158,11 +158,12 @@ public class EditorSafetyTests
     }
 
     [AvaloniaFact]
-    public async Task ImageEditorWindow_ContextualCopyAndPaste_DuplicatesAnnotationWith20DipOffset()
+    public async Task ImageEditorWindow_ContextualCopyAndPaste_DuplicatesAnnotationWith50DipOffset()
     {
         var editor = await CreateEditor();
         try
         {
+            await editor.SetImageAsync(new SharpImage32(400, 400, new Rgba32(255, 255, 255)), RECT.FromXYWH(0, 0, 400, 400));
             var rect = new Avalonia.Controls.Shapes.Rectangle { Width = 30, Height = 30, Fill = Brushes.Blue };
             Canvas.SetLeft(rect, 10);
             Canvas.SetTop(rect, 10);
@@ -180,8 +181,8 @@ public class EditorSafetyTests
             var selected = (Control?)typeof(ImageEditorWindow).GetField("_selectedControl", Private)!.GetValue(editor);
             Assert.NotNull(selected);
             Assert.NotSame(rect, selected);
-            Assert.Equal(30.0, Canvas.GetLeft(selected));
-            Assert.Equal(30.0, Canvas.GetTop(selected));
+            Assert.Equal(60.0, Canvas.GetLeft(selected));
+            Assert.Equal(60.0, Canvas.GetTop(selected));
         }
         finally { editor.Close(); }
     }

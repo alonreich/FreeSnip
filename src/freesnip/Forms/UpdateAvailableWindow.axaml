@@ -63,6 +63,7 @@
 
                 <StackPanel Grid.Row="2" Spacing="10">
                     <Button Name="UpdateNowBtn" Cursor="Hand" IsDefault="True"
+                            AutomationProperties.Name="Download and upgrade to the latest released version now"
                             Background="{DynamicResource FreeSnipAccentBrush}"
                             Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
@@ -72,6 +73,7 @@
                     </Button>
 
                     <Button Name="RemindLaterBtn" Cursor="Hand"
+                            AutomationProperties.Name="Remind me later and keep using the current version"
                             Background="{DynamicResource FreeSnipPanelDarkBrush}"
                             Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
                             BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
@@ -85,6 +87,7 @@
                     <Separator Background="{DynamicResource FreeSnipSeparatorBrush}" Height="1" Margin="0,4"/>
 
                     <Button Name="SkipBtn" Cursor="Hand"
+                            AutomationProperties.Name="Skip this version"
                             Background="{DynamicResource FreeSnipCanvasBrush}"
                             Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
                             BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
@@ -96,13 +99,14 @@
                     </Button>
 
                     <Button Name="NeverBtn" Cursor="Hand"
-                            Background="{DynamicResource FreeSnipCanvasBrush}"
-                            Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
-                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                            AutomationProperties.Name="Never check for updates again"
+                            Background="{DynamicResource FreeSnipDestructiveSurfaceBrush}"
+                            Foreground="{DynamicResource FreeSnipDestructiveHoverBrush}"
+                            BorderBrush="{DynamicResource FreeSnipDestructiveBrush}"
                             BorderThickness="1"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                             Padding="10,6" CornerRadius="4">
-                        <TextBlock Text="Never tell me about updates again."
+                        <TextBlock Text="⚠ Never tell me about updates again (not recommended)."
                                    TextWrapping="Wrap" TextAlignment="Center"/>
                     </Button>
                 </StackPanel>

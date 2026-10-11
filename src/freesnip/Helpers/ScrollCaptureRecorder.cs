@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
@@ -43,6 +43,11 @@ namespace freesnip.helpers
         public int TotalCapturedHeight => _stitcher.TotalCapturedHeight;
         public long CurrentCompositePixels => _stitcher.CurrentCompositePixels;
         public bool IsPaused { get; private set; }
+        public int LastDeltaY => _stitcher.LastDeltaY;
+        public int LastDeltaX => _stitcher.LastDeltaX;
+        public int ScrollDirection => _stitcher.ScrollDirection;
+        public bool IsScrollingTooFast => _rejectedFrames >= 2 || _stitcher.IsScrollingTooFast;
+        public int RejectedFrames => _rejectedFrames;
 
         /// <summary>
         /// Optional axis hint from the UI (e.g. mouse wheel direction).
@@ -259,6 +264,20 @@ namespace freesnip.helpers
         public bool? AxisHint { get; set; }
 
         public int AcceptedFrames { get; private set; }
+        public int LastDeltaY { get; private set; }
+        public int LastDeltaX { get; private set; }
+        public int ScrollDirection { get; private set; }
+        public bool IsScrollingTooFast { get; private set; }
+
+        private void RecordDisplacement(int dx, int dy)
+        {
+            LastDeltaX = dx;
+            LastDeltaY = dy;
+            ScrollDirection = dy > 0 ? 1 : (dy < 0 ? -1 : (dx > 0 ? 1 : (dx < 0 ? -1 : 0)));
+            int threshold = _frameHeight > 0 ? Math.Max(180, (int)(_frameHeight * 0.40)) : 200;
+            IsScrollingTooFast = Math.Abs(dy) > threshold || Math.Abs(dx) > threshold;
+        }
+
         public int SegmentCount => _segments.Count;
         public bool IsTrackingLost => _isTrackingLost;
         public long CurrentCompositePixels
@@ -387,6 +406,7 @@ namespace freesnip.helpers
 
                     UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
                     AcceptedFrames++;
+                    RecordDisplacement(vDx, vDy);
                     _isTrackingLost = false;
                     return ScrollFrameStatus.Accepted;
                 }
@@ -421,6 +441,7 @@ namespace freesnip.helpers
 
                         UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
                         AcceptedFrames++;
+                        RecordDisplacement(vDx, vDy);
                         _isTrackingLost = false;
                         return ScrollFrameStatus.Accepted;
                     }
@@ -455,6 +476,7 @@ namespace freesnip.helpers
 
                         UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
                         AcceptedFrames++;
+                        RecordDisplacement(vDx, vDy);
                         _isTrackingLost = false;
                         Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Global motion fallback accepted (verified dx={vDx}, dy={vDy}).");
                         return ScrollFrameStatus.Accepted;
@@ -493,6 +515,7 @@ namespace freesnip.helpers
 
                         UpdatePreviousFrame(frame, currentLuma, _offsetX, _offsetY);
                         AcceptedFrames++;
+                        RecordDisplacement(stepDx, stepDy);
                         _isTrackingLost = false;
                         Log.Info($"[STEP:SUCCESS] ScrollFrameStitcher.AddFrame ({sw.ElapsedMilliseconds}ms) - Re-acquired tracking against recent frame {i} (verified offset: {_offsetX}, {_offsetY}).");
                         return ScrollFrameStatus.Accepted;

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -179,6 +179,38 @@ namespace freesnip.tests
             var limitHint = bar.FindControl<TextBlock>("SubtextHint")?.Text ?? string.Empty;
             Assert.Contains("Enter", limitHint);
             Assert.DoesNotContain("Space", limitHint);
+
+            bar.Close();
+        }
+
+        [AvaloniaFact]
+        public void ScrollCaptureBarWindow_HudStates_ShowSpeedWarningAndDirection()
+        {
+            var bar = new ScrollCaptureBarWindow();
+
+            bar.UpdateHudState(ScrollHudState.Active, 2.5, 1800, 10, isTooFast: true);
+            var speedWarning = bar.FindControl<TextBlock>("SpeedWarningText");
+            Assert.NotNull(speedWarning);
+            Assert.True(speedWarning.IsVisible);
+            Assert.Contains("too fast", speedWarning.Text);
+
+            bar.UpdateHudState(ScrollHudState.Active, 2.5, 1800, 10, isTooFast: false, direction: -1);
+            Assert.True(speedWarning.IsVisible);
+            Assert.Contains("Scrolling up", speedWarning.Text);
+
+            bar.UpdateHudState(ScrollHudState.Paused, 2.5, 1800, 10);
+            var stats = bar.FindControl<TextBlock>("StatsCounterText");
+            Assert.NotNull(stats);
+            Assert.Contains("PAUSED", stats.Text);
+
+            bar.ShowStitchingProgress(55);
+            var progress = bar.FindControl<ProgressBar>("StitchProgressBar");
+            Assert.NotNull(progress);
+            Assert.True(progress.IsVisible);
+            Assert.Equal(55, progress.Value);
+
+            bar.ShowNoScrollWarning();
+            Assert.Contains("No scroll", stats.Text);
 
             bar.Close();
         }

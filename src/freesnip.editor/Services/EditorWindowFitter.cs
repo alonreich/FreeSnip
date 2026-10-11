@@ -7,7 +7,7 @@ namespace freesnip.editor.Services
     public class EditorWindowFitter
     {
         public const double MinEditorWindowWidth = 880;
-        public const double MinEditorWindowHeight = 520;
+        public const double MinEditorWindowHeight = 630;
         public const int MaxRetries = 10;
 
         public bool IsPending { get; set; }

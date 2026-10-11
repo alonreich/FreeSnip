@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -99,6 +99,8 @@ namespace freesnip.forms
         private static int _lastCapturedHeight = 0;
         private static DateTime _lastMovementTime = DateTime.UtcNow;
         private static bool _hasScrolled = false;
+        private static bool _lastSpaceDown = false;
+        private static bool _lastPDown = false;
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
@@ -137,17 +139,24 @@ namespace freesnip.forms
                 {
                     if (Recorder != null)
                     {
-                        if (Recorder.IsSegmentCeilingReached || Recorder.IsPaused)
+                        int frames = Recorder.AcceptedFrames;
+                        double screens = Recorder.EstimatedScreens;
+                        int height = Recorder.TotalCapturedHeight;
+                        bool isTooFast = Recorder.IsScrollingTooFast;
+                        int direction = Recorder.ScrollDirection;
+
+                        if (Recorder.IsSegmentCeilingReached)
                         {
-                            BroadcastStatus("LIMIT REACHED (PAUSED)", "Maximum memory reached (180 MP) · Space/Enter finishes");
-                            BarWindow?.UpdateHudState(ScrollHudState.LimitReached);
+                            BroadcastStatus("LIMIT REACHED (PAUSED)", "Maximum memory reached (180 MP) · Enter finishes");
+                            BarWindow?.UpdateHudState(ScrollHudState.LimitReached, screens, height, frames, isTooFast, direction);
+                        }
+                        else if (Recorder.IsPaused)
+                        {
+                            BroadcastStatus("RECORDING PAUSED", "Paused · Click Resume, press Space, or Enter to finish");
+                            BarWindow?.UpdateHudState(ScrollHudState.Paused, screens, height, frames, isTooFast, direction);
                         }
                         else
                         {
-                            int frames = Recorder.AcceptedFrames;
-                            double screens = Recorder.EstimatedScreens;
-                            int height = Recorder.TotalCapturedHeight;
-
                             if (frames > 1 && (frames > _lastAcceptedFrames || height > _lastCapturedHeight))
                             {
                                 _hasScrolled = true;
@@ -158,21 +167,22 @@ namespace freesnip.forms
 
                             if (!_hasScrolled)
                             {
-                                BroadcastStatus("SCROLLING ACTIVE", "Recording started. Scroll down now using your mouse wheel.");
-                                BarWindow?.UpdateHudState(ScrollHudState.Initial);
+                                BroadcastStatus("SCROLLING ACTIVE", "Recording active. Scroll down using your mouse wheel.");
+                                BarWindow?.UpdateHudState(ScrollHudState.Initial, screens, height, frames, isTooFast, direction);
                             }
                             else
                             {
                                 bool isIdle = (DateTime.UtcNow - _lastMovementTime).TotalMilliseconds > 900;
                                 if (isIdle)
                                 {
-                                    BroadcastStatus("WAITING FOR INPUT", $"Waiting for scroll input... | {screens:0.0} screens ({height} px)");
-                                    BarWindow?.UpdateHudState(ScrollHudState.Idle, screens, height);
+                                    BroadcastStatus("WAITING FOR INPUT", $"Waiting for scroll input... | {screens:0.0} screens ({height:N0} px)");
+                                    BarWindow?.UpdateHudState(ScrollHudState.Idle, screens, height, frames, isTooFast: false, direction: 0);
                                 }
                                 else
                                 {
-                                    BroadcastStatus("SCROLLING ACTIVE", $"Scrolling detected: {screens:0.0} screens captured ({height} px)");
-                                    BarWindow?.UpdateHudState(ScrollHudState.Active, screens, height);
+                                    string statusMsg = isTooFast ? "⚠️ Scrolling too fast — slow down for steady capture!" : $"Scrolling detected: {screens:0.0} screens ({height:N0} px)";
+                                    BroadcastStatus("SCROLLING ACTIVE", statusMsg);
+                                    BarWindow?.UpdateHudState(ScrollHudState.Active, screens, height, frames, isTooFast, direction);
                                 }
                             }
                         }
@@ -185,7 +195,18 @@ namespace freesnip.forms
                 }
                 
                 ticks++;
-                if (ticks < 10) return;
+                if (ticks < 2) return;
+
+                bool isSpaceDelimiter = IsConfiguredDelimiterPressed("Space");
+                bool spaceDown = (GetAsyncKeyState(0x20) & 0x8000) != 0;
+                bool pDown = (GetAsyncKeyState(0x50) & 0x8000) != 0;
+
+                if ((spaceDown && !_lastSpaceDown && !isSpaceDelimiter) || (pDown && !_lastPDown))
+                {
+                    TogglePauseRecording();
+                }
+                _lastSpaceDown = spaceDown;
+                _lastPDown = pDown;
 
                 bool delimiterPressed = IsConfiguredDelimiterPressed();
                 bool enterPressed = (GetAsyncKeyState(0x0D) & 0x8000) != 0;
@@ -202,6 +223,23 @@ namespace freesnip.forms
                 }
             };
             _pollTimer.Start();
+        }
+
+        public static void TogglePauseRecording()
+        {
+            if (!IsRecording || Recorder == null) return;
+            if (Recorder.IsPaused)
+            {
+                Recorder.Resume();
+                BarWindow?.SetPausedState(false);
+                BroadcastStatus("SCROLLING ACTIVE", "Resumed · Scroll down using your mouse wheel");
+            }
+            else
+            {
+                Recorder.Pause();
+                BarWindow?.SetPausedState(true);
+                BroadcastStatus("RECORDING PAUSED", "Paused · Click Resume, press Space, or Enter to finish");
+            }
         }
 
         private static bool IsConfiguredDelimiterPressed()
@@ -454,18 +492,33 @@ namespace freesnip.forms
                 return;
             }
 
-            if (IsDelimiterKey(e))
+            if (IsRecording)
             {
-                if (IsRecording)
+                if (e.Key == Key.Space || e.Key == Key.P)
                 {
-                    _ = FinishRecordingAsync();
-                }
-                else
-                {
-                    StartRecording();
+                    if (!IsDelimiterKey(e))
+                    {
+                        TogglePauseRecording();
+                        e.Handled = true;
+                        return;
+                    }
                 }
 
-                e.Handled = true;
+                if (e.Key == Key.Enter || e.Key == Key.Return || IsDelimiterKey(e))
+                {
+                    _ = FinishRecordingAsync();
+                    e.Handled = true;
+                    return;
+                }
+            }
+            else
+            {
+                if (e.Key == Key.Enter || e.Key == Key.Return || e.Key == Key.Space || IsDelimiterKey(e))
+                {
+                    StartRecording();
+                    e.Handled = true;
+                    return;
+                }
             }
         }
 
@@ -504,13 +557,13 @@ namespace freesnip.forms
             RECT rect = SelectedRect.Normalize();
             if (rect.IsEmpty || rect.Width <= 20 || rect.Height <= 20)
             {
-                BroadcastStatus("Point at a window", "No window selected");
+                BroadcastStatus("Point at a window", "No window selected · Hover over a window and click");
                 return;
             }
 
             if (IsSelectedWindowElevated && !IsFreeSnipElevated)
             {
-                BroadcastStatus("ACCESS DENIED", "Run FreeSnip as Admin to capture");
+                BroadcastStatus("ADMIN RIGHTS REQUIRED", "Restart FreeSnip with 'Run as administrator', or select a different window");
                 return;
             }
 
@@ -623,7 +676,7 @@ namespace freesnip.forms
                         if (screen != null)
                         {
                             scaling = screen.Scaling;
-                            double barWidth = 580;
+                            double barWidth = 690;
                             double targetCenterX = (targetRect.Left + targetRect.Width / 2.0);
                             double screenLeft = screen.Bounds.X;
                             double screenWidth = screen.Bounds.Width;
@@ -652,12 +705,22 @@ namespace freesnip.forms
                 return;
             }
 
+            if (!_hasScrolled || (Recorder != null && Recorder.AcceptedFrames <= 1))
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    BarWindow?.ShowNoScrollWarning();
+                });
+                return;
+            }
+
             IsFinishing = true;
             StopInputPolling();
-            if (BarWindow != null)
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                BarWindow.SetHint("Stitching frames together...");
-            }
+                BarWindow?.ShowStitchingProgress(0);
+            });
+
             foreach (var win in ActiveWindows) 
             { 
                 win.SetClickThrough(false); 
@@ -675,18 +738,16 @@ namespace freesnip.forms
             {
                 if (recorder != null)
                 {
-                    if (!_hasScrolled || recorder.AcceptedFrames <= 1)
+                    var progress = new Progress<double>(p => 
                     {
-                        result = null;
-                    }
-                    else
-                    {
-                        var progress = new Progress<double>(p => 
+                        int pct = Math.Clamp((int)(p * 100), 0, 100);
+                        Dispatcher.UIThread.Post(() =>
                         {
-                            BroadcastStatus("Building image", $"Stitching: {(int)(p * 100)}%");
+                            BarWindow?.ShowStitchingProgress(pct);
                         });
-                        result = await recorder.FinishAsync(progress).ConfigureAwait(false);
-                    }
+                        BroadcastStatus("Building image", $"Stitching: {pct}%");
+                    });
+                    result = await recorder.FinishAsync(progress).ConfigureAwait(false);
                     await recorder.DisposeAsync().ConfigureAwait(false);
                 }
 
@@ -819,15 +880,41 @@ namespace freesnip.forms
 
             if (rect.IsEmpty)
             {
-                BroadcastStatus("Point at a window", "Left-click window or press Enter to start (Esc exits)");
+                BroadcastStatus("Point at a window", "Left-click window or press Enter to start · Esc exits");
             }
             else if (IsSelectedWindowElevated)
             {
-                BroadcastStatus("ELEVATED WINDOW DETECTED", "Run FreeSnip as Admin to capture");
+                string procName = Win32WindowHelper.GetWindowProcessName(hwnd);
+                string header = !string.IsNullOrWhiteSpace(procName) ? $"{procName} (Administrator) · {rect.Width} × {rect.Height} px" : $"ELEVATED (ADMIN) WINDOW · {rect.Width} × {rect.Height} px";
+                BroadcastStatus(header, "This window runs as Admin · Restart FreeSnip as Admin to capture, or pick another window");
             }
             else
             {
-                BroadcastStatus("Window ready", "Left-click window or press Enter to start (Esc exits)");
+                string title = Win32WindowHelper.GetWindowTitle(hwnd);
+                string procName = Win32WindowHelper.GetWindowProcessName(hwnd);
+                if (!string.IsNullOrWhiteSpace(title) && title.Length > 36)
+                {
+                    title = title.Substring(0, 33) + "...";
+                }
+                string header;
+                if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(procName))
+                {
+                    header = $"{procName} — \"{title}\" · {rect.Width} × {rect.Height} px";
+                }
+                else if (!string.IsNullOrWhiteSpace(title))
+                {
+                    header = $"\"{title}\" · {rect.Width} × {rect.Height} px";
+                }
+                else if (!string.IsNullOrWhiteSpace(procName))
+                {
+                    header = $"{procName} · {rect.Width} × {rect.Height} px";
+                }
+                else
+                {
+                    header = $"Window Ready · {rect.Width} × {rect.Height} px";
+                }
+
+                BroadcastStatus(header, "Left-click window or press Enter to start · Esc exits");
             }
         }
 
@@ -885,10 +972,12 @@ namespace freesnip.forms
             if (_instructionText != null)
             {
                 _instructionText.Text = instruction;
-                if (instruction == "ELEVATED WINDOW DETECTED" || instruction == "SCROLLING ACTIVE" || instruction == "ACCESS DENIED")
+                if (instruction.Contains("ADMIN") || instruction.Contains("ELEVATED") || instruction.Contains("ACCESS DENIED"))
                     _instructionText.Foreground = new SolidColorBrush(Color.Parse("#FF7F50"));
+                else if (instruction.StartsWith("SCROLLING ACTIVE") || instruction.StartsWith("RECORDING ACTIVE"))
+                    _instructionText.Foreground = new SolidColorBrush(Color.Parse("#76FF03"));
                 else
-                    _instructionText.Foreground = Brushes.White;
+                    _instructionText.Foreground = (IBrush)this.FindResource("FreeSnipScrollAccentBrush") ?? Brushes.Lime;
             }
 
             if (_statusText != null)
