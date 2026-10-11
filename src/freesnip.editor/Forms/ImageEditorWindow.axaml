@@ -31,14 +31,14 @@
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <Border Background="#60FFFFFF" CornerRadius="2" />
+                    <Border Background="{DynamicResource FreeSnipToolbarThumbBrush}" CornerRadius="2" />
                 </ControlTemplate>
             </Setter>
             <Style Selector="^:pointerover /template/ Border">
-                <Setter Property="Background" Value="#A0FFFFFF" />
+                <Setter Property="Background" Value="{DynamicResource FreeSnipToolbarThumbHoverBrush}" />
             </Style>
             <Style Selector="^:pressed /template/ Border">
-                <Setter Property="Background" Value="#D0FFFFFF" />
+                <Setter Property="Background" Value="{DynamicResource FreeSnipToolbarThumbPressedBrush}" />
             </Style>
         </ControlTheme>
 
@@ -55,7 +55,7 @@
             <Setter Property="Height" Value="6" />
             <Setter Property="MinHeight" Value="6" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#80FFFFFF" />
+            <Setter Property="Foreground" Value="{DynamicResource FreeSnipToolbarThumbBrush}" />
             <Setter Property="Opacity" Value="0.8" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="AllowAutoHide" Value="False" />
@@ -683,7 +683,7 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0" VerticalAlignment="Center">
                     <Button Classes="toolbar destructive" Name="ClearAllButton" AutomationProperties.Name="Clear all objects" ToolTip.Tip="Removes every object you added to this image. Asks first." Click="OnClearAllClick" Width="NaN" MinWidth="40" Height="40" Padding="8,4">
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <svg:Svg Width="20" Height="20" VerticalAlignment="Center" Path="avares://freesnip.editor/Icons/nuclear-sharp.svg" />
+                            <svg:Svg Width="24" Height="24" VerticalAlignment="Center" Path="avares://freesnip.editor/Icons/nuclear-sharp.svg" />
                             <TextBlock Text="Clear All" VerticalAlignment="Center" FontSize="{DynamicResource FreeSnipToolbarFontSize}" />
                         </StackPanel>
                     </Button>
@@ -905,7 +905,7 @@
                         <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="5,0" />
                         
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                            <Button Name="CustomColorBtn" MinWidth="64" MinHeight="40" VerticalAlignment="Center" Cursor="Hand" Padding="6,0,6,0" AutomationProperties.Name="Current colour, opens colour picker" ToolTip.Tip="Current color (click to open picker)">
+                            <Button Name="CustomColorBtn" MinWidth="64" MinHeight="40" VerticalAlignment="Center" Cursor="Hand" Padding="6,0,6,0" AutomationProperties.Name="Current color, opens color picker" ToolTip.Tip="Current color (click to open picker)">
                                 <Button.Flyout>
                                     <Flyout Placement="Top">
                                         <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Padding="14" MinWidth="316" MaxWidth="420">
@@ -917,20 +917,20 @@
                                                 <ColorView Name="ColorPickerView" />
                                                 <Grid ColumnDefinitions="Auto,*,Auto">
                                                     <TextBlock Text="HEX" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                                    <TextBox Grid.Column="1" Name="HexInput" AutomationProperties.Name="Hex colour code" Watermark="#RRGGBB" MaxLength="9" FontFamily="Consolas, Courier New" FontSize="13" Padding="6,4" Background="{DynamicResource FreeSnipCanvasBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" KeyDown="OnHexInputKeyDown" ToolTip.Tip="Type a hex color; Enter applies it to the tool" />
+                                                    <TextBox Grid.Column="1" Name="HexInput" AutomationProperties.Name="Hex color code" Watermark="#RRGGBB" MaxLength="9" FontFamily="Consolas, Courier New" FontSize="13" Padding="6,4" Background="{DynamicResource FreeSnipCanvasBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" KeyDown="OnHexInputKeyDown" ToolTip.Tip="Type a hex color; Enter applies it to the tool" />
                                                     <Button Grid.Column="2" Name="CopyHexButton" Classes="toolbar" Width="34" Height="34" Margin="6,0,0,0" Click="OnCopyHexClick" AutomationProperties.Name="Copy hex code" ToolTip.Tip="Copy hex code to clipboard">
                                                         <svg:Svg Width="18" Height="18" Path="avares://freesnip.editor/Icons/copy.svg" />
                                                     </Button>
                                                 </Grid>
                                                 <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,2,0,0">
-                                                    <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6" Click="OnSamplerClick" AutomationProperties.Name="Sample a colour from the screen" Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" ToolTip.Tip="Pick any color from the screen (Esc cancels)">
+                                                    <Button Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="8,6" Click="OnSamplerClick" AutomationProperties.Name="Sample a color from the screen" Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" ToolTip.Tip="Pick any color from the screen (Esc cancels)">
                                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                                             <svg:Svg Width="20" Height="20" Path="avares://freesnip.editor/Icons/custom-color.svg" />
                                                             <TextBlock Text="Sample From Screen" VerticalAlignment="Center" FontSize="12" />
                                                         </StackPanel>
                                                     </Button>
-                                                    <Button Grid.Column="1" Content="Cancel" IsCancel="True" AutomationProperties.Name="Cancel colour change" Click="OnColorCancelClick" Margin="6,0,0,0" MinWidth="72" Padding="8,6" HorizontalContentAlignment="Center" Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" />
-                                                    <Button Grid.Column="2" Content="OK" IsDefault="True" AutomationProperties.Name="Apply colour" Click="OnColorConfirmClick" Margin="6,0,0,0" MinWidth="72" Padding="8,6" HorizontalContentAlignment="Center" Background="{DynamicResource FreeSnipAccentBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" FontWeight="SemiBold" />
+                                                    <Button Grid.Column="1" Content="Cancel" IsCancel="True" AutomationProperties.Name="Cancel color change" Click="OnColorCancelClick" Margin="6,0,0,0" MinWidth="72" Padding="8,6" HorizontalContentAlignment="Center" Background="{DynamicResource FreeSnipSecondaryButtonBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" />
+                                                    <Button Grid.Column="2" Content="OK" IsDefault="True" AutomationProperties.Name="Apply color" Click="OnColorConfirmClick" Margin="6,0,0,0" MinWidth="72" Padding="8,6" HorizontalContentAlignment="Center" Background="{DynamicResource FreeSnipAccentBrush}" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" BorderThickness="0" CornerRadius="4" Cursor="Hand" FontWeight="SemiBold" />
                                                 </Grid>
                                             </StackPanel>
                                         </Border>
@@ -1056,7 +1056,7 @@
                                          Width="140"
                                          ClipToBounds="False"
                                          AutomationProperties.Name="Pixelation strength"
-                                         ToolTip.Tip="Pixelization strength">
+                                         ToolTip.Tip="Pixelation strength">
                                     <Slider.Resources>
                                         <GridLength x:Key="SliderPreContentMargin">0</GridLength>
                                         <GridLength x:Key="SliderPostContentMargin">0</GridLength>

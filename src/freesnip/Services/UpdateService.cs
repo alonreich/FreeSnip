@@ -635,22 +635,11 @@ public static class UpdateService
                 installer.ArgumentList.Add("--wait-pid");
                 installer.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
 
-                Process.Start(installer);
-
                 Dispatcher.UIThread.Post(() =>
                 {
                     try { progressWindow?.Close(); } catch { }
-                    if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-                    {
-                        desktop.Shutdown();
-                    }
-                    else
-                    {
-                        Environment.Exit(0);
-                    }
+                    App.ShutdownForUpdate(installer);
                 });
-
-                _ = Task.Delay(750).ContinueWith(_ => Environment.Exit(0));
             }
             else
             {

@@ -321,10 +321,21 @@ public static class StartupTaskHelper
             string targetExecutable = string.IsNullOrWhiteSpace(executablePath) ? GetStartupTaskExecutablePath() : executablePath;
             if (!IsElevated())
             {
+                if (string.IsNullOrWhiteSpace(userSid))
+                {
+                    try { userSid = WindowsIdentity.GetCurrent().User?.Value; } catch { }
+                }
                 string arguments = ConfigureAdminStartupArgument;
                 if (UpgradeUserContext.IsValidSid(userSid)) arguments += " " + StartupUserSidArgument + " " + userSid;
                 bool elevated = await RunElevatedAdminCommandAsync(arguments).ConfigureAwait(false);
-                return elevated && await HasElevatedStartupTaskAsync().ConfigureAwait(false);
+                if (elevated && await HasElevatedStartupTaskAsync().ConfigureAwait(false))
+                {
+                    PurgeAllRunKeys();
+                    StartupHelper.DeleteRunUser();
+                    StartupHelper.DeleteStartupFolderShortcut();
+                    return true;
+                }
+                return false;
             }
 
             return await ConfigureElevatedStartupTaskInCurrentProcessAsync(targetExecutable, userSid).ConfigureAwait(false);
@@ -645,7 +656,7 @@ public static class StartupTaskHelper
     /// </summary>
     internal static void PurgeRunKeysForUser(string userSid)
     {
-        if (IsCurrentUserSid(userSid) || !UpgradeUserContext.IsValidSid(userSid)) return;
+        if (!UpgradeUserContext.IsValidSid(userSid)) return;
         string[] valueNames = { "freesnip", "FreeSnip", "snapvox", "SnapVox" };
         foreach (string subKey in UserRunSubKeys)
         {
@@ -867,14 +878,18 @@ public static class StartupTaskHelper
             string currentExecutable = Path.GetFullPath(RuntimePathHelper.ExecutablePath).TrimEnd(Path.DirectorySeparatorChar);
             string expectedInstallPath = Path.GetFullPath(InstallPath).TrimEnd(Path.DirectorySeparatorChar);
             if (string.Equals(currentExecutable, expectedInstallPath, StringComparison.OrdinalIgnoreCase)) return true;
+            string expectedTesseractPath = Path.Combine(InstallFolder, "FreeSnip_tesseract.exe").TrimEnd(Path.DirectorySeparatorChar);
+            if (string.Equals(currentExecutable, expectedTesseractPath, StringComparison.OrdinalIgnoreCase)) return true;
             string expectedUninstallPath = Path.GetFullPath(UninstallExePath).TrimEnd(Path.DirectorySeparatorChar);
             return string.Equals(currentExecutable, expectedUninstallPath, StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
             string executablePath = RuntimePathHelper.ExecutablePath;
+            string expectedTesseractPath = Path.Combine(InstallFolder, "FreeSnip_tesseract.exe");
             ExecutionTrace.LogEvent("StartupTaskHelper", "InstallPathFallback", executablePath);
             return string.Equals(executablePath, InstallPath, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(executablePath, expectedTesseractPath, StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(executablePath, UninstallExePath, StringComparison.OrdinalIgnoreCase);
         }
     }

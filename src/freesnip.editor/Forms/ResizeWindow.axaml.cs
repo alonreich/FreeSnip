@@ -251,8 +251,10 @@ namespace freesnip.editor.forms
 
         private async void OnOkClick(object sender, RoutedEventArgs e)
         {
-            bool validW = int.TryParse(_widthInput.Text, out int w);
-            bool validH = int.TryParse(_heightInput.Text, out int h);
+            string wRaw = _widthInput?.Text?.Trim().TrimEnd('p', 'x', 'P', 'X').Trim() ?? string.Empty;
+            string hRaw = _heightInput?.Text?.Trim().TrimEnd('p', 'x', 'P', 'X').Trim() ?? string.Empty;
+            bool validW = int.TryParse(wRaw, out int w);
+            bool validH = int.TryParse(hRaw, out int h);
 
             if (!validW || !validH)
             {

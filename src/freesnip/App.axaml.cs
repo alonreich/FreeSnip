@@ -51,6 +51,22 @@ namespace freesnip
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 _desktop = desktop;
+                if (DeploymentLifecycle.IsLifecycleCommand(desktop.Args))
+                {
+                    try
+                    {
+                        var icons = TrayIcon.GetIcons(this);
+                        if (icons != null)
+                        {
+                            foreach (var icon in icons)
+                            {
+                                icon.IsVisible = false;
+                            }
+                            icons.Clear();
+                        }
+                    }
+                    catch { }
+                }
                 int uiExceptionCascadeCount = 0;
                 DateTime lastUiExceptionTime = DateTime.MinValue;
                 Dispatcher.UIThread.UnhandledException += (s, e) =>
@@ -128,6 +144,7 @@ namespace freesnip
                     return;
                 }
                 InitializePersistentConfiguration();
+                SanitizeStartupRegistration();
                 ExecutionTrace.Start();
                 var options = FreeSnipCommandLine.Parse(args);
                 UiClipboard.RegisterGetter(() => desktop.MainWindow?.Clipboard ?? (desktop.Windows.FirstOrDefault()?.Clipboard));
@@ -234,6 +251,32 @@ namespace freesnip
             {
                 BootstrapDebug.Log($"InitializePersistentConfiguration failed: {ex.Message}");
                 LogHelper.GetLogger(typeof(App)).Error("Failed to initialize persistent configuration", ex);
+            }
+        }
+
+        private static void SanitizeStartupRegistration()
+        {
+            try
+            {
+                var config = IniConfig.GetIniSection<CoreConfiguration>();
+                if (config == null) return;
+
+                if (config.RunAsAdministratorOnStartup)
+                {
+                    // If administrator startup (scheduled task) is configured, purge any registry Run keys
+                    // and startup shortcuts to prevent Windows from launching a duplicate non-elevated instance on boot.
+                    helpers.StartupHelper.DeleteRunUser();
+                    helpers.StartupHelper.DeleteStartupFolderShortcut();
+                }
+                else
+                {
+                    // If standard startup is configured, delete any scheduled task if accessible.
+                    helpers.StartupHelper.DeleteRunAll();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.GetLogger(typeof(App)).Warn("SanitizeStartupRegistration encountered an error", ex);
             }
         }
 
@@ -868,7 +911,7 @@ namespace freesnip
                 log.Info("IPC Shutdown message received; initiating clean application exit...");
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    _desktop?.Shutdown();
+                    CleanShutdownAndExit(0);
                 });
             }
             else
@@ -990,8 +1033,30 @@ namespace freesnip
                 LogHelper.GetLogger(typeof(App)).Error("Failed to open application logs folder", ex);
             }
         }
-        public void OnExitClick(object sender, EventArgs e)
+        public static void CleanShutdownAndExit(int exitCode = 0)
         {
+            try
+            {
+                if (_trayIcon != null)
+                {
+                    _trayIcon.IsVisible = false;
+                    _trayIcon.Icon = null;
+                }
+                if (Current is App)
+                {
+                    var icons = TrayIcon.GetIcons(Current);
+                    if (icons != null)
+                    {
+                        foreach (var icon in icons)
+                        {
+                            icon.IsVisible = false;
+                        }
+                        icons.Clear();
+                    }
+                }
+            }
+            catch { }
+
             var coordinator = SimpleServiceProvider.Current.GetInstance<IAppLifecycleCoordinator>(isOptional: true);
             if (coordinator != null)
             {
@@ -1003,13 +1068,71 @@ namespace freesnip
                 ExecutionTrace.Stop();
                 HotkeyManager.Stop();
             }
-            _mainAppCts.Cancel();
+            try { _mainAppCts?.Cancel(); } catch { }
             s_ipcServer?.Dispose();
             s_ipcServer = null;
             s_instanceMutex?.Dispose();
             s_instanceMutex = null;
-            IniConfig.Flush();
-            _desktop?.Shutdown();
+            try { IniConfig.Flush(); } catch { }
+
+            try { _desktop?.Shutdown(exitCode); } catch { }
+            Environment.Exit(exitCode);
+        }
+
+        public static void ShutdownForUpdate(ProcessStartInfo installerStartInfo)
+        {
+            try
+            {
+                if (_trayIcon != null)
+                {
+                    _trayIcon.IsVisible = false;
+                    _trayIcon.Icon = null;
+                }
+                if (Current is App)
+                {
+                    var icons = TrayIcon.GetIcons(Current);
+                    if (icons != null)
+                    {
+                        foreach (var icon in icons)
+                        {
+                            icon.IsVisible = false;
+                        }
+                        icons.Clear();
+                    }
+                }
+            }
+            catch { }
+
+            var coordinator = SimpleServiceProvider.Current.GetInstance<IAppLifecycleCoordinator>(isOptional: true);
+            if (coordinator != null)
+            {
+                coordinator.StopServices();
+            }
+            else
+            {
+                RetentionHelper.Stop();
+                ExecutionTrace.Stop();
+                HotkeyManager.Stop();
+            }
+            try { _mainAppCts?.Cancel(); } catch { }
+            s_ipcServer?.Dispose();
+            s_ipcServer = null;
+            s_instanceMutex?.Dispose();
+            s_instanceMutex = null;
+            try { IniConfig.Flush(); } catch { }
+
+            if (installerStartInfo != null)
+            {
+                Process.Start(installerStartInfo);
+            }
+
+            try { _desktop?.Shutdown(0); } catch { }
+            Environment.Exit(0);
+        }
+
+        public void OnExitClick(object sender, EventArgs e)
+        {
+            CleanShutdownAndExit(0);
         }
     }
 }

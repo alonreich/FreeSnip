@@ -20,10 +20,10 @@
                 <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto" VerticalAlignment="Center">
                     <TextBlock Text="Width:" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" Margin="0,0,10,0"/>
                     <!-- ISSUE_016: text inputs kept in sync from the code-behind (result properties are read at OK time). -->
-                    <TextBox Name="WidthInput" Grid.Column="1" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Watermark="px" AutomationProperties.Name="New width in pixels" ToolTip.Tip="New width in pixels" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                    <TextBox Name="WidthInput" Grid.Column="1" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Watermark="Width" AutomationProperties.Name="New width in pixels" ToolTip.Tip="New width in pixels" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
                     
                     <TextBlock Text="Height:" Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" Margin="15,0,10,0"/>
-                    <TextBox Name="HeightInput" Grid.Column="3" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Watermark="px" AutomationProperties.Name="New height in pixels" ToolTip.Tip="New height in pixels" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                    <TextBox Name="HeightInput" Grid.Column="3" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Watermark="Height" AutomationProperties.Name="New height in pixels" ToolTip.Tip="New height in pixels" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
                 </Grid>
 
                 <StackPanel Spacing="6">

@@ -12,6 +12,9 @@
         ShowInTaskbar="False"
         Width="690"
         Height="68"
+        MinWidth="690"
+        MinHeight="68"
+        SizeToContent="WidthAndHeight"
         WindowStartupLocation="Manual"
         Cursor="Arrow">
     <Border Background="{DynamicResource FreeSnipPanelDarkBrush}"
@@ -52,10 +55,10 @@
             <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center" Margin="0,0,12,0">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Name="StatsCounterText" Text="1.0 screens · 0 px · 1 frame" FontSize="12.5" FontWeight="Bold" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Name="SpeedWarningText" Text="" FontSize="11.5" FontWeight="Bold" Foreground="#FFA500" IsVisible="False" VerticalAlignment="Center"/>
+                    <TextBlock Name="SpeedWarningText" Text="" FontSize="11.5" FontWeight="Bold" Foreground="{DynamicResource FreeSnipWarningBrush}" IsVisible="False" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Name="SubtextHint" Text="Recording active. Scroll down using your mouse wheel." FontSize="10.5" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" TextTrimming="CharacterEllipsis" />
-                <ProgressBar Name="StitchProgressBar" Minimum="0" Maximum="100" Value="0" Height="4" CornerRadius="2" Margin="0,3,0,0" IsVisible="False" Background="#33FFFFFF" Foreground="{DynamicResource FreeSnipSuccessBrush}"/>
+                <ProgressBar Name="StitchProgressBar" Minimum="0" Maximum="100" Value="0" Height="4" CornerRadius="2" Margin="0,3,0,0" IsVisible="False" Background="{DynamicResource FreeSnipSliderTrackBrush}" Foreground="{DynamicResource FreeSnipSuccessBrush}"/>
             </StackPanel>
 
             <!-- Pause / Resume Button -->

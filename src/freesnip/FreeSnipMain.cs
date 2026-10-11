@@ -91,6 +91,7 @@ public class FreeSnipMain
             {
                 s_singleInstanceMutex.Dispose();
                 s_singleInstanceMutex = null;
+                Environment.Exit(0);
                 return;
             }
 

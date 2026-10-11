@@ -30,7 +30,7 @@
 
     <TrayIcon.Icons>
         <TrayIcons>
-            <TrayIcon ToolTipText="FreeSnip v3.0" Clicked="OnTrayIconClicked">
+            <TrayIcon ToolTipText="FreeSnip" Clicked="OnTrayIconClicked">
                 <TrayIcon.Menu>
                     <NativeMenu>
                         <NativeMenuItem Header="Capture Region (PrintScreen)" Click="OnCaptureRegionClick" Icon="avares://FreeSnip/icons/ruler-crop.png" />
@@ -44,8 +44,9 @@
                         <NativeMenuItemSeparator />
                         <NativeMenuItem Header="Settings" Click="OnSettingsClick" Icon="avares://FreeSnip/icons/wrench.png" />
                         <NativeMenuItem Header="Check for Updates..." Click="OnCheckForUpdatesClick" Icon="avares://FreeSnip/icons/update.png" />
-                        <NativeMenuItem Header="About FreeSnip" Click="OnAboutClick" Icon="avares://FreeSnip/FreeSnip.ico" />
                         <NativeMenuItem Header="View Logs" Click="OnViewLogsClick" Icon="avares://FreeSnip/icons/log.png" />
+                        <NativeMenuItem Header="About FreeSnip" Click="OnAboutClick" Icon="avares://FreeSnip/icons/about.png" />
+                        <NativeMenuItemSeparator />
                         <NativeMenuItem Header="Exit" Click="OnExitClick" Icon="avares://FreeSnip/icons/cross.png" />
                     </NativeMenu>
                 </TrayIcon.Menu>

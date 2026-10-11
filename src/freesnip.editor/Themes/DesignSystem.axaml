@@ -30,6 +30,9 @@
     <Color x:Key="FreeSnipSecondaryButtonColor">#444444</Color>
     <SolidColorBrush x:Key="FreeSnipSecondaryButtonBrush" Color="{StaticResource FreeSnipSecondaryButtonColor}" />
 
+    <Color x:Key="FreeSnipSecondaryButtonHoverColor">#555555</Color>
+    <SolidColorBrush x:Key="FreeSnipSecondaryButtonHoverBrush" Color="{StaticResource FreeSnipSecondaryButtonHoverColor}" />
+
     <!-- ── Borders & separators ── -->
     <Color x:Key="FreeSnipSelectedSurfaceColor">#402D2D30</Color>
     <SolidColorBrush x:Key="FreeSnipSelectedSurfaceBrush" Color="{StaticResource FreeSnipSelectedSurfaceColor}" />
@@ -38,6 +41,15 @@
     <SolidColorBrush x:Key="FreeSnipSliderTrackBrush" Color="{StaticResource FreeSnipSliderTrackColor}" />
     <GridLength x:Key="SliderPreContentMargin">0</GridLength>
     <GridLength x:Key="SliderPostContentMargin">0</GridLength>
+
+    <Color x:Key="FreeSnipToolbarThumbColor">#60FFFFFF</Color>
+    <SolidColorBrush x:Key="FreeSnipToolbarThumbBrush" Color="{StaticResource FreeSnipToolbarThumbColor}" />
+
+    <Color x:Key="FreeSnipToolbarThumbHoverColor">#A0FFFFFF</Color>
+    <SolidColorBrush x:Key="FreeSnipToolbarThumbHoverBrush" Color="{StaticResource FreeSnipToolbarThumbHoverColor}" />
+
+    <Color x:Key="FreeSnipToolbarThumbPressedColor">#D0FFFFFF</Color>
+    <SolidColorBrush x:Key="FreeSnipToolbarThumbPressedBrush" Color="{StaticResource FreeSnipToolbarThumbPressedColor}" />
 
     <Color x:Key="FreeSnipScrimColor">#99000000</Color>
     <SolidColorBrush x:Key="FreeSnipScrimBrush" Color="{StaticResource FreeSnipScrimColor}" />

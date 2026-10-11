@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="freesnip.forms.UpdateAvailableWindow"
         Title="FreeSnip Update Available"
-        Width="580" SizeToContent="Height"
+        Width="580" MinWidth="580" SizeToContent="Height"
         MinHeight="280"
         Background="{DynamicResource FreeSnipCanvasBrush}"
         CanResize="False"
@@ -43,6 +43,8 @@
 
                     <!-- Scrollable release notes fetched from GitHub release -->
                     <Expander Name="ReleaseNotesExpander" Header="What's New in this Release"
+                              AutomationProperties.Name="What's new in this release"
+                              Cursor="Hand"
                               IsExpanded="False" MaxHeight="220"
                               Background="{DynamicResource FreeSnipCanvasBrush}"
                               Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
@@ -72,7 +74,7 @@
                                    FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"/>
                     </Button>
 
-                    <Button Name="RemindLaterBtn" Cursor="Hand"
+                    <Button Name="RemindLaterBtn" Cursor="Hand" IsCancel="True"
                             AutomationProperties.Name="Remind me later and keep using the current version"
                             Background="{DynamicResource FreeSnipPanelDarkBrush}"
                             Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"

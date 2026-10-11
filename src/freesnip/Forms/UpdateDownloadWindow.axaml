@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="freesnip.forms.UpdateDownloadWindow"
         Title="Updating FreeSnip"
-        Width="520" SizeToContent="Height"
+        Width="520" MinWidth="520" MinHeight="260" SizeToContent="Height"
         Background="{DynamicResource FreeSnipCanvasBrush}"
         CanResize="False"
         WindowStartupLocation="CenterScreen">
@@ -67,7 +67,7 @@
                         </StackPanel>
                     </Button>
 
-                    <Button Name="ContinueWorkingBtn" Cursor="Hand"
+                    <Button Name="ContinueWorkingBtn" Cursor="Hand" IsCancel="True"
                             AutomationProperties.Name="Continue Working (I will restart the app when I am done working)"
                             Background="{DynamicResource FreeSnipPanelDarkBrush}"
                             Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
