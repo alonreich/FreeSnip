@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -22,7 +22,7 @@ namespace freesnip.native
         private readonly OcrRequestQueue _queue;
         private int _disposed;
         private static readonly TimeSpan RecognitionTimeout = TimeSpan.FromSeconds(45);
-        private const int WorkerMagic = 0x46534F43; // "FSOC"
+        private const int WorkerMagic = 0x46534F43;
         private const int MaxWorkerPngBytes = 128 * 1024 * 1024;
         private const int MaxWorkerWords = 1_000_000;
 

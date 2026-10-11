@@ -34,13 +34,24 @@ namespace freesnip.helpers
                 return _nativeDependencyDirectory;
             }
 
-            _nativeDependencyDirectory = Path.Combine(
-                DeploymentFootprint.TempAppFolder,
-                "Runtime",
-                $"{Process.GetCurrentProcess().Id}_{Guid.NewGuid():N}");
-            Directory.CreateDirectory(_nativeDependencyDirectory);
-            NativeDllSearchPath.Register(_nativeDependencyDirectory);
-            return _nativeDependencyDirectory;
+            try
+            {
+                string installDir = StartupTaskHelper.InstallFolder;
+                Directory.CreateDirectory(installDir);
+                _nativeDependencyDirectory = installDir;
+                NativeDllSearchPath.Register(_nativeDependencyDirectory);
+                return _nativeDependencyDirectory;
+            }
+            catch
+            {
+                _nativeDependencyDirectory = Path.Combine(
+                    DeploymentFootprint.TempAppFolder,
+                    "Runtime",
+                    $"{Process.GetCurrentProcess().Id}_{Guid.NewGuid():N}");
+                Directory.CreateDirectory(_nativeDependencyDirectory);
+                NativeDllSearchPath.Register(_nativeDependencyDirectory);
+                return _nativeDependencyDirectory;
+            }
         }
 
         public static void ExtractCriticalDependencies()
@@ -48,9 +59,6 @@ namespace freesnip.helpers
             string[] criticalDlls = { "av_libglesv2.dll", "libHarfBuzzSharp.dll", "libSkiaSharp.dll" };
             string targetDir = GetNativeDependencyDirectory();
 
-            // Installed files live below Program Files and are protected by installation ACLs.
-            // Portable/bootstrap execution uses a unique per-process directory so native code is
-            // never trusted from a predictable user-writable temp path.
             if (StartupTaskHelper.IsRunningFromInstallPath())
             {
                 return;
@@ -66,12 +74,13 @@ namespace freesnip.helpers
             using ZipArchive archive = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: false);
             foreach (string dll in criticalDlls)
             {
-                ZipArchiveEntry entry = archive.GetEntry(dll)
-                    ?? throw new InvalidDataException($"Embedded payload is missing required dependency '{dll}'.");
+                ZipArchiveEntry entry = archive.GetEntry(dll);
+                if (entry == null) continue;
                 string destination = Path.Combine(targetDir, dll);
+                if (File.Exists(destination)) continue;
 
                 using Stream input = entry.Open();
-                using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.Read, 81920, FileOptions.WriteThrough);
+                using var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.Read, 81920, FileOptions.WriteThrough);
                 input.CopyTo(output);
                 output.Flush(flushToDisk: true);
             }
@@ -80,8 +89,11 @@ namespace freesnip.helpers
             foreach (string dll in criticalDlls)
             {
                 string fullPath = Path.Combine(targetDir, dll);
-                IntPtr handle = NativeLibrary.Load(fullPath);
-                lock (LoadedNativeHandles) LoadedNativeHandles.Add(handle);
+                if (File.Exists(fullPath))
+                {
+                    IntPtr handle = NativeLibrary.Load(fullPath);
+                    lock (LoadedNativeHandles) LoadedNativeHandles.Add(handle);
+                }
             }
         }
 

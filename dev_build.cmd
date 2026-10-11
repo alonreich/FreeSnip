@@ -65,7 +65,7 @@ set "TAG=v!BUILD_VERSION!"
 set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!FILE_VERSION! -p:AssemblyVersion=!FILE_VERSION! -p:InformationalVersion=!INFORMATIONAL_VERSION!"
 echo Local Dev Build version: !BUILD_VERSION!  ^(tag !TAG!, fileversion !FILE_VERSION!, commit !GIT_COMMIT!^)
 
-powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value ('<Project>`r`n  <PropertyGroup>`r`n    <Version>!BUILD_VERSION!</Version>`r`n    <AssemblyVersion>!FILE_VERSION!</AssemblyVersion>`r`n    <FileVersion>!FILE_VERSION!</FileVersion>`r`n    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>`r`n    <ProductVersion>!BUILD_VERSION!</ProductVersion>`r`n  </PropertyGroup>`r`n</Project>')" <nul
+powershell -NoProfile -Command "$lines = @('<Project>', '  <PropertyGroup>', '    <Version>!BUILD_VERSION!</Version>', '    <AssemblyVersion>!FILE_VERSION!</AssemblyVersion>', '    <FileVersion>!FILE_VERSION!</FileVersion>', '    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>', '    <ProductVersion>!BUILD_VERSION!</ProductVersion>', '  </PropertyGroup>', '</Project>'); Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value $lines" <nul
 
 echo ###########################################################
 echo PREPARING LOCAL BUILD ENVIRONMENT...
@@ -109,11 +109,17 @@ echo ###########################################################
 echo BUILDING BRANCH 2: Tesseract (Standard Deployment)
 echo ###########################################################
 
+call :SIGN_NATIVE_DEPENDENCIES
+if errorlevel 1 exit /b 1
+
 call :BUILD_STANDALONE "Branch2" "FreeSnip_tesseract" "USE_TESSERACT=true" "-p:PublishAot=false -p:SelfContained=true" "0"
 if errorlevel 1 exit /b 1
 
 copy /y "LICENSE.txt" ".\compiled\LICENSE.txt" >nul
 call :VALIDATE_COMPILED_OUTPUT
+if errorlevel 1 exit /b 1
+
+call :APPLY_VERSION_RESOURCES
 if errorlevel 1 exit /b 1
 
 call :SIGN_BINARIES
@@ -237,6 +243,29 @@ if "!INVALID!"=="1" (
   exit /b 1
 )
 echo Verified .\compiled contains exactly 2 EXE files and LICENSE.txt.
+exit /b 0
+
+:SIGN_NATIVE_DEPENDENCIES
+echo.
+echo ###########################################################
+echo DIGITALLY SIGNING BUNDLED NATIVE DEPENDENCIES...
+echo ###########################################################
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\developer_tools\SignBinaries.ps1" -TargetFolder ".\src\freesnip\Native\x64" <nul
+if errorlevel 1 (
+  echo ERROR: Digital signature on native dependencies failed.
+  exit /b 1
+)
+exit /b 0
+
+:APPLY_VERSION_RESOURCES
+echo.
+echo ###########################################################
+echo SYNCHRONIZING PE VERSION METADATA...
+echo ###########################################################
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\developer_tools\ApplyVersionResource.ps1" -ExePath ".\compiled\FreeSnip.exe" -Version "!BUILD_VERSION!" -OriginalFilename "FreeSnip.exe" -InternalName "FreeSnip.exe" -FileDescription "FreeSnip" <nul
+if errorlevel 1 exit /b 1
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\developer_tools\ApplyVersionResource.ps1" -ExePath ".\compiled\FreeSnip_tesseract.exe" -Version "!BUILD_VERSION!" -OriginalFilename "FreeSnip_tesseract.exe" -InternalName "FreeSnip_tesseract.exe" -FileDescription "FreeSnip (Tesseract OCR)" <nul
+if errorlevel 1 exit /b 1
 exit /b 0
 
 :SIGN_BINARIES

@@ -25,7 +25,7 @@ internal static class DeploymentFootprint
 
     public static readonly string InstallFolder = StartupTaskHelper.InstallFolder;
 
-    public static readonly string TempInstallationLogPath = Path.Combine(Path.GetTempPath(), "SnapVox_Installation.log");
+    public static readonly string TempInstallationLogPath = Path.Combine(Path.GetTempPath(), "FreeSnip_Installation.log");
     public static readonly string InstallLogPath = TempInstallationLogPath;
 
     public static readonly string RoamingAppDataFolder = Path.Combine(

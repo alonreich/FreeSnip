@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Channels;
@@ -667,9 +667,6 @@ namespace freesnip.helpers
             if (double.IsInfinity(motionDiff) || double.IsNaN(motionDiff) || motionDiff == double.MaxValue) return false;
             if (stationaryDiff <= StationarySadThreshold) return false;
 
-            // Browser text, compositing and sub-pixel antialiasing can leave a non-trivial SAD even
-            // when the same content is aligned. Judge motion primarily by relative improvement
-            // instead of requiring every row/column to fall under the global tile threshold.
             double requiredImprovement = Math.Max(1.5, stationaryDiff * 0.20);
             double adaptiveCeiling = Math.Max(28.0, stationaryDiff * 0.80);
             return motionDiff <= adaptiveCeiling && motionDiff <= stationaryDiff - requiredImprovement;
@@ -719,8 +716,6 @@ namespace freesnip.helpers
                 exactTop = 0;
             }
 
-            // Modern apps (ChatGPT, browsers, PDF viewers) can keep a large composer/status panel
-            // pinned to the bottom. Scan deeply enough to exclude that fixed chrome from every stitched strip.
             int maxFooterH = Math.Min(360, (int)(h * 0.40));
             int exactBottom = h;
             int lastMovingY = -1;

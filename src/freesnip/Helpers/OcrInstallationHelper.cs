@@ -1,4 +1,4 @@
-using freesnip.native;
+﻿using freesnip.native;
 using freesnip.native.foundation;
 using System;
 using System.Collections.Generic;
@@ -216,8 +216,6 @@ namespace freesnip.helpers
         public static Task InstallHebrewOcrAsync(CancellationToken cancellationToken = default)
         {
 #if USE_TESSERACT
-            // The desktop host only prepares language data. Native Tesseract code is loaded solely
-            // inside the supervised OCR worker process so a native hang cannot poison the UI host.
             return EnsureTessDataReadyAsync(cancellationToken);
 #else
             return native.Win10OcrProvider.EnsureWindowsOcrInstalled();

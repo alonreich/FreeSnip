@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -774,8 +774,6 @@ namespace freesnip.forms
                     return;
                 }
 
-                // Encode/stage the finished image before transferring ownership to the editor.
-                // This avoids a second full-resolution clone for long scroll captures.
                 await CaptureHelper.CopyCaptureToClipboardAsync(result).ConfigureAwait(false);
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {

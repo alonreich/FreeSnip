@@ -37,10 +37,10 @@ if (-not $cert) {
     Write-Host "[SIGN] Found existing Code Signing certificate: $($cert.Thumbprint)"
 }
 
-# 2. Sign each executable in the target folder with SHA256 and RFC 3161 timestamping
-$exeFiles = Get-ChildItem -Path $TargetFolder -Filter "*.exe" -File
-if (-not $exeFiles) {
-    Write-Host "[SIGN] No .exe files found in $TargetFolder to sign."
+# 2. Sign each executable and DLL in the target folder with SHA256 and RFC 3161 timestamping
+$filesToSign = Get-ChildItem -Path $TargetFolder -File | Where-Object { $_.Extension -in '.exe', '.dll' }
+if (-not $filesToSign) {
+    Write-Host "[SIGN] No .exe or .dll files found in $TargetFolder to sign."
     exit 0
 }
 
@@ -49,7 +49,7 @@ $timestampUrls = @(
     "http://timestamp.sectigo.com"
 )
 
-foreach ($file in $exeFiles) {
+foreach ($file in $filesToSign) {
     Write-Host "[SIGN] Signing $($file.Name)..."
     $signed = $null
 
@@ -81,6 +81,6 @@ foreach ($file in $exeFiles) {
     }
 }
 
-Write-Host "[SIGN] All executables signed successfully."
+Write-Host "[SIGN] All binaries signed successfully."
 Write-Host "==========================================================="
 exit 0

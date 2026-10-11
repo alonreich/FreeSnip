@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -219,8 +219,6 @@ namespace freesnip.helpers
                 catch { }
             }
 
-            // Do not dispose _clientSlots here: a timed-out client task may still reach its
-            // continuation and release the slot after the shutdown grace period.
             _cts.Dispose();
         }
 
@@ -228,8 +226,6 @@ namespace freesnip.helpers
         {
             if (Interlocked.Exchange(ref _isDisposed, 1) != 0) return;
             try { _cts.Cancel(); } catch { }
-            // Synchronous disposal never blocks the caller. Active handlers observe cancellation and
-            // own/dispose their pipe instances; async callers should prefer DisposeAsync().
         }
     }
 

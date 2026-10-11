@@ -35,7 +35,7 @@ public static class UpdateService
     private const string LastCheckFile = "update_last_check_utc.txt";
     private const string SkippedTagFile = "update_skipped_tag.txt";
 
-    private static readonly TimeSpan StartupGracePeriod = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan StartupGracePeriod = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan MinimumIntervalBetweenChecks = TimeSpan.FromHours(24);
     private static readonly TimeSpan MinimumManualInterval = TimeSpan.FromMinutes(1);
@@ -302,8 +302,6 @@ public static class UpdateService
     public static bool IsRemoteVersionNewer(Version remote, Version local)
     {
         if (remote == null || local == null) return false;
-        // If local is date-based (Major >= 2000) and remote is semver (Major < 100),
-        // treat semver as newer (forward-compatibility for semver migration).
         if (local.Major >= 2000 && remote.Major < 100) return true;
         return remote.CompareTo(local) > 0;
     }
@@ -652,7 +650,6 @@ public static class UpdateService
                     }
                 });
 
-                // Safety fallback: if desktop.Shutdown() takes longer than 750ms, force exit so installer is not blocked.
                 _ = Task.Delay(750).ContinueWith(_ => Environment.Exit(0));
             }
             else

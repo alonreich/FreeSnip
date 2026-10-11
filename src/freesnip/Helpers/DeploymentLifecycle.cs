@@ -26,7 +26,7 @@ namespace freesnip.helpers;
 internal static class DeploymentLifecycle
 {
     private const int DeleteRetries = 3;
-    private static readonly string SessionTempFolder = Path.Combine(DeploymentFootprint.DeploymentTempRoot, "Staging_" + Process.GetCurrentProcess().Id);
+    private static readonly string SessionTempFolder = Path.Combine(StartupTaskHelper.InstallFolder, ".staging_" + Process.GetCurrentProcess().Id);
     private static int _pendingRebootDeletes;
 
     [Flags]
@@ -265,7 +265,6 @@ internal static class DeploymentLifecycle
             {
                 StartupTaskHelper.RequireInstalledApplicationsClosed();
 
-                // Phase 1: Shadow Staging and probe verification
                 await ReportAsync(progress, logger, 50, "STAGE", "SHADOW", "Staging new assets into shadow folder...", ct).ConfigureAwait(false);
                 await PopulateStagingDirectoryAsync(shadowDir, deltaPackagePath, logger, ct).ConfigureAwait(false);
 
@@ -281,7 +280,6 @@ internal static class DeploymentLifecycle
                     await logger.LogAsync("STAGE", "PROBE_SUCCESS", "Staged binary passed probe verification.", ct).ConfigureAwait(false);
                 }
 
-                // Phase 2: Rollback backup of existing installation
                 if (existingFreeSnip && !cleanWipeRequested && Directory.Exists(StartupTaskHelper.InstallFolder))
                 {
                     await ReportAsync(progress, logger, 60, "BACKUP", "ROLLBACK", "Creating rollback backup of existing installation...", ct).ConfigureAwait(false);
@@ -289,14 +287,12 @@ internal static class DeploymentLifecycle
                     await logger.LogAsync("UPGRADE", "ROLLBACK_PREPARED", $"Rollback backup created at {rollbackDir}", ct).ConfigureAwait(false);
                 }
 
-                // Pre-install host cleanup; if upgrading, preserve the existing install folder until swap
                 await PerformFullHostCleanupAsync(progress, logger, "Pre-Install Cleanup", 65, 80,
                     requireZeroFootprint: false,
                     purgeUserArtifacts: cleanWipeRequested,
                     includeInstallFolder: cleanWipeRequested || !existingFreeSnip,
                     ct: ct).ConfigureAwait(false);
 
-                // Phase 3: Atomic swap with rollback safety
                 try
                 {
                     await ReportAsync(progress, logger, 85, "DEPLOY", "SWAP", "Deploying verified assets...", ct).ConfigureAwait(false);
@@ -1612,7 +1608,6 @@ internal static class DeploymentLifecycle
                         }
                         catch
                         {
-                            // Could not delete or rename locked file; fallback to stream overwrite or pending reboot swap below
                         }
                     }
                 }
@@ -1812,7 +1807,27 @@ internal static class DeploymentLifecycle
 
     private static void QueueSelfCleanup(string dir)
     {
-        Process.Start(new ProcessStartInfo { FileName = "cmd.exe", Arguments = $"/c ping 127.0.0.1 -n 3 > nul & rmdir /s /q \"{dir}\"", CreateNoWindow = true, UseShellExecute = false });
+        if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) return;
+        try
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            LogSwallowed("QueueSelfCleanup.ImmediateDelete", dir, ex);
+            try
+            {
+                MoveFileEx(dir, null, MoveFileFlags.DelayUntilReboot);
+                foreach (string file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                {
+                    MoveFileEx(file, null, MoveFileFlags.DelayUntilReboot);
+                }
+            }
+            catch (Exception moveEx)
+            {
+                LogSwallowed("QueueSelfCleanup.DelayUntilReboot", dir, moveEx);
+            }
+        }
     }
 
     private static bool DetectExistingInstallation()
@@ -1977,8 +1992,6 @@ internal static class DeploymentLifecycle
         extraArgs += $" {UpgradeUserContext.InlineArgumentName} \"{inlineContext}\"";
         BootstrapDebug.Log($"Captured original upgrade user SID={originalUser.UserSid} before elevation using inline context.");
 
-        // Elevate the already-open source executable directly. Do not copy executable code into
-        // a user-writable temp directory before crossing the UAC boundary.
         Process.Start(new ProcessStartInfo
         {
             FileName = RuntimePathHelper.ExecutablePath,

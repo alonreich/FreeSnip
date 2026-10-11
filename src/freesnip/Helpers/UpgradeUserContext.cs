@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -50,8 +50,6 @@ internal sealed class UpgradeUserContext
         Path.Combine(AppData, "SnapVox", "snapvox.ini"),
         Path.Combine(LocalAppData, "SnapVox", "snapvox.ini"),
         Path.Combine(LocalAppData, "FreeSnip", "freesnip.ini"),
-        // Versions that incorrectly selected %TEMP%\FreeSnip\Config as the active configuration
-        // root can still be recovered during the next upgrade. It is migration-only, never canonical.
         Path.Combine(LocalAppData, "Temp", "FreeSnip", "Config", "freesnip.ini")
     };
 
