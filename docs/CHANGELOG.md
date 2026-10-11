@@ -5,6 +5,14 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 
 ---
 
+### [3.1.0] - 2026-10-11
+- **Anchor-Preserving Canvas Refit**: Cropping, slicing, or resizing dynamically resizes the editor window in place around its current center anchor without disorienting jumps to the monitor center.
+- **Intelligent Workspace Sizing & Zoom Guard**: Automatically resets zoom magnification to 100% on crop commit and detects manual window border resizing to preserve custom user frame dimensions.
+- **Antivirus False-Positive Hardening**: Replaced temporary directory staging with direct Program Files staging and native reboot deletion (`MoveFileEx`), eliminating false-positive malware heuristics.
+- **Binary & Metadata Integrity**: Synchronized PE metadata (`OriginalFilename`, `InternalName`, `ProductVersion`), preserved portable PDB debug directories, Authenticode signed all bundled third-party libraries, and extended startup telemetry grace period.
+
+---
+
 ### [3.0.0] - 2026-10-10
 - **High-Performance Editor & Non-Destructive Canvas**: Built on Avalonia UI with vector annotations (arrows, shapes, text, emojis, counters), customizable line thickness, and instant undo/redo history.
 - **Dual-Engine Text Recognition (OCR)**: Fast offline text extraction using Windows OCR or bundled LTS Tesseract, copying recognized text to the clipboard and opening it in Notepad.
@@ -30,9 +38,3 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 ### [2.7.0] - 2026-06-20
 - **Magnetic Window Snapping**: Cursor snapping directly to open application windows with a 10-pixel proximity threshold for quick window snips.
 - **Non-Destructive Crop & Slice**: Crop, resize, and slice canvas areas without flattening or rasterizing vector annotations.
-
----
-
-### [2.6.0] - 2026-05-05
-- **Single-Instance Background Tray Architecture**: Ultra-low memory tray presence with instantaneous sub-millisecond hotkey triggers.
-- **Durable Settings Engine**: Human-readable INI configuration file preserving user shortcuts, colors, and preferences across updates.

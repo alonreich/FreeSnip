@@ -83,6 +83,37 @@ namespace freesnip.editor.Services
             return new PixelPoint((int)(centerX + cascade), (int)(centerY + cascade));
         }
 
+        public static PixelPoint CalculateAnchoredPosition(
+            PixelRect workingArea,
+            PixelPoint currentPos,
+            double oldWidth,
+            double oldHeight,
+            double newWidth,
+            double newHeight,
+            double scaling)
+        {
+            double oldWidthPx = oldWidth * scaling;
+            double oldHeightPx = oldHeight * scaling;
+            double newWidthPx = newWidth * scaling;
+            double newHeightPx = newHeight * scaling;
+
+            double currentCenterXPx = currentPos.X + oldWidthPx / 2.0;
+            double currentCenterYPx = currentPos.Y + oldHeightPx / 2.0;
+
+            double targetXPx = currentCenterXPx - newWidthPx / 2.0;
+            double targetYPx = currentCenterYPx - newHeightPx / 2.0;
+
+            double minX = workingArea.X;
+            double maxX = workingArea.X + Math.Max(0.0, workingArea.Width - newWidthPx);
+            double minY = workingArea.Y;
+            double maxY = workingArea.Y + Math.Max(0.0, workingArea.Height - newHeightPx);
+
+            int clampedX = (int)Math.Round(Math.Clamp(targetXPx, minX, maxX));
+            int clampedY = (int)Math.Round(Math.Clamp(targetYPx, minY, maxY));
+
+            return new PixelPoint(clampedX, clampedY);
+        }
+
         public bool TryFit(
             double currentWidth,
             double currentHeight,
@@ -91,6 +122,31 @@ namespace freesnip.editor.Services
             double imageWidth,
             double imageHeight,
             double zoomFactor,
+            out (double Width, double Height) newSize,
+            out PixelPoint newPos)
+        {
+            return TryFit(
+                currentWidth,
+                currentHeight,
+                viewportWidth,
+                viewportHeight,
+                imageWidth,
+                imageHeight,
+                zoomFactor,
+                currentPos: null,
+                out newSize,
+                out newPos);
+        }
+
+        public bool TryFit(
+            double currentWidth,
+            double currentHeight,
+            double viewportWidth,
+            double viewportHeight,
+            double imageWidth,
+            double imageHeight,
+            double zoomFactor,
+            PixelPoint? currentPos,
             out (double Width, double Height) newSize,
             out PixelPoint newPos)
         {
@@ -114,7 +170,14 @@ namespace freesnip.editor.Services
                 MaxHeight);
 
             newSize = (desiredWidth, desiredHeight);
-            newPos = CalculateCenteredPosition(WorkingArea, desiredWidth, desiredHeight, Scaling, 0);
+            if (currentPos.HasValue)
+            {
+                newPos = CalculateAnchoredPosition(WorkingArea, currentPos.Value, currentWidth, currentHeight, desiredWidth, desiredHeight, Scaling);
+            }
+            else
+            {
+                newPos = CalculateCenteredPosition(WorkingArea, desiredWidth, desiredHeight, Scaling, 0);
+            }
 
             bool alreadyFitted = Math.Abs(desiredWidth - currentWidth) <= 2 && Math.Abs(desiredHeight - currentHeight) <= 2;
             return !alreadyFitted;

@@ -119,6 +119,86 @@ namespace freesnip.tests
             Assert.Equal(1400, newSize.Width);
             Assert.Equal(1080, newSize.Height);
         }
+
+        [Fact]
+        public void CalculateAnchoredPosition_PreservesCenterPoint()
+        {
+            var workingArea = new PixelRect(0, 0, 1920, 1080);
+            var currentPos = new PixelPoint(100, 100);
+
+            var anchoredPos = EditorWindowFitter.CalculateAnchoredPosition(
+                workingArea: workingArea,
+                currentPos: currentPos,
+                oldWidth: 1000,
+                oldHeight: 800,
+                newWidth: 880,
+                newHeight: 630,
+                scaling: 1.0);
+
+            Assert.Equal(160, anchoredPos.X);
+            Assert.Equal(185, anchoredPos.Y);
+
+            // Verify center alignment
+            double oldCenterX = currentPos.X + 1000 / 2.0;
+            double oldCenterY = currentPos.Y + 800 / 2.0;
+            double newCenterX = anchoredPos.X + 880 / 2.0;
+            double newCenterY = anchoredPos.Y + 630 / 2.0;
+
+            Assert.Equal(oldCenterX, newCenterX);
+            Assert.Equal(oldCenterY, newCenterY);
+        }
+
+        [Fact]
+        public void CalculateAnchoredPosition_ClampsToWorkingAreaBounds()
+        {
+            var workingArea = new PixelRect(0, 0, 1920, 1080);
+            var currentPos = new PixelPoint(1200, 400);
+
+            var anchoredPos = EditorWindowFitter.CalculateAnchoredPosition(
+                workingArea: workingArea,
+                currentPos: currentPos,
+                oldWidth: 880,
+                oldHeight: 630,
+                newWidth: 1200,
+                newHeight: 800,
+                scaling: 1.0);
+
+            // Max X is 1920 - 1200 = 720
+            Assert.Equal(720, anchoredPos.X);
+            Assert.True(anchoredPos.X >= workingArea.X);
+            Assert.True(anchoredPos.X + 1200 <= workingArea.Right);
+            Assert.True(anchoredPos.Y >= workingArea.Y);
+            Assert.True(anchoredPos.Y + 800 <= workingArea.Bottom);
+        }
+
+        [Fact]
+        public void TryFit_WithCurrentPos_ProducesAnchoredPosition()
+        {
+            var fitter = new EditorWindowFitter();
+            fitter.Configure(new PixelRect(0, 0, 1920, 1080), 1.0, 1920, 1080);
+            var currentPos = new PixelPoint(200, 200);
+
+            bool needsResize = fitter.TryFit(
+                currentWidth: 1000,
+                currentHeight: 800,
+                viewportWidth: 800,
+                viewportHeight: 600,
+                imageWidth: 1100,
+                imageHeight: 700,
+                zoomFactor: 1.0,
+                currentPos: currentPos,
+                out var newSize,
+                out var newPos);
+
+            Assert.True(needsResize);
+            Assert.Equal(1300, newSize.Width);
+            Assert.Equal(900, newSize.Height);
+
+            // Center of old: (200 + 500 = 700, 200 + 400 = 600)
+            // Desired top-left: (700 - 650 = 50, 600 - 450 = 150)
+            Assert.Equal(50, newPos.X);
+            Assert.Equal(150, newPos.Y);
+        }
     }
 }
 

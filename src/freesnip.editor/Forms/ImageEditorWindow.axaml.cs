@@ -387,6 +387,7 @@ namespace freesnip.editor.forms
             Closed += OnWindowClosed;
             Opened += OnWindowOpened;
             Closing += OnWindowClosing;
+            SizeChanged += OnWindowSizeChanged;
         }
 
         private void CacheControls()
@@ -1655,6 +1656,7 @@ namespace freesnip.editor.forms
 
         private void OnWindowOpened(object sender, EventArgs e)
         {
+            _hasOpened = true;
             UiClipboard.Register(this, text => Clipboard?.SetTextAsync(text) ?? Task.FromException(new InvalidOperationException("Clipboard unavailable.")));
 
             
@@ -1680,6 +1682,7 @@ namespace freesnip.editor.forms
         }
         private void OnWindowClosed(object sender, EventArgs e) 
         { 
+            _hasOpened = false;
             _zoomEngine.Dispose(); 
             for (int i = 0; i < _activeHaloTimers.Count; i++)
             {
@@ -1696,6 +1699,14 @@ namespace freesnip.editor.forms
             }
             ReleaseImageResources(); 
             IniConfig.Flush();
+        }
+
+        private void OnWindowSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_hasOpened && !_isProgrammaticResize && WindowState == WindowState.Normal)
+            {
+                _isUserManuallySized = true;
+            }
         }
 
         private string _sourceTitle;
@@ -2633,6 +2644,9 @@ namespace freesnip.editor.forms
 
         
         private readonly EditorWindowFitter _windowFitter = new();
+        private bool _hasOpened = false;
+        private bool _isProgrammaticResize = false;
+        private bool _isUserManuallySized = false;
         private bool _autoFitPending
         {
             get => _windowFitter.IsPending;
@@ -2641,30 +2655,39 @@ namespace freesnip.editor.forms
 
         private void PositionWindow(RECT captureRect)
         {
-            var screens = Screens.All.ToList();
-            var targetScreen = Screens.Primary;
-            long maxArea = -1;
-            foreach (var screen in screens)
+            _isProgrammaticResize = true;
+            _isUserManuallySized = false;
+            try
             {
-                var intersect = captureRect.Intersect(RECT.FromXYWH(screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height));
-                if (!intersect.IsEmpty) { long area = (long)intersect.Width * intersect.Height; if (area > maxArea) { maxArea = area; targetScreen = screen; } }
+                var screens = Screens.All.ToList();
+                var targetScreen = Screens.Primary;
+                long maxArea = -1;
+                foreach (var screen in screens)
+                {
+                    var intersect = captureRect.Intersect(RECT.FromXYWH(screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height));
+                    if (!intersect.IsEmpty) { long area = (long)intersect.Width * intersect.Height; if (area > maxArea) { maxArea = area; targetScreen = screen; } }
+                }
+
+                double scaling = targetScreen.Scaling;
+                double maxAllowedWidth = (targetScreen.WorkingArea.Width - 24) / scaling;
+                double maxAllowedHeight = (targetScreen.WorkingArea.Height - 24) / scaling;
+
+                var (targetWidth, targetHeight) = EditorWindowFitter.CalculateInitialSize(
+                    _document.Width, _document.Height, _zoomFactor, maxAllowedWidth, maxAllowedHeight, FreeSnipFrameThickness);
+
+                targetWidth = Math.Max(MinWidth, targetWidth);
+                targetHeight = Math.Max(MinHeight, targetHeight);
+
+                Width = targetWidth; Height = targetHeight;
+
+                Position = EditorWindowFitter.CalculateCenteredPosition(targetScreen.WorkingArea, Width, Height, scaling, _cascadeOffset++);
+
+                _windowFitter.Configure(targetScreen.WorkingArea, scaling, maxAllowedWidth, maxAllowedHeight);
             }
-
-            double scaling = targetScreen.Scaling;
-            double maxAllowedWidth = (targetScreen.WorkingArea.Width - 24) / scaling;
-            double maxAllowedHeight = (targetScreen.WorkingArea.Height - 24) / scaling;
-
-            var (targetWidth, targetHeight) = EditorWindowFitter.CalculateInitialSize(
-                _document.Width, _document.Height, _zoomFactor, maxAllowedWidth, maxAllowedHeight, FreeSnipFrameThickness);
-
-            targetWidth = Math.Max(MinWidth, targetWidth);
-            targetHeight = Math.Max(MinHeight, targetHeight);
-
-            Width = targetWidth; Height = targetHeight;
-
-            Position = EditorWindowFitter.CalculateCenteredPosition(targetScreen.WorkingArea, Width, Height, scaling, _cascadeOffset++);
-
-            _windowFitter.Configure(targetScreen.WorkingArea, scaling, maxAllowedWidth, maxAllowedHeight);
+            finally
+            {
+                _isProgrammaticResize = false;
+            }
         }
 
         private void AutoFitWindowToContent()
@@ -2676,7 +2699,14 @@ namespace freesnip.editor.forms
                 return;
             }
 
-            if (!_windowFitter.TryFit(Width, Height, scroller.Viewport.Width, scroller.Viewport.Height, _document.Width, _document.Height, _zoomFactor, out var newSize, out var newPos))
+            if (_isUserManuallySized)
+            {
+                _initialCenterPending = true;
+                Dispatcher.UIThread.Post(CenterImageInScrollViewer, DispatcherPriority.Render);
+                return;
+            }
+
+            if (!_windowFitter.TryFit(Width, Height, scroller.Viewport.Width, scroller.Viewport.Height, _document.Width, _document.Height, _zoomFactor, Position, out var newSize, out var newPos))
             {
                 _initialCenterPending = true;
                 CenterImageInScrollViewer();
@@ -2691,13 +2721,21 @@ namespace freesnip.editor.forms
                 var screen = Screens.ScreenFromPoint(Position) ?? Screens.Primary;
                 if (screen != null)
                 {
-                    newPos = EditorWindowFitter.CalculateCenteredPosition(screen.WorkingArea, actualWidth, actualHeight, screen.Scaling, 0);
+                    newPos = EditorWindowFitter.CalculateAnchoredPosition(screen.WorkingArea, Position, Width, Height, actualWidth, actualHeight, screen.Scaling);
                 }
             }
 
-            Width = actualWidth;
-            Height = actualHeight;
-            Position = newPos;
+            _isProgrammaticResize = true;
+            try
+            {
+                Width = actualWidth;
+                Height = actualHeight;
+                Position = newPos;
+            }
+            finally
+            {
+                _isProgrammaticResize = false;
+            }
             _initialCenterPending = true;
             Dispatcher.UIThread.Post(CenterImageInScrollViewer, DispatcherPriority.Render);
         }
@@ -2711,6 +2749,15 @@ namespace freesnip.editor.forms
             double maxH = (screen.WorkingArea.Height - 24) / scaling;
             _windowFitter.Configure(screen.WorkingArea, scaling, maxW, maxH);
             Dispatcher.UIThread.Post(AutoFitWindowToContent, DispatcherPriority.Loaded);
+        }
+
+        private void ResetZoomToDefault()
+        {
+            _zoomEngine.StopAnimation();
+            _zoomFactor = 1.0;
+            _targetZoom = 1.0;
+            _zoomEngine.ClearFocalPoints();
+            ApplyZoom();
         }
 
         private void ReleaseImageResources()
@@ -8671,6 +8718,11 @@ namespace freesnip.editor.forms
 
                 if (!await Task.Run(() => MutateImage(img => img.Mutate(x => x.Crop(cropRect)))).ConfigureAwait(true)) return;
 
+                if (Math.Abs(_zoomFactor - 1.0) > 0.001)
+                {
+                    ResetZoomToDefault();
+                }
+
                 if (_canvas != null)
                 {
                     _canvas.Width = cropRect.Width;
@@ -8681,6 +8733,7 @@ namespace freesnip.editor.forms
                 UpdateSelectionIndicator();
                 UpdateThicknessPanelVisibility();
                 ShowUndoAvailableHint();
+                RefitWindowToImage();
             }
             catch (Exception ex)
             {
@@ -8799,6 +8852,11 @@ namespace freesnip.editor.forms
                     _selectedControl = null;
                 }
 
+                if (Math.Abs(_zoomFactor - 1.0) > 0.001)
+                {
+                    ResetZoomToDefault();
+                }
+
                 SetImageUnderLock(newImage);
                 if (_canvas != null)
                 {
@@ -8811,6 +8869,7 @@ namespace freesnip.editor.forms
                 UpdateThicknessPanelVisibility();
                 ShowUndoAvailableHint();
                 OverlayHelper.ShowLightToast(isVertical ? "CUT OUT VERTICAL APPLIED" : "CUT OUT HORIZONTAL APPLIED", this);
+                RefitWindowToImage();
             }
             catch (Exception ex)
             {
@@ -8934,6 +8993,7 @@ namespace freesnip.editor.forms
                 UpdateSelectionIndicator();
                 await UpdateDisplayAsync().ConfigureAwait(true);
                 ShowUndoAvailableHint();
+                RefitWindowToImage();
             }
             finally
             {
