@@ -80,31 +80,30 @@ set "DO_PUBLISH=1"
 if /I "%~1"=="--no-publish" set "DO_PUBLISH=0"
 
 rem ---------------------------------------------------------------------------
-rem  SEMANTIC VERSION STAMP:
-rem  Reads semantic version from .\version.txt (e.g., 3.0.0).
-rem  Supports bumping via: Build.cmd --patch
-rem  Supports explicit override via: Build.cmd 3.0.1
+rem  CHRONOLOGICAL VERSION STAMP:
+rem  Every release reports a timestamp version yyyy.MM.dd.HHmm so that:
+rem    1. It strictly stays under 65535 per field for Windows FILEVERSION.
+rem    2. It strictly increases chronologically, ensuring backward compatibility
+rem       with existing installed clients (e.g. v2026.10.7.935).
+rem  Supports explicit override via: Build.cmd <version>
 rem ---------------------------------------------------------------------------
 set "BUILD_VERSION="
-if exist ".\version.txt" (
-  for /f "usebackq delims=" %%V in (".\version.txt") do if not defined BUILD_VERSION set "BUILD_VERSION=%%V"
-)
-if not defined BUILD_VERSION set "BUILD_VERSION=3.0.0"
-
 set "USER_ARG=%~1"
-if /I "!USER_ARG!"=="--patch" (
-  for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "$v = [version]'!BUILD_VERSION!'; if ($v.Build -ge 0) { '{0}.{1}.{2}' -f $v.Major, $v.Minor, ($v.Build + 1) } else { '{0}.{1}.1' -f $v.Major, ($v.Minor + 1) }"`) do set "BUILD_VERSION=%%V"
+if defined USER_ARG if /I not "!USER_ARG!"=="--no-publish" if /I not "!USER_ARG!"=="--patch" (
+  set "BUILD_VERSION=!USER_ARG!"
   shift
-) else (
-  if defined USER_ARG if /I not "!USER_ARG!"=="--no-publish" (
-    set "BUILD_VERSION=!USER_ARG!"
-    shift
-  )
+)
+if not defined BUILD_VERSION (
+  for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "Get-Date -Format yyyy.MM.dd.HHmm"`) do set "BUILD_VERSION=%%V"
+)
+if not defined BUILD_VERSION (
+  echo ERROR: could not compute a build version.
+  exit /b 1
 )
 
 set "FILE_VERSION="
 for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "$v = [version]'!BUILD_VERSION!'; if ($v.Build -lt 0) { '!BUILD_VERSION!.0.0' } elseif ($v.Revision -lt 0) { '!BUILD_VERSION!.0' } else { '!BUILD_VERSION!' }"`) do set "FILE_VERSION=%%V"
-if not defined FILE_VERSION set "FILE_VERSION=!BUILD_VERSION!.0"
+if not defined FILE_VERSION set "FILE_VERSION=!BUILD_VERSION!"
 
 set "GIT_COMMIT="
 for /f "usebackq delims=" %%G in (`git rev-parse --short HEAD 2^>nul`) do set "GIT_COMMIT=%%G"

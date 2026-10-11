@@ -91,6 +91,20 @@ public class AutoUpdateSafetyTests
         Assert.True(olderRemote.CompareTo(local) < 0);
     }
 
+    [Theory]
+    [InlineData("v2026.10.11.1015", "2026.10.7.935", true)]
+    [InlineData("v2026.10.7.935", "2026.10.7.935", false)]
+    [InlineData("v2026.10.7.900", "2026.10.7.935", false)]
+    [InlineData("v3.0.1", "2026.10.7.935", true)]
+    [InlineData("v3.0.2", "3.0.1", true)]
+    [InlineData("v3.0.1", "3.0.2", false)]
+    public void IsRemoteVersionNewer_DetectsNewerVersionsCorrectly(string remoteTag, string localVer, bool expected)
+    {
+        Assert.True(RuntimePathHelper.TryParseVersion(remoteTag, out Version remote));
+        Assert.True(RuntimePathHelper.TryParseVersion(localVer, out Version local));
+        Assert.Equal(expected, UpdateService.IsRemoteVersionNewer(remote, local));
+    }
+
     [Fact]
     public void ExpectedAssetName_MatchesValidBinaryFlavor()
     {

@@ -132,7 +132,7 @@ public static class UpdateService
                     return;
                 }
 
-                if (remote.CompareTo(local) <= 0)
+                if (!IsRemoteVersionNewer(remote, local))
                 {
                     return;
                 }
@@ -211,7 +211,7 @@ public static class UpdateService
                 return;
             }
 
-            if (remote.CompareTo(local) <= 0)
+            if (!IsRemoteVersionNewer(remote, local))
             {
                 statusCallback?.Invoke($"Up to date (v{local}).");
                 StartupTaskHelper.ShowForegroundMessageBox(
@@ -297,6 +297,15 @@ public static class UpdateService
     public static bool ThrottlePermitsCheck(TimeSpan interval)
     {
         return !IsCheckThrottled(interval);
+    }
+
+    public static bool IsRemoteVersionNewer(Version remote, Version local)
+    {
+        if (remote == null || local == null) return false;
+        // If local is date-based (Major >= 2000) and remote is semver (Major < 100),
+        // treat semver as newer (forward-compatibility for semver migration).
+        if (local.Major >= 2000 && remote.Major < 100) return true;
+        return remote.CompareTo(local) > 0;
     }
 
     private static string ReadStateFile(string fileName)
