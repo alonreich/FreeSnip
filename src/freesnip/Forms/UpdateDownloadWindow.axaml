@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="freesnip.forms.UpdateDownloadWindow"
         Title="Updating FreeSnip"
-        Width="520" MinWidth="520" MinHeight="260" SizeToContent="Height"
+        Width="520" MinWidth="520" SizeToContent="Height"
         Background="{DynamicResource FreeSnipCanvasBrush}"
         CanResize="False"
         WindowStartupLocation="CenterScreen">
@@ -10,7 +10,7 @@
     <Grid Margin="16">
         <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8"
                 BorderBrush="{DynamicResource FreeSnipAccentBrush}" BorderThickness="2" Padding="20">
-            <Grid RowDefinitions="Auto, *, Auto">
+            <Grid RowDefinitions="Auto, Auto, Auto">
                 <TextBlock Name="TitleText" Grid.Row="0" Text="Updating FreeSnip"
                            Foreground="{DynamicResource FreeSnipAccentBrush}"
                            FontSize="18" FontWeight="Bold"
@@ -53,18 +53,11 @@
                             Background="{DynamicResource FreeSnipAccentBrush}"
                             Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                            Padding="16,8" CornerRadius="6">
-                        <StackPanel Spacing="2" HorizontalAlignment="Center">
-                            <TextBlock Text="Restart The App Now"
-                                       FontSize="14" FontWeight="Bold"
-                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
-                                       HorizontalAlignment="Center" TextAlignment="Center"/>
-                            <TextBlock Text="(to finish the upgrade process)"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
-                                       Opacity="0.85"
-                                       HorizontalAlignment="Center" TextAlignment="Center"/>
-                        </StackPanel>
+                            Padding="16,10" CornerRadius="6">
+                        <TextBlock TextAlignment="Center" TextWrapping="Wrap">
+                            <Run Text="Restart The App Now" FontSize="14" FontWeight="Bold" /><LineBreak />
+                            <Run Text="(to finish the upgrade process)" FontSize="11" />
+                        </TextBlock>
                     </Button>
 
                     <Button Name="ContinueWorkingBtn" Cursor="Hand" IsCancel="True"
@@ -73,17 +66,11 @@
                             Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
                             BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                            Padding="12,6" CornerRadius="6">
-                        <StackPanel Spacing="2" HorizontalAlignment="Center">
-                            <TextBlock Text="Continue Working"
-                                       FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
-                                       HorizontalAlignment="Center" TextAlignment="Center"/>
-                            <TextBlock Text="(I will restart the app when I am done working)"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
-                                       HorizontalAlignment="Center" TextAlignment="Center"/>
-                        </StackPanel>
+                            Padding="14,8" CornerRadius="6">
+                        <TextBlock TextAlignment="Center" TextWrapping="Wrap">
+                            <Run Text="Continue Working" FontSize="13" FontWeight="SemiBold" /><LineBreak />
+                            <Run Text="(I will restart the app when I am done working)" FontSize="11" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" />
+                        </TextBlock>
                     </Button>
                 </StackPanel>
             </Grid>
