@@ -33,7 +33,8 @@
                                FontSize="12" TextAlignment="Center" TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center"
+                <!-- Downloading Buttons Panel -->
+                <StackPanel Name="DownloadingButtonsPanel" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center"
                             Spacing="15" Margin="0,5,0,0">
                     <Button Name="CancelBtn" Content="CANCEL DOWNLOAD" MinWidth="140"
                             AutomationProperties.Name="Cancel download"
@@ -43,6 +44,47 @@
                             BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
                             BorderThickness="1" Padding="12,6" CornerRadius="4"
                             HorizontalContentAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Ready to Install Action Buttons -->
+                <StackPanel Name="ReadyButtonsPanel" Grid.Row="2" Spacing="10" Margin="0,10,0,0" IsVisible="False">
+                    <Button Name="RestartNowBtn" Cursor="Hand" IsDefault="True"
+                            AutomationProperties.Name="Restart The App Now (to finish the upgrade process)"
+                            Background="{DynamicResource FreeSnipAccentBrush}"
+                            Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="16,8" CornerRadius="6">
+                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                            <TextBlock Text="Restart The App Now"
+                                       FontSize="14" FontWeight="Bold"
+                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                       HorizontalAlignment="Center" TextAlignment="Center"/>
+                            <TextBlock Text="(to finish the upgrade process)"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                       Opacity="0.85"
+                                       HorizontalAlignment="Center" TextAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button Name="ContinueWorkingBtn" Cursor="Hand"
+                            AutomationProperties.Name="Continue Working (I will restart the app when I am done working)"
+                            Background="{DynamicResource FreeSnipPanelDarkBrush}"
+                            Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Padding="12,6" CornerRadius="6">
+                        <StackPanel Spacing="2" HorizontalAlignment="Center">
+                            <TextBlock Text="Continue Working"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                       HorizontalAlignment="Center" TextAlignment="Center"/>
+                            <TextBlock Text="(I will restart the app when I am done working)"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
+                                       HorizontalAlignment="Center" TextAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

@@ -609,37 +609,60 @@ public static class UpdateService
 
             cts.Token.ThrowIfCancellationRequested();
 
-            Dispatcher.UIThread.Post(() => progressWindow?.MarkHandoffToInstaller());
-
-            string launcherExe = release.IsDelta ? StartupTaskHelper.InstallPath : finalPath;
-            var installer = new ProcessStartInfo(launcherExe)
+            UpdateReadyAction action = UpdateReadyAction.ContinueWorking;
+            if (progressWindow != null)
             {
-                UseShellExecute = true
-            };
-            installer.ArgumentList.Add("--install");
-            installer.ArgumentList.Add("--auto-update");
-            if (release.IsDelta)
-            {
-                installer.ArgumentList.Add("--delta");
-                installer.ArgumentList.Add(finalPath);
+                action = await Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    return await progressWindow.PromptReadyActionAsync().ConfigureAwait(true);
+                }).ConfigureAwait(false);
             }
-            installer.ArgumentList.Add("--wait-pid");
-            installer.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
 
-            Process.Start(installer);
-
-            Dispatcher.UIThread.Post(() =>
+            if (action == UpdateReadyAction.RestartNow)
             {
-                try { progressWindow?.Close(); } catch { }
-                if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                Dispatcher.UIThread.Post(() => progressWindow?.MarkHandoffToInstaller());
+
+                string launcherExe = release.IsDelta ? StartupTaskHelper.InstallPath : finalPath;
+                var installer = new ProcessStartInfo(launcherExe)
                 {
-                    desktop.Shutdown();
-                }
-                else
+                    UseShellExecute = true
+                };
+                installer.ArgumentList.Add("--install");
+                installer.ArgumentList.Add("--auto-update");
+                if (release.IsDelta)
                 {
-                    Environment.Exit(0);
+                    installer.ArgumentList.Add("--delta");
+                    installer.ArgumentList.Add(finalPath);
                 }
-            });
+                installer.ArgumentList.Add("--wait-pid");
+                installer.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+
+                Process.Start(installer);
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try { progressWindow?.Close(); } catch { }
+                    if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                    {
+                        desktop.Shutdown();
+                    }
+                    else
+                    {
+                        Environment.Exit(0);
+                    }
+                });
+
+                // Safety fallback: if desktop.Shutdown() takes longer than 750ms, force exit so installer is not blocked.
+                _ = Task.Delay(750).ContinueWith(_ => Environment.Exit(0));
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try { progressWindow?.Close(); } catch { }
+                    ToastHelper.ShowToast("Update Ready", "FreeSnip will complete the upgrade when restarted.");
+                });
+            }
         }
         catch (OperationCanceledException)
         {

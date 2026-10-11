@@ -1,4 +1,4 @@
-FreeSnip v3.0 - "The Ghost" Reality Map (Avalonia + ImageSharp Edition)
+FreeSnip (Chronological v2026 Release) - "The Ghost" Reality Map (Avalonia + ImageSharp Edition)
 ================================================================================
 
 ================================================================================
@@ -47,7 +47,7 @@ PRIMARY ARCHITECTURAL INVARIANTS & CORE MANDATES (THE "GHOST" RULES)
      3. Lightweight probe validation (`IsDirectoryWritable`) probes target directory with a temporary probe file before saving.
      4. **Resilient Path Fallback:** If the primary destination is missing, offline (e.g. offline OneDrive redirection, unmapped network drives), or unwritable, prompt the user ONCE with native folder picker (`StorageProvider.OpenFolderPickerAsync`: "FreeSnip: Select Default Save Folder"). If chosen, persist path to `UserDownloadPath` in `freesnip.ini` for all future saves without prompting again. If cancelled or failed, save to `%TMP%\FreeSnip\` and display toast notification: `"Saved to FreeSnip Temp Folder (Downloads unavailable)"`.
    - **Predictable Context-Aware Clipboard Invariant:** Saving an image (Ctrl+S or Save button) writes strictly to disk and 24-hour backup (if enabled), leaving the Windows clipboard 100% untouched to avoid destroying whatever data the user previously held on the clipboard. Keyboard shortcut `Ctrl+C` inside the editor is strictly context-aware: it copies extracted OCR text when in OCR mode with words selected, copies the selected annotation object into internal memory buffer `_annotationClipboard` when an object is selected, and does nothing when nothing is selected (preventing accidental clipboard overwrites). The Toolbar "Copy" button explicitly copies the flattened image to the clipboard. The Toolbar "Download" button executes a double-clipboard sequence: stages `CF_DIB` image format onto the clipboard, probes it to guarantee availability, and immediately afterwards stages plain text only wrapped in quotation marks `"{downloadedFilePath}"` onto the clipboard.
-   - By default on fresh installations, automatic editor closing is enabled (`CoreConfiguration.CloseEditorOnAction` default = `true`). The editor window automatically closes following the notification overlay duration (NotificationOverlayDurationMs, clamped to 250-1000ms). When `CloseEditorOnAction` is explicitly disabled by the user in Settings (or preserved as-is during upgrade migration), the editor remains fully open, interactive, and focused after Save, Copy, or OCR, preserving zoom, pan, active selections, and the undo/redo stack:
+   - By default on fresh installations, automatic editor closing is enabled (`CoreConfiguration.CloseEditorOnAction` default = `true`). The editor window automatically closes following the notification overlay duration (NotificationOverlayDurationMs, with blink duration clamped to 250-10000ms and post-action editor close delay clamped to 250-1000ms). When `CloseEditorOnAction` is explicitly disabled by the user in Settings (or preserved as-is during upgrade migration), the editor remains fully open, interactive, and focused after Save, Copy, or OCR, preserving zoom, pan, active selections, and the undo/redo stack:
      - "Save Image" (Ctrl+S): Saves image (PNG by default; 100% JPEG if configured) to file without modifying the Windows clipboard, and saves a 24-hour backup (matching the configured format) to `%TMP%\FreeSnip\` when backup is enabled.
      - "Download Button" (Toolbar Download / SaveToDownloadsAsync): Saves image file to user downloads directory (or `%TMP%\FreeSnip\` fallback), stages `CF_DIB` image format onto the clipboard, probes it to prevent race conditions, and immediately afterwards stages plain text only wrapped in quotation marks `"{downloadedFilePath}"` onto the clipboard (probed via `CF_UNICODETEXT`).
      - "Copy to Clipboard":
@@ -57,7 +57,7 @@ PRIMARY ARCHITECTURAL INVARIANTS & CORE MANDATES (THE "GHOST" RULES)
          - Tier 3 (Nothing Selected): No-op. Does not overwrite the Windows clipboard.
        - Toolbar "Copy" button: Copies flattened image to clipboard via `UiClipboard.SetImageAsync()`, displays toast "IMAGE SAVED TO CLIPBOARD", and closes or preserves window lifecycle depending on `CloseEditorOnAction`.
      - "OCR": Copies text to clipboard, saves `.txt` to `%TMP%\FreeSnip\` when backup is enabled, and opens it in Notepad.
-   - **Context-Aware Paste (Ctrl+V):** When an annotation object or multi-select group is held in the in-memory clipboard buffer (`_annotationClipboard`), duplicates it instantaneously (0ms latency) offset by (+20, +20) DIPs from the copied source (clamped to canvas bounds), adds to AnnotationCanvas, selects it, updates indicators, and pushes an undo snapshot without querying the OS clipboard or triggering native image decoding. Falls back to external clipboard image paste only when no annotation is buffered or when an external image was copied while the editor window was deactivated.
+   - **Context-Aware Paste (Ctrl+V):** When an annotation object or multi-select group is held in the in-memory clipboard buffer (`_annotationClipboard`), duplicates it instantaneously (0ms latency) dynamically offset into the more available screen quadrant by 50.0 DIPs per iteration (matching a single aggressive Shift+Arrow nudge of 50 DIPs back to the original position, clamped to canvas bounds), adds to AnnotationCanvas, selects it, updates indicators, and pushes an undo snapshot without querying the OS clipboard or triggering native image decoding. Falls back to external clipboard image paste only when no annotation is buffered or when an external image was copied while the editor window was deactivated.
 8. **PNG-Default Output with Optional JPEG (100% Quality):**
    - PNG ingestion is allowed (opening files or injecting from clipboard).
    - ALL image output (manual saves, 24-hour backup, automated history) defaults to `.png` (lossless, full 32-bit ARGB alpha transparency preserved).
@@ -122,16 +122,17 @@ ZERO-OVERHEAD ROLLING CHANGELOG MANDATE
 AUTO-UPDATE & RELEASE SUBSYSTEM
 -------------------------------
 1. **Update Discovery & Throttling:** `UpdateService` polls GitHub Releases API (`https://api.github.com/repos/alonreich/FreeSnip/releases/latest`) on startup (background async Task) and on demand via Settings/Tray. Check throttled to once per 24h via `update_last_check_utc.txt` (stamped strictly after successful HTTP response).
-2. **Manifest & Hash Integrity:** Enforces strict `SHA256SUMS.txt` manifest matching; rejects unverified or missing hash payloads with hard exceptions.
+2. **Manifest & Hash Integrity:** Enforces strict SHA-256 verification against GitHub asset digest or release notes body hash, with SHA256SUMS.txt/checksums.txt manifest as fallback; unverified payloads are discarded with hard exceptions.
 3. **Resumable Downloads:** Downloads write to `%TMP%\FreeSnip_AutoUpdate\` using HTTP `Range` headers, appending existing chunks in `.part` files across disconnects.
 4. **Delta Packages:** Detects and prefers `*_delta.zip` payloads, falling back to full standalone installer binaries when unavailable.
-5. **User Surfaces:** `UpdateAvailableWindow` renders expandable "What's New in this Release" notes with "Update Now", "Remind Me Later" (`UpdateChoice.NotNow`), "Skip", and "Never" actions. `AboutWindow` and `SettingsWindow` display SemVer and Git commit SHA.
+5. **User Surfaces:** `UpdateAvailableWindow` renders expandable "What's New in this Release" notes with "Update Now", "Remind Me Later" (`UpdateChoice.NotNow`), "Skip", and "Never" actions. When download completes, `UpdateDownloadWindow` offers two distinct actions: "Restart The App Now (to finish the upgrade process)" to cleanly hand off and restart, or "Continue Working (I will restart the app when I am done working)" to finish without interrupting work. `AboutWindow` and `SettingsWindow` display chronological timestamp version (yyyy.MM.dd.HHmm) and Git commit SHA, maintaining backward compatibility with installed v2026 clients via `UpdateService.IsRemoteVersionNewer`.
 
 DEPLOYMENT & PACKAGING MANDATES (CRITICAL)
 ------------------------------------------
 1. **Single-File Installer:** The deployment output for EACH branch MUST be a single `.exe` installer file. Branch 1 is Native AOT end-to-end (`FreeSnip.exe`); Branch 2 is a Native AOT installer wrapper containing a self-contained Tesseract payload (`FreeSnip_tesseract.exe`).
 2. **DLL Persistence:** Any extracted permanent `.dll` dependencies MUST reside exclusively in `C:\Program Files\FreeSnip\`.
 3. **Unpacked Persistence:** When the single `.exe` installer is run, it MUST unpack its payload into: `C:\Program Files\FreeSnip\`
+4. **Authenticode Digital Signing:** All compiled standalone executables (`FreeSnip.exe` and `FreeSnip_tesseract.exe`) are digitally signed with Authenticode signatures and RFC 3161 timestamps (`developer_tools\SignBinaries.ps1`) via `Build.cmd` prior to release distribution.
 
 FUNCTIONAL SPECIFICATIONS (THE USER EXPERIENCE)
 -----------------------------------------------
@@ -340,6 +341,7 @@ FULL PROJECT MINIMAP & NAVIGATION GUIDE
 |   |   |       ruler-crop.png
 |   |   |       scroll-capture.png
 |   |   |       shape_square_add.png
+|   |   |       update.png
 |   |   |       wrench.png
 |   |   |       
 |   |   +---Native
@@ -519,7 +521,7 @@ TASK IMPLEMENTATION LOG (BUGFIXES & FEATURES)
 12. Emoji Flyout: Closed flyout on item selection.
 13. Selection Cleanup: Tool switches clear _selectedControl and refresh indicators.
 14. Canvas Scrollbars: FreeSnipScrollBarVertical/Horizontal themes with AllowAutoHide=False for dark canvas.
-15. Notification Timing: NotificationOverlayWindow.GetOverlayDurationMs unified as single source of truth clamped to [250, 1000]ms.
+15. Notification Timing: NotificationOverlayWindow.GetOverlayDurationMs unified as single source of truth clamped to [250, 10000]ms (with editor post-action close delay clamped to [250, 1000]ms).
 16. Mixed-DPI Overlays: PerMonitorV2 multi-screen capture spawns one CaptureWindow per monitor with absolute coordinate sync.
 17. Zoom Anchoring: Consolidated into Fix 37.
 18-20. Resize Magnet & Guide Rails: 6-DIP handle snap threshold, live Alt override, unsnapped bounds accumulator, and guide rails.
@@ -549,7 +551,7 @@ TASK IMPLEMENTATION LOG (BUGFIXES & FEATURES)
 44. Dynamic Text Font Sizing: Binary search font fitting (10-300pt) scales typography dynamically during handle resize.
 45. Occluded Window Capture: PrintWindow with PW_RENDERFULLCONTENT captures occluded windows without foreground obstruction.
 46. Bottom Layout Scroller: Two-row Grid isolates toolbar buttons from canvas horizontal scrollbar.
-47. Scroll Capture Bar HUD: Floating ScrollCaptureBarWindow HUD with pulsing indicator, screen counter, and Finish button.
+47. Scroll Capture Bar HUD: Floating ScrollCaptureBarWindow HUD with pulsing indicator, live pixel counter, scroll velocity tracking, scroll-too-fast warnings ("SCROLL SLOWER FOR STABLE STITCHING"), interactive Pause/Resume control (Space key), and Finish button.
 48. Crop Submenu Icons: Redesigned crop-mode SVGs with clean borders and 732px expanded popup layout.
 49. Tunneling Enter Crop Confirmation: Tunneling Key.Enter confirms crop unconditionally across focused child controls.
 50. Multi-Monitor Tint Bypass: Software tint detection (f.lux, Night Light) and 1ms Planckian inverse LUT color correction.
@@ -572,7 +574,7 @@ TASK IMPLEMENTATION LOG (BUGFIXES & FEATURES)
 68. Contextual Duplication & Clipboard Isolation: In-memory _annotationClipboard buffer isolates canvas duplicates from system clipboard; non-destructive window lifecycle.
 69. Non-Destructive Vector Crop & Cutout: ApplyCropRect and ApplyCutOutSlice mathematically shift and adapt vector annotations across raster mutations; Ctrl+Z undo fully restores original raster and annotations.
 70. Single-Instance Named Pipe IPC Relay: Local\FreeSnip_Instance_IpcPipe with Win32 AllowSetForegroundWindow handles ACTIVATE, OPEN_FILE, and SHUTDOWN with byte-streamed ACK turnaround (<1ms).
-71. Scroll Capture Overhaul: Click-through Win32 routing, hardware mouse wheel fall-through, 180 MP streaming, radial search motion estimation, 4-state floating guidance HUD.
+71. Scroll Capture Overhaul: Click-through Win32 routing, hardware mouse wheel fall-through, 180 MP streaming, radial search motion estimation, real-time velocity tracking, directional guide arrows, and 4-state floating guidance HUD.
 72. Canonical FreeSnip Identity & Fail-Safe Upgrade Engine: Solution renamed FreeSnip across all manifests; UpgradeUserContext preserves original user identity across UAC; SettingsCandidateSelector selects authoritative INI; durable SHA-256 backup.
 73. Settings Upgrade Preservation: Canonical user profile preferred over templates; CloseEditorOnAction defaults to true for fresh installs.
 74. Canvas Shortcut Listening: Tunneling keystroke routing on popups; perpetual canvas focus listening mode for single-key shortcuts.
@@ -598,7 +600,7 @@ TASK IMPLEMENTATION LOG (BUGFIXES & FEATURES)
 94. Download Double-Clipboard Sequence: CF_DIB image format staged and verified first; quoted file path ("{path}") staged immediately second.
 95. Structured Diagnostic Logging: Explicit step markers ([STEP:START], [STEP:SUCCESS], etc.) with elapsed millisecond timing across critical pipelines.
 96. Application-Agnostic Scroll Capture: 8x8 block consensus motion engine with line-by-line boundary refinement ignores stationary chrome (ribbons, sidebars, headers).
-97. Full Regression Expansion: 328 passing tests across 31 suites with dual-branch compilation parity.
+97. Full Regression Expansion: 360 passing tests across 31 suites with dual-branch compilation parity.
 98. Non-Activating Notification Overlay: ShowActivated=False prevents focus stealing from ImageEditorWindow during toasts.
 99. Tray State Contract: Icon remains blue on capture overlay open, turns red only during active drag or OCR (T), and flushes holds on close.
 100. Terminal Viewport Detection: Outside-in boundary scanning and variance thresholding prevent viewport collapse on black/sparse terminal windows.
@@ -643,7 +645,7 @@ All issues and architectural invariants are fully resolved and regression-verifi
 - Scroll capture incorporates bounded streaming buffers, clamped composite fallback for oversized documents, and window-scoped abort controls.
 - Elevated administrator autostart tasks are inspected prior to upgrade cleanup and restored post-installation, while duplicate Run keys are purged.
 - Task scheduler tasks use schema-compliant XML definitions disabling battery, idle, network, and execution time restrictions.
-- Non-destructive editor window lifecycle preserves viewport pan, zoom, active selections, and undo/redo stacks on Save, Copy, and OCR when CloseEditorOnAction is disabled, with context-aware 3-tier Ctrl+C routing and offset Ctrl+V duplicate pasting.
+- Non-destructive editor window lifecycle preserves viewport pan, zoom, active selections, and undo/redo stacks on Save, Copy, and OCR when CloseEditorOnAction is disabled, with context-aware 3-tier Ctrl+C routing and quadrant-aware 50 DIP Shift+Arrow aligned Ctrl+V duplicate pasting.
 - Non-destructive Crop, Cutout, and Resize operations mathematically shift, adapt, and scale vector annotations across raster bounds mutations without rasterization, with complete Ctrl+Z undo/redo recovery.
 - Single-instance Named Pipe IPC relay (`Local\FreeSnip_Instance_IpcPipe`) delegates foreground activation and file loading from secondary launches to background instance with Win32 `AllowSetForegroundWindow` authorization.
 - Scroll capture subsystem overhauled with click-through Win32 window message routing, hardware mouse wheel fall-through, 180 MP memory-bounded streaming (120-segment ceiling removed), radial coarse-to-fine motion estimation with lattice anti-aliasing, and an interactive 4-state floating guidance HUD.
@@ -651,5 +653,5 @@ All issues and architectural invariants are fully resolved and regression-verifi
 - Canvas shortcuts (A, L, C, etc.) remain in perpetual listening mode during canvas editing and selection; popups (CropModePopup, LineSizePopup) tunnel keystrokes and auto-dismiss so tool switching is seamless.
 - Text tool font size invariant preserved during typing; multiline text expands bounding box downwards non-destructively; binary-search font fitting restricted to explicit corner resize handles with zero-allocation [ThreadStatic] measurement probes.
 - Native Win32 IShellLinkW and IPersistFile direct vtable dispatch replaces slow/brittle powershell.exe execution in ShellLinkWriter, achieving sub-millisecond (<1ms) shortcut generation with zero process dependencies, full Native AOT compatibility, and zero PowerShell execution policy constraints.
-- Full regression coverage: 353 tests passing with 0 failures, 0 skipped, and warnings treated as errors (-p:TreatWarningsAsErrors=true) across both Branch 1 (Native AOT) and Branch 2 (Tesseract). Suites include ApplicationAgnosticScrollCaptureTests.cs (10 tests), AutoUpdateSafetyTests.cs (19 tests), BorderedExportSafetyTests.cs (8 tests), ClipboardTests.cs (7 tests), ConflictDetectionTests.cs, ContextToolbarThemeTests.cs, DeploymentFootprintTests.cs, EditorDocumentTests.cs, EditorExportServiceTests.cs, EditorHistoryManagerTests.cs, EditorSafetyTests.cs (10 tests), EditorWindowFitterTests.cs, EditorZoomEngineTests.cs, EngineAuditRegressionTests.cs, HotkeyBindingTests.cs, IniConfigAtomicSaveTests.cs, IniConfigConcurrencyTests.cs, InstallerConflictTests.cs, InstanceIpcRelayTests.cs (9 tests), OcrOverlayControllerTests.cs, OcrTextLayoutTests.cs, ResourceMutexTests.cs, RetentionTests.cs, ScreenTintBypassBenchmarkTests.cs, ScrollCaptureHardeningTests.cs (13 tests), SettingsServiceTests.cs, ShellLinkWriterTests.cs (13 tests), ToolHandlersTests.cs (12 tests), TrayAndScrollCaptureSafetyTests.cs (5 tests), UpgradeSafetyTests.cs, and VectorSnappingEngineTests.cs.
+- Full regression coverage: 360 tests passing with 0 failures, 0 skipped, and warnings treated as errors (-p:TreatWarningsAsErrors=true) across both Branch 1 (Native AOT) and Branch 2 (Tesseract). Suites include ApplicationAgnosticScrollCaptureTests.cs (10 tests), AutoUpdateSafetyTests.cs (25 tests), BorderedExportSafetyTests.cs (8 tests), ClipboardTests.cs (7 tests), ConflictDetectionTests.cs, ContextToolbarThemeTests.cs, DeploymentFootprintTests.cs, EditorDocumentTests.cs, EditorExportServiceTests.cs, EditorHistoryManagerTests.cs, EditorSafetyTests.cs (10 tests), EditorWindowFitterTests.cs, EditorZoomEngineTests.cs, EngineAuditRegressionTests.cs, HotkeyBindingTests.cs, IniConfigAtomicSaveTests.cs, IniConfigConcurrencyTests.cs, InstallerConflictTests.cs, InstanceIpcRelayTests.cs (9 tests), OcrOverlayControllerTests.cs, OcrTextLayoutTests.cs, ResourceMutexTests.cs, RetentionTests.cs, ScreenTintBypassBenchmarkTests.cs, ScrollCaptureHardeningTests.cs (13 tests), SettingsServiceTests.cs, ShellLinkWriterTests.cs (13 tests), ToolHandlersTests.cs (12 tests), TrayAndScrollCaptureSafetyTests.cs (5 tests), UpgradeSafetyTests.cs, and VectorSnappingEngineTests.cs.
 
