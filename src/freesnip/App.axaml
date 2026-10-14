@@ -26,6 +26,14 @@
         <Style Selector="FlyoutPresenter">
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
         </Style>
+        <Style Selector="Button:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipAccentBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="TextBox:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipAccentBrush}" />
+            <Setter Property="BorderThickness" Value="1.5" />
+        </Style>
     </Application.Styles>
 
     <TrayIcon.Icons>

@@ -72,8 +72,8 @@
 
                 <Grid Grid.Row="2" ColumnDefinitions="Auto, *, Auto" Margin="5,0,5,0">
                     <Button Name="CheckUpdatesBtn" Grid.Column="0"
-                            AutomationProperties.Name="Check for updates now"
-                            Content="Check for Updates..." Cursor="Hand"
+                            AutomationProperties.Name="Check for updates"
+                            Content="Check for Updates" Cursor="Hand"
                             Background="{DynamicResource FreeSnipCanvasBrush}"
                             Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
                             BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"

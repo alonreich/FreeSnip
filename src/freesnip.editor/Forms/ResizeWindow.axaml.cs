@@ -23,6 +23,8 @@ namespace freesnip.editor.forms
         private TextBlock _percentText;
         private TextBlock _scaleHintText;
         private TextBlock _currentSizeText;
+        private TextBlock _dimensionErrorText;
+        private Button _okButton;
         private int _originalWidth;
         private int _originalHeight;
 
@@ -56,6 +58,9 @@ namespace freesnip.editor.forms
             _scaleHintText = this.FindControl<TextBlock>("ScaleHintText");
             _currentSizeText = this.FindControl<TextBlock>("CurrentSizeText");
 
+            _dimensionErrorText = this.FindControl<TextBlock>("DimensionErrorText");
+            _okButton = this.FindControl<Button>("OkButton");
+
             _originalWidth = currentWidth;
             _originalHeight = currentHeight;
             _ratio = (double)currentWidth / currentHeight;
@@ -69,6 +74,7 @@ namespace freesnip.editor.forms
             _sizeSlider.PropertyChanged += OnSliderChanged;
             _sizeSlider.Value = 0;
             UpdatePercentText(100);
+            ValidateInputs();
             
             KeyDown += OnWindowKeyDown;
             Opened += (_, __) =>
@@ -144,6 +150,7 @@ namespace freesnip.editor.forms
             if (moveSlider && _sizeSlider != null) _sizeSlider.Value = PercentToSliderPosition(percent);
             UpdatePercentText(percent);
             _isUpdating = false;
+            ValidateInputs();
         }
 
         private void UpdatePercentText(double percent)
@@ -155,6 +162,42 @@ namespace freesnip.editor.forms
         {
             AvaloniaXamlLoader.Load(this);
             freesnip.foundation.core.UiLayoutDirection.Apply(this);
+        }
+
+        private bool ValidateInputs()
+        {
+            string wRaw = _widthInput?.Text?.Trim().TrimEnd('p', 'x', 'P', 'X').Trim() ?? string.Empty;
+            string hRaw = _heightInput?.Text?.Trim().TrimEnd('p', 'x', 'P', 'X').Trim() ?? string.Empty;
+            bool validW = int.TryParse(wRaw, out int w) && w >= 1;
+            bool validH = int.TryParse(hRaw, out int h) && h >= 1;
+            bool tooBig = validW && validH && ((long)w * h > MaxResultPixels);
+
+            bool isValid = validW && validH && !tooBig;
+
+            if (_dimensionErrorText != null)
+            {
+                if (!validW || !validH)
+                {
+                    _dimensionErrorText.Text = "Please enter valid whole numbers (at least 1 px).";
+                    _dimensionErrorText.IsVisible = true;
+                }
+                else if (tooBig)
+                {
+                    _dimensionErrorText.Text = $"Exceeds maximum size ({MaxResultPixels / 1_000_000L} MP).";
+                    _dimensionErrorText.IsVisible = true;
+                }
+                else
+                {
+                    _dimensionErrorText.IsVisible = false;
+                }
+            }
+
+            if (_okButton != null)
+            {
+                _okButton.IsEnabled = isValid;
+            }
+
+            return isValid;
         }
 
         private void OnRatioCheckedChanged(object sender, RoutedEventArgs e)
@@ -187,6 +230,7 @@ namespace freesnip.editor.forms
             {
                 if (_percentText != null) _percentText.Text = "Custom";
             }
+            ValidateInputs();
         }
 
         private void OnWidthChanged(object sender, AvaloniaPropertyChangedEventArgs e)
@@ -209,6 +253,7 @@ namespace freesnip.editor.forms
                 {
                     if (_percentText != null) _percentText.Text = "Custom";
                 }
+                ValidateInputs();
             }
         }
 
@@ -232,6 +277,7 @@ namespace freesnip.editor.forms
                 {
                     if (_percentText != null) _percentText.Text = "Custom";
                 }
+                ValidateInputs();
             }
         }
 
@@ -251,6 +297,7 @@ namespace freesnip.editor.forms
 
         private async void OnOkClick(object sender, RoutedEventArgs e)
         {
+            if (!ValidateInputs()) return;
             string wRaw = _widthInput?.Text?.Trim().TrimEnd('p', 'x', 'P', 'X').Trim() ?? string.Empty;
             string hRaw = _heightInput?.Text?.Trim().TrimEnd('p', 'x', 'P', 'X').Trim() ?? string.Empty;
             bool validW = int.TryParse(wRaw, out int w);

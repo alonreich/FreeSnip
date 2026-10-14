@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -744,6 +744,60 @@ namespace freesnip.tests
             finally
             {
                 editor.Close();
+            }
+        }
+
+        [AvaloniaFact]
+        public async Task ApplyFrameBorderPreview_ConfiguresOutwardMarginAndBorderDimensionsOnCanvas()
+        {
+            var config = IniConfig.GetIniSection<CoreConfiguration>();
+            bool origBorders = config.AddFrameBorders;
+            int origThickness = config.FrameBorderThickness;
+            string origColor = config.FrameBorderColor;
+
+            try
+            {
+                config.AddFrameBorders = true;
+                config.FrameBorderThickness = 4;
+                config.FrameBorderColor = "#FF0000";
+
+                using var sample = new SharpImage32(200, 150);
+                var editor = new ImageEditorWindow();
+                try
+                {
+                    await editor.SetImageAsync(sample, RECT.FromXYWH(0, 0, 200, 150));
+
+                    var snipBorder = Field<Border>(editor, "_snipBorder");
+                    Assert.NotNull(snipBorder);
+
+                    editor.ApplyFrameBorderPreview();
+
+                    Assert.Equal(new Thickness(4), snipBorder.BorderThickness);
+                    Assert.Equal(new Thickness(-4), snipBorder.Margin);
+                    Assert.Equal(208.0, snipBorder.Width);
+                    Assert.Equal(158.0, snipBorder.Height);
+                    Assert.IsType<SolidColorBrush>(snipBorder.BorderBrush);
+                    Assert.Equal(Avalonia.Media.Color.FromRgb(255, 0, 0), ((SolidColorBrush)snipBorder.BorderBrush).Color);
+
+                    // When disabled, thickness & margin zero out and width/height match image
+                    config.AddFrameBorders = false;
+                    editor.ApplyFrameBorderPreview();
+
+                    Assert.Equal(new Thickness(0), snipBorder.BorderThickness);
+                    Assert.Equal(new Thickness(0), snipBorder.Margin);
+                    Assert.Equal(200.0, snipBorder.Width);
+                    Assert.Equal(150.0, snipBorder.Height);
+                }
+                finally
+                {
+                    editor.Close();
+                }
+            }
+            finally
+            {
+                config.AddFrameBorders = origBorders;
+                config.FrameBorderThickness = origThickness;
+                config.FrameBorderColor = origColor;
             }
         }
     }

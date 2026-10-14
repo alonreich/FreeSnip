@@ -35,15 +35,15 @@
         </Style>
         <Style Selector="TextBlock.field-label">
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Width" Value="95"/>
+            <Setter Property="Width" Value="105"/>
             <Setter Property="Margin" Value="0,0,6,0"/>
             <Setter Property="TextWrapping" Value="NoWrap"/>
             <Setter Property="Foreground" Value="{DynamicResource FreeSnipPrimaryTextBrush}"/>
         </Style>
         <Style Selector="TextBox.hotkey">
-            <Setter Property="MinWidth" Value="90"/>
-            <Setter Property="MaxWidth" Value="100"/>
-            <Setter Property="Width" Value="95"/>
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="MaxWidth" Value="125"/>
+            <Setter Property="Width" Value="105"/>
             <Setter Property="MinHeight" Value="{DynamicResource FreeSnipMinTouchTarget}"/>
             <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -157,7 +157,7 @@
                                             <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="6" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Padding="8">
                                                 <StackPanel Spacing="6">
                                                     <TextBlock Text="PRESET COLORS" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" />
-                                                    <WrapPanel Name="FrameBorderColorPresets" MaxWidth="150">
+                                                    <WrapPanel Name="FrameBorderColorPresets" MaxWidth="116">
                                                         <Button Classes="color-preset" Background="#434343" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#434343" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="#434343 (Default)" AutomationProperties.Name="Default dark gray" />
                                                         <Button Classes="color-preset" Background="#000000" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#000000" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="Black" AutomationProperties.Name="Black" />
                                                         <Button Classes="color-preset" Background="#000080" Width="24" Height="24" MinWidth="24" MinHeight="24" Margin="2" Tag="#000080" Click="OnFrameBorderColorPresetClick" ToolTip.Tip="Navy Blue" AutomationProperties.Name="Navy blue" />
@@ -477,8 +477,8 @@
                             <TextBlock Text="Stay up to date with the newest features, performance optimizations, and bug fixes." Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" FontSize="12" TextWrapping="Wrap"/>
 
                             <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,6,0,0">
-                                <Button Name="BtnCheckUpdatesNow" Content="Check For Updates Now" MinWidth="180" Cursor="Hand"
-                                        AutomationProperties.Name="Check for updates now"
+                                <Button Name="BtnCheckUpdatesNow" Content="Check for Updates" MinWidth="180" Cursor="Hand"
+                                        AutomationProperties.Name="Check for updates"
                                         Background="{DynamicResource FreeSnipPanelDarkBrush}"
                                         Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
                                         BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"

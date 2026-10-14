@@ -5,6 +5,16 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 
 ---
 
+### [3.3.0] - 2026-10-14
+- **Outward Canvas Frame Border Preview**: Added live canvas border preview matching configured thickness and color outward without altering captured image dimensions or suffering canvas edge clipping.
+- **Dynamic Editor Settings Synchronization**: Synchronized user preferences live across all active image editor windows upon saving settings.
+- **High-Contrast Focus Indicators**: Global `:focus-visible` visual feedback across buttons and text inputs for WCAG keyboard accessibility.
+- **Responsive Crop Tool Selection**: Wrapped aspect ratio presets in a responsive panel to prevent viewport clipping on smaller screens.
+- **Real-Time Resize Validation**: Added live dimension validation and error messaging in the resize dialog, preventing invalid scale operations.
+- **Symmetric Layout & Visual Polish**: Aligned color preset grids, normalized update action labeling, and harmonized toolbar separators.
+
+---
+
 ### [3.2.0] - 2026-10-14
 - **Responsive Alternate Editor Hotkeys**: Fully wired secondary alternate hotkeys across all editor tools and actions (Counter, Arrow, Line, FreeDraw, Highlight, Text, Rotate, Resize, Emoji, Blur, Crop, Duplicate, Delete).
 - **Responsive Setup Cancellation**: Enabled clean, immediate cancellation on the Setup & Uninstaller progress windows, halting staging, filesystem, and registry operations without leaving locked files.
@@ -37,8 +47,3 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 - **Magnifier Lens & Color Sampler**: 8x pixel magnification with live HEX color code display and circular zoom loupe for millimeter-precision region selection.
 - **Instant Snapshot Retention**: Optional 24-hour temporary backup storing raw captures locally with automated cleanup.
 
----
-
-### [2.8.0] - 2026-08-01
-- **Permanent Redaction & Blur Tool**: Irreversible pixelation and blur filters to mask sensitive credentials, passwords, and personal information.
-- **Global Hotkey Customization**: Configurable keyboard combinations with real-time clash detection preventing hotkey conflicts with other tools.

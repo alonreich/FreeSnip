@@ -140,6 +140,10 @@
         <Style Selector="Button.action:hover /template/ Border#ActionBorder">
             <Setter Property="Opacity" Value="0.85" />
         </Style>
+        <Style Selector="Button.action:focus-visible /template/ Border#ActionBorder">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipAccentBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
         <Style Selector="Button.context-delete">
             <Setter Property="Background" Value="{DynamicResource FreeSnipDestructiveBrush}" />
         </Style>
@@ -172,6 +176,10 @@
             <Setter Property="BorderThickness" Value="2,2,1,1" />
             <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipSeparatorBrush}" />
         </Style>
+        <Style Selector="Button.toolbar:focus-visible /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipAccentBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
 
         <Style Selector="Button.cropmode">
             <Setter Property="Background" Value="{DynamicResource FreeSnipActionButtonBrush}" />
@@ -183,6 +191,7 @@
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Width" Value="96" />
             <Setter Property="Height" Value="74" />
+            <Setter Property="Margin" Value="2.5" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
@@ -206,6 +215,10 @@
         <Style Selector="Button.cropmode.selected /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource FreeSnipAccentBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipPrimaryTextBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="Button.cropmode:focus-visible /template/ ContentPresenter">
+            <Setter Property="BorderBrush" Value="{DynamicResource FreeSnipAccentBrush}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
         
@@ -593,10 +606,10 @@
                         <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/crop.svg" />
                     </Button>
                     <Popup Name="CropModePopup" FlowDirection="LeftToRight" Placement="BottomEdgeAlignedLeft" VerticalOffset="8" HorizontalOffset="-6" IsLightDismissEnabled="False">
-                        <Border FlowDirection="LeftToRight" Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Padding="12,10" Width="732" BoxShadow="0 6 20 0 #AA000000">
+                        <Border FlowDirection="LeftToRight" Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8" BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1" Padding="12,10" MaxWidth="732" MinWidth="340" BoxShadow="0 6 20 0 #AA000000">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="CROP SHAPE" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" />
-                                <StackPanel Name="CropModeButtons" Orientation="Horizontal" Spacing="5">
+                                <WrapPanel Name="CropModeButtons" Orientation="Horizontal">
                                 <Button Classes="cropmode" Name="CropModeRegular" Tag="Regular" Click="OnCropModeClick" PointerEntered="OnCropModeHover" PointerExited="OnCropModeHoverEnd"
                                         AutomationProperties.Name="Free crop"
                                         AutomationProperties.HelpText="Free crop. Drag any box you like - the picture keeps exactly what is inside it, in whatever shape you drew."
@@ -660,7 +673,7 @@
                                         <TextBlock Grid.Row="1" Margin="0,4,0,0" Text="Cut Horiz." FontSize="10.5" FontWeight="SemiBold" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" />
                                     </Grid>
                                 </Button>
-                                </StackPanel>
+                                </WrapPanel>
                                 <Border Background="{DynamicResource FreeSnipCanvasBrush}" CornerRadius="4" Padding="12,8" Margin="0,6,0,0" HorizontalAlignment="Stretch">
                                     <TextBlock Name="CropModeDescription" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" FontSize="11.5" Foreground="{DynamicResource FreeSnipPrimaryTextBrush}" LineHeight="16" />
                                 </Border>
@@ -769,7 +782,7 @@
 
         <ScrollViewer Grid.Column="1" Name="EditorScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
             <Panel Name="ScrollContentPanel" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{DynamicResource FreeSnipCanvasBrush}">
-                <Grid Name="MainGrid" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <Panel Name="MainGrid" HorizontalAlignment="Left" VerticalAlignment="Top">
                     <Panel Name="ZoomContainer" HorizontalAlignment="Left" VerticalAlignment="Top">
                         <Border Name="SnipBorder" BorderBrush="{DynamicResource FreeSnipFrameBorderBrush}" BorderThickness="3" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{StaticResource CheckerboardBrush}">
                             <Image Name="EditorImage" AutomationProperties.Name="Captured image" Margin="0" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" />
@@ -883,7 +896,7 @@
                             </Canvas>
                         </Canvas>
                     </Panel>
-                </Grid>
+                </Panel>
             </Panel>
         </ScrollViewer>
         </Grid>
@@ -894,15 +907,15 @@
                 <ScrollViewer Grid.Column="0" Classes="bottom-toolbar-scroller" Name="BottomToolbarScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,8,0" PointerWheelChanged="OnBottomToolbarPointerWheelChanged">
                     <StackPanel Orientation="Horizontal" Margin="10,0" Spacing="0" VerticalAlignment="Center" MinHeight="60" HorizontalAlignment="Left">
                         <StackPanel Name="ColorPresetsPanel" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
-                            <Button Classes="color-preset" Background="#000000" Click="OnColorSelectClick" Tag="#000000" AutomationProperties.Name="Black" ToolTip.Tip="Black" />
-                            <Button Classes="color-preset" Background="#00FF00" Click="OnColorSelectClick" Tag="#00FF00" AutomationProperties.Name="Green" ToolTip.Tip="Green" />
-                            <Button Classes="color-preset" Background="#FF0000" Click="OnColorSelectClick" Tag="#FF0000" AutomationProperties.Name="Red" ToolTip.Tip="Red" />
-                            <Button Classes="color-preset" Background="#FFFF00" Click="OnColorSelectClick" Tag="#FFFF00" AutomationProperties.Name="Yellow" ToolTip.Tip="Yellow" />
-                            <Button Classes="color-preset" Background="#0000FF" Click="OnColorSelectClick" Tag="#0000FF" AutomationProperties.Name="Blue" ToolTip.Tip="Blue" />
-                            <Button Classes="color-preset" Background="#FFFFFF" Click="OnColorSelectClick" Tag="#FFFFFF" AutomationProperties.Name="White" ToolTip.Tip="White" />
+                            <Button Classes="color-preset" Background="{DynamicResource FreeSnipPaletteBlackBrush}" Click="OnColorSelectClick" Tag="#000000" AutomationProperties.Name="Black" ToolTip.Tip="Black" />
+                            <Button Classes="color-preset" Background="{DynamicResource FreeSnipPaletteGreenBrush}" Click="OnColorSelectClick" Tag="#00FF00" AutomationProperties.Name="Green" ToolTip.Tip="Green" />
+                            <Button Classes="color-preset" Background="{DynamicResource FreeSnipPaletteRedBrush}" Click="OnColorSelectClick" Tag="#FF0000" AutomationProperties.Name="Red" ToolTip.Tip="Red" />
+                            <Button Classes="color-preset" Background="{DynamicResource FreeSnipPaletteYellowBrush}" Click="OnColorSelectClick" Tag="#FFFF00" AutomationProperties.Name="Yellow" ToolTip.Tip="Yellow" />
+                            <Button Classes="color-preset" Background="{DynamicResource FreeSnipPaletteBlueBrush}" Click="OnColorSelectClick" Tag="#0000FF" AutomationProperties.Name="Blue" ToolTip.Tip="Blue" />
+                            <Button Classes="color-preset" Background="{DynamicResource FreeSnipPaletteWhiteBrush}" Click="OnColorSelectClick" Tag="#FFFFFF" AutomationProperties.Name="White" ToolTip.Tip="White" />
                         </StackPanel>
 
-                        <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="5,0" />
+                        <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="8,0" />
                         
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                             <Button Name="CustomColorBtn" MinWidth="64" MinHeight="40" VerticalAlignment="Center" Cursor="Hand" Padding="6,0,6,0" AutomationProperties.Name="Current color, opens color picker" ToolTip.Tip="Current color (click to open picker)">
@@ -949,7 +962,9 @@
                             </Button>
                         </StackPanel>
 
-                        <Button Classes="toolbar" Name="FillToggleBtn" AutomationProperties.Name="Toggle shape fill" ToolTip.Tip="Toggle Shape Fill" Click="OnFillToggleClick" VerticalAlignment="Center" Width="NaN" MinWidth="40" Padding="10,0" Margin="25,0,0,0">
+                        <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="8,0" />
+
+                        <Button Classes="toolbar" Name="FillToggleBtn" AutomationProperties.Name="Toggle shape fill" ToolTip.Tip="Toggle Shape Fill" Click="OnFillToggleClick" VerticalAlignment="Center" Width="NaN" MinWidth="40" Padding="10,0">
                             <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                                 <svg:Svg Width="24" Height="24" Path="avares://freesnip.editor/Icons/fill.svg" />
                                 <TextBlock Name="FillToggleText" Text="Fill: Off" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource FreeSnipToolbarTextBrush}" />
@@ -971,8 +986,9 @@
                             </Button>
                         </StackPanel>
 
-                        <StackPanel Name="ThicknessPanel" Orientation="Horizontal" Spacing="2" Margin="25,0,0,0" VerticalAlignment="Center">
-                            <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="0,0,5,0" />
+                        <Rectangle Width="1" Height="30" Fill="{DynamicResource FreeSnipSeparatorBrush}" Margin="8,0" />
+
+                        <StackPanel Name="ThicknessPanel" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                             <StackPanel Name="ThicknessChoicesPanel" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center" FlowDirection="LeftToRight">
                                 <Button Name="LineSizeBtn" Classes="line-size-btn" Click="OnLineSizeBtnClick" AutomationProperties.Name="Line size variety selection" ToolTip.Tip="Line size menu (click for more thickness options)">
                                     <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">

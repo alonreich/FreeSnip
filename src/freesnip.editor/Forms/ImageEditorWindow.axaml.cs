@@ -165,9 +165,11 @@ namespace freesnip.editor.forms
         private Avalonia.Controls.Shapes.Rectangle _contextApplySeparator;
         private Avalonia.Controls.Shapes.Rectangle _contextDuplicateSeparator;
 
+        private static readonly HashSet<ImageEditorWindow> _activeEditors = new();
+
         private ScrollViewer _editorScrollViewer;
         private Control _editorContentRoot;
-        private Grid _mainGrid;
+        private Panel _mainGrid;
         private Panel _scrollContentPanel;
         private Panel _zoomContainer;
         private Border _snipBorder;
@@ -175,7 +177,7 @@ namespace freesnip.editor.forms
         private Button _zoomText;
 
         private Button _cropTool;
-        private StackPanel _cropModeButtons;
+        private Panel _cropModeButtons;
 
         private StackPanel _leftToolbar;
         private StackPanel _topToolbarStackPanel;
@@ -384,6 +386,7 @@ namespace freesnip.editor.forms
                 };
             }
 
+            lock (_activeEditors) { _activeEditors.Add(this); }
             Closed += OnWindowClosed;
             Opened += OnWindowOpened;
             Closing += OnWindowClosing;
@@ -420,7 +423,7 @@ namespace freesnip.editor.forms
 
             _editorScrollViewer = this.FindControl<ScrollViewer>("EditorScrollViewer");
             _editorContentRoot = this.FindControl<Control>("EditorContentRoot");
-            _mainGrid = this.FindControl<Grid>("MainGrid");
+            _mainGrid = this.FindControl<Panel>("MainGrid");
             _scrollContentPanel = this.FindControl<Panel>("ScrollContentPanel");
             _zoomContainer = this.FindControl<Panel>("ZoomContainer");
             _snipBorder = this.FindControl<Border>("SnipBorder");
@@ -430,7 +433,7 @@ namespace freesnip.editor.forms
             _cropTool = this.FindControl<Button>("CropTool");
             _cropModePopup = this.FindControl<Avalonia.Controls.Primitives.Popup>("CropModePopup");
             _cropModeDescription = this.FindControl<TextBlock>("CropModeDescription");
-            _cropModeButtons = this.FindControl<StackPanel>("CropModeButtons");
+            _cropModeButtons = this.FindControl<Panel>("CropModeButtons");
 
             _leftToolbar = this.FindControl<StackPanel>("LeftToolBar");
             _topToolbarStackPanel = this.FindControl<StackPanel>("TopToolbarStackPanel");
@@ -1305,6 +1308,54 @@ namespace freesnip.editor.forms
                 out scaledH);
         }
 
+        public static void RefreshAllEditorSettings()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                lock (_activeEditors)
+                {
+                    foreach (var editor in _activeEditors)
+                    {
+                        editor.ApplyFrameBorderPreview();
+                    }
+                }
+            });
+        }
+
+        public void ApplyFrameBorderPreview()
+        {
+            var snipBorder = _snipBorder;
+            if (snipBorder == null || _image == null || _image.Width <= 0 || _image.Height <= 0) return;
+
+            var config = IniConfig.GetIniSection<CoreConfiguration>();
+            bool hasBorder = config?.AddFrameBorders ?? true;
+            if (hasBorder)
+            {
+                int t = config?.FrameBorderThickness > 0 ? config.FrameBorderThickness : 4;
+                snipBorder.BorderThickness = new Thickness(t);
+                snipBorder.Margin = new Thickness(-t);
+                snipBorder.Width = _image.Width + 2 * t;
+                snipBorder.Height = _image.Height + 2 * t;
+
+                string colorHex = config?.FrameBorderColor ?? "#434343";
+                if (AvaloniaColor.TryParse(colorHex, out var bc))
+                {
+                    snipBorder.BorderBrush = new SolidColorBrush(bc);
+                }
+                else
+                {
+                    snipBorder.BorderBrush = new SolidColorBrush(AvaloniaColor.FromRgb(0x43, 0x43, 0x43));
+                }
+            }
+            else
+            {
+                snipBorder.BorderThickness = new Thickness(0);
+                snipBorder.Margin = new Thickness(0);
+                snipBorder.Width = _image.Width;
+                snipBorder.Height = _image.Height;
+            }
+        }
+
         private void ApplyZoom()
         {
             if (_imageControl != null && _canvas != null && _image != null)
@@ -1314,27 +1365,7 @@ namespace freesnip.editor.forms
                 _canvas.Width = _image.Width;
                 _canvas.Height = _image.Height;
 
-                var snipBorder = _snipBorder;
-                if (snipBorder != null)
-                {
-                    snipBorder.Width = _image.Width;
-                    snipBorder.Height = _image.Height;
-                    var config = IniConfig.GetIniSection<CoreConfiguration>();
-                    bool hasBorder = config?.AddFrameBorders ?? true;
-                    if (hasBorder)
-                    {
-                        int t = config?.FrameBorderThickness > 0 ? config.FrameBorderThickness : 4;
-                        snipBorder.BorderThickness = new Thickness(t);
-                        if (AvaloniaColor.TryParse(config?.FrameBorderColor ?? "#434343", out var bc))
-                        {
-                            snipBorder.BorderBrush = new SolidColorBrush(bc);
-                        }
-                    }
-                    else
-                    {
-                        snipBorder.BorderThickness = new Thickness(0);
-                    }
-                }
+                ApplyFrameBorderPreview();
 
                 var overlayCanvas = _overlayCanvas;
                 if (overlayCanvas != null)
@@ -1694,6 +1725,7 @@ namespace freesnip.editor.forms
         }
         private void OnWindowClosed(object sender, EventArgs e) 
         { 
+            lock (_activeEditors) { _activeEditors.Remove(this); }
             _hasOpened = false;
             _zoomEngine.Dispose(); 
             for (int i = 0; i < _activeHaloTimers.Count; i++)
@@ -9193,6 +9225,9 @@ namespace freesnip.editor.forms
             var oldScrollOffset = _editorScrollViewer?.Offset ?? default;
             ITransform oldZoomTransform = _zoomContainer?.RenderTransform;
             bool oldOverlayVisible = _overlayCanvas?.IsVisible ?? true;
+            Thickness oldSnipMargin = _snipBorder?.Margin ?? default;
+            double oldSnipWidth = _snipBorder?.Width ?? imageWidth;
+            double oldSnipHeight = _snipBorder?.Height ?? imageHeight;
             IBrush oldSnipBackground = _snipBorder?.Background;
             Thickness oldSnipThickness = _snipBorder?.BorderThickness ?? default;
             IBrush oldSnipBrush = _snipBorder?.BorderBrush;
@@ -9211,6 +9246,7 @@ namespace freesnip.editor.forms
                 {
                     _snipBorder.Background = null;
                     _snipBorder.BorderThickness = new Thickness(0);
+                    _snipBorder.Margin = new Thickness(0);
                     _snipBorder.Width = w;
                     _snipBorder.Height = h;
                 }
@@ -9285,6 +9321,9 @@ namespace freesnip.editor.forms
                     _snipBorder.Background = oldSnipBackground;
                     _snipBorder.BorderThickness = oldSnipThickness;
                     _snipBorder.BorderBrush = oldSnipBrush;
+                    _snipBorder.Margin = oldSnipMargin;
+                    _snipBorder.Width = oldSnipWidth;
+                    _snipBorder.Height = oldSnipHeight;
                 }
 
                 if (_overlayCanvas != null)

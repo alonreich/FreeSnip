@@ -470,24 +470,45 @@ namespace freesnip.forms
 
         private async void OnToggleAdminClick(object sender, RoutedEventArgs e)
         {
-            bool wasAdmin = await _settingsService.IsAdminStartupConfiguredAsync().ConfigureAwait(true);
+            var btn = this.FindControl<Button>("BtnToggleAdmin");
+            object originalContent = btn?.Content;
+            if (btn != null)
+            {
+                btn.IsEnabled = false;
+                btn.Content = "Configuring Administrator Privileges...";
+            }
             try
             {
-                bool success = await _settingsService.ConfigureAdminStartupAsync(!wasAdmin, _config).ConfigureAwait(true);
-                if (success)
+                bool wasAdmin = await _settingsService.IsAdminStartupConfiguredAsync().ConfigureAwait(true);
+                try
                 {
-                    OverlayHelper.ShowNotification(wasAdmin ? "Admin Startup Removed" : "Admin Startup Configured", this);
+                    bool success = await _settingsService.ConfigureAdminStartupAsync(!wasAdmin, _config).ConfigureAwait(true);
+                    if (success)
+                    {
+                        OverlayHelper.ShowNotification(wasAdmin ? "Admin Startup Removed" : "Admin Startup Configured", this);
+                    }
+                    else
+                    {
+                        OverlayHelper.ShowNotification(wasAdmin ? "Failed to Remove Admin" : "Failed to Configure Admin", this);
+                    }
                 }
-                else
+                catch
                 {
-                    OverlayHelper.ShowNotification(wasAdmin ? "Failed to Remove Admin" : "Failed to Configure Admin", this);
+                    OverlayHelper.ShowNotification("Permission Error", this);
                 }
+                await UpdateAdminButtonStateAsync().ConfigureAwait(true);
             }
-            catch
+            finally
             {
-                OverlayHelper.ShowNotification("Permission Error", this);
+                if (btn != null)
+                {
+                    btn.IsEnabled = true;
+                    if (btn.Content is string s && s == "Configuring Administrator Privileges...")
+                    {
+                        btn.Content = originalContent;
+                    }
+                }
             }
-            await UpdateAdminButtonStateAsync().ConfigureAwait(true);
         }
 
         private async void OnSaveClick(object sender, RoutedEventArgs e)
@@ -640,6 +661,7 @@ namespace freesnip.forms
                                       oldClipAlt != _config.ClipboardHotkeyAlt;
 
                 await _settingsService.SaveSettingsAsync(_config, hotkeysChanged).ConfigureAwait(true);
+                freesnip.editor.forms.ImageEditorWindow.RefreshAllEditorSettings();
                 
                 _loadedFingerprint = BuildFingerprint();
                 _savedAndClosing = true;

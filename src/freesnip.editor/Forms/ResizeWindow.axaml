@@ -25,6 +25,7 @@
                     <TextBlock Text="Height:" Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}" Margin="15,0,10,0"/>
                     <TextBox Name="HeightInput" Grid.Column="3" MinWidth="80" MinHeight="{DynamicResource FreeSnipMinTouchTarget}" Watermark="Height" AutomationProperties.Name="New height in pixels" ToolTip.Tip="New height in pixels" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
                 </Grid>
+                <TextBlock Name="DimensionErrorText" Text="Please enter valid whole numbers (at least 1 px)." Foreground="#FF6B6B" FontSize="11" IsVisible="False" Margin="0,2,0,0" />
 
                 <StackPanel Spacing="6">
                     <StackPanel Orientation="Horizontal" Spacing="6">
