@@ -27,6 +27,7 @@ namespace freesnip.helpers
 
         private static volatile string[] _lastFailedHotkeys = Array.Empty<string>();
         private static volatile string[] _ownedHotkeys = Array.Empty<string>();
+        private static volatile string s_lastNotifiedFailures;
         private static volatile bool _registrationCompleted;
         private static volatile bool _shouldRun = false;
 
@@ -500,10 +501,15 @@ namespace freesnip.helpers
             get
             {
                 var failed = _lastFailedHotkeys;
-                if (failed == null) return false;
+                if (failed == null || failed.Length == 0) return false;
+                var cfg = IniConfig.GetIniSection<CoreConfiguration>();
+                string primaryRegion = cfg?.RegionHotkey;
+                string altRegion = cfg?.RegionHotkeyAlt;
                 foreach (var hotkey in failed)
                 {
-                    if (!string.IsNullOrEmpty(hotkey) && hotkey.IndexOf("PrintScreen", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                    if (string.IsNullOrEmpty(hotkey)) continue;
+                    if (!string.IsNullOrEmpty(primaryRegion) && string.Equals(hotkey.Trim(), primaryRegion.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+                    if (!string.IsNullOrEmpty(altRegion) && string.Equals(hotkey.Trim(), altRegion.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
                 }
                 return false;
             }
@@ -516,6 +522,7 @@ namespace freesnip.helpers
             {
                 _lastFailedHotkeys = System.Array.Empty<string>();
                 _ownedHotkeys = System.Array.Empty<string>();
+                s_lastNotifiedFailures = null;
                 _registrationCompleted = true;
                 BootstrapDebug.Log("HotkeyManager: DisableHotkeys is set. No global hotkeys registered.");
                 return;
@@ -541,8 +548,12 @@ namespace freesnip.helpers
 
             if (failures.Count > 0)
             {
-                string msg = "Failed to register: " + string.Join(", ", failures);
-                if (HasPrintScreenRegistrationFailure)
+                string failureKey = string.Join("|", failures);
+                if (!string.Equals(s_lastNotifiedFailures, failureKey, StringComparison.Ordinal))
+                {
+                    s_lastNotifiedFailures = failureKey;
+                    string msg = "Failed to register: " + string.Join(", ", failures);
+                    if (HasPrintScreenRegistrationFailure)
                     {
                         PrintScreenConflictHelper.ShowConflictToast();
                     }
@@ -550,6 +561,11 @@ namespace freesnip.helpers
                     {
                         ToastHelper.ShowToast("Hotkey Conflict", msg + ". Another app (like OneDrive or Windows) might be using them.");
                     }
+                }
+            }
+            else
+            {
+                s_lastNotifiedFailures = null;
             }
         }
 

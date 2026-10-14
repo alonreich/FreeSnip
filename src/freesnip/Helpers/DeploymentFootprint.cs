@@ -43,6 +43,33 @@ internal static class DeploymentFootprint
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "FreeSnipUpgradeBackups");
 
+    public static readonly string[] LegacyAppNames =
+    {
+        "SnapVox",
+        "snapvox",
+        "LightweightGreenshot",
+        "lightweight_greenshot",
+        "Lightweight Greenshot",
+        "lightweight-greenshot",
+        "Lightweight_Greenshot",
+        "Greenshot",
+        "greenshot"
+    };
+
+    public static readonly string[] LegacyScheduledTaskNames =
+    {
+        "freesnip",
+        "snapvox",
+        "SnapVox",
+        "lightweight_greenshot",
+        "LightweightGreenshot",
+        "lightweight-greenshot",
+        "Lightweight Greenshot",
+        "Lightweight_Greenshot",
+        "greenshot",
+        "Greenshot"
+    };
+
     public static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif", ".ico" };
 
     public static readonly string[] RunKeyRelativePaths =
@@ -58,7 +85,16 @@ internal static class DeploymentFootprint
         AppName,
         DisplayName,
         "freesnip",
-        "FreeSnip"
+        "FreeSnip",
+        "SnapVox",
+        "snapvox",
+        "LightweightGreenshot",
+        "lightweight_greenshot",
+        "Lightweight Greenshot",
+        "lightweight-greenshot",
+        "Lightweight_Greenshot",
+        "Greenshot",
+        "greenshot"
     };
 
     public static readonly string[] MuiCacheRelativePaths =
@@ -72,7 +108,18 @@ internal static class DeploymentFootprint
     {
         "FreeSnip.lnk",
         "freesnip.lnk",
-        "Uninstall FreeSnip.lnk"
+        "Uninstall FreeSnip.lnk",
+        "SnapVox.lnk",
+        "snapvox.lnk",
+        "Uninstall SnapVox.lnk",
+        "LightweightGreenshot.lnk",
+        "lightweight_greenshot.lnk",
+        "Lightweight Greenshot.lnk",
+        "lightweight-greenshot.lnk",
+        "Uninstall Lightweight Greenshot.lnk",
+        "Greenshot.lnk",
+        "greenshot.lnk",
+        "Uninstall Greenshot.lnk"
     };
 
     public static IEnumerable<string> GetShortcutSearchFolders()
@@ -108,6 +155,21 @@ internal static class DeploymentFootprint
         }
     }
 
+    public static IEnumerable<(RegistryHive Hive, RegistryView View, string SubKeyPath)> GetLegacyUninstallRegistryPurgeTargets()
+    {
+        foreach (RegistryHive hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
+        {
+            foreach (RegistryView view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
+                foreach (string name in LegacyAppNames)
+                {
+                    yield return (hive, view, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + name);
+                    yield return (hive, view, @"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\" + name);
+                }
+            }
+        }
+    }
+
     public static IEnumerable<(RegistryHive Hive, RegistryView View, string Path)> GetAppRegistryPurgeTargets()
     {
         foreach (RegistryHive hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
@@ -119,6 +181,21 @@ internal static class DeploymentFootprint
                 yield return (hive, view, @"SOFTWARE\freesnip");
                 yield return (hive, view, @"SOFTWARE\Wow6432Node\FreeSnip");
                 yield return (hive, view, @"SOFTWARE\Wow6432Node\freesnip");
+            }
+        }
+    }
+
+    public static IEnumerable<(RegistryHive Hive, RegistryView View, string Path)> GetLegacyAppRegistryPurgeTargets()
+    {
+        foreach (RegistryHive hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
+        {
+            foreach (RegistryView view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
+                foreach (string name in LegacyAppNames)
+                {
+                    yield return (hive, view, @"SOFTWARE\" + name);
+                    yield return (hive, view, @"SOFTWARE\Wow6432Node\" + name);
+                }
             }
         }
     }
@@ -139,6 +216,32 @@ internal static class DeploymentFootprint
         dirs.Add(DeploymentTempRoot);
         dirs.Add(TempAutoUpdateFolder);
         dirs.Add(UpgradeBackupsRoot);
+
+        return dirs.Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public static IEnumerable<string> GetLegacyDirectoryPurgeTargets(bool includeInstallFolder)
+    {
+        var dirs = new List<string>();
+        string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string progData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+        string[] legacyDirNames = { "SnapVox", "LightweightGreenshot", "lightweight_greenshot", "Greenshot" };
+        foreach (var name in legacyDirNames)
+        {
+            dirs.Add(Path.Combine(appData, name));
+            dirs.Add(Path.Combine(localAppData, name));
+            dirs.Add(Path.Combine(progData, name));
+            if (includeInstallFolder)
+            {
+                dirs.Add(Path.Combine(progFiles, name));
+                if (!string.IsNullOrEmpty(progFilesX86))
+                    dirs.Add(Path.Combine(progFilesX86, name));
+            }
+        }
 
         return dirs.Distinct(StringComparer.OrdinalIgnoreCase);
     }

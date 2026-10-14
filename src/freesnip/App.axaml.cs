@@ -258,6 +258,8 @@ namespace freesnip
         {
             try
             {
+                helpers.StartupTaskHelper.PurgeLegacyStartupResidue();
+
                 var config = IniConfig.GetIniSection<CoreConfiguration>();
                 if (config == null) return;
 

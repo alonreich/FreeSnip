@@ -362,6 +362,7 @@ public static class StartupTaskHelper
                 return false;
             }
 
+            await PurgeLegacyScheduledTasksAsync().ConfigureAwait(false);
             PurgeAllRunKeys();
             PurgeRunKeysForUser(userSid);
             ExecutionTrace.LogEvent("StartupTaskHelper.ScheduledTask", "Configured", targetExecutable);
@@ -374,12 +375,42 @@ public static class StartupTaskHelper
         }
     }
 
+    public static async Task PurgeLegacyScheduledTasksAsync()
+    {
+        try
+        {
+            foreach (var tn in DeploymentFootprint.LegacyScheduledTaskNames)
+            {
+                if (!string.Equals(tn, ScheduledTaskName, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        int exitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", tn), 10000).ConfigureAwait(false);
+                        if (exitCode == 0)
+                        {
+                            LogInstallationElevationState($"Purged legacy scheduled task: {tn}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogSuppressedException("PurgeLegacyScheduledTasks." + tn, ex);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSuppressedException("PurgeLegacyScheduledTasks", ex);
+        }
+    }
+
     public static async Task<bool> HasElevatedStartupTaskAsync()
     {
         try
         {
-            string[] taskNames = { ScheduledTaskName, "freesnip", "snapvox", "SnapVox" };
-            foreach (var tn in taskNames)
+            var taskNames = new List<string> { ScheduledTaskName };
+            taskNames.AddRange(DeploymentFootprint.LegacyScheduledTaskNames);
+            foreach (var tn in taskNames.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 int exitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Query /TN \"{0}\"", tn), 10000).ConfigureAwait(false);
                 if (exitCode == 0) return true;
@@ -423,14 +454,7 @@ public static class StartupTaskHelper
             }
 
             int primaryExitCode = await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", ScheduledTaskName), 10000).ConfigureAwait(false);
-            string[] legacyTasks = { "freesnip", "snapvox", "SnapVox" };
-            foreach (var tn in legacyTasks)
-            {
-                if (!string.Equals(tn, ScheduledTaskName, StringComparison.OrdinalIgnoreCase))
-                {
-                    await RunHiddenProcessAsync("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", tn), 10000).ConfigureAwait(false);
-                }
-            }
+            await PurgeLegacyScheduledTasksAsync().ConfigureAwait(false);
             StartupHelper.SetRunUser(null, GetStartupTaskExecutablePath());
             ExecutionTrace.LogEvent("StartupTaskHelper.ScheduledTask", "Delete", primaryExitCode.ToString());
             return primaryExitCode == 0 || !await HasElevatedStartupTaskAsync().ConfigureAwait(false);
@@ -492,8 +516,10 @@ public static class StartupTaskHelper
         {
             Path.Combine(ConfigurationFolder, "freesnip.ini"),
             Path.Combine(ConfigurationFolder, "snapvox.ini"),
+            Path.Combine(ConfigurationFolder, "lightweight_greenshot.ini"),
             Path.Combine(InstallFolder, "freesnip.ini"),
             Path.Combine(InstallFolder, "snapvox.ini"),
+            Path.Combine(InstallFolder, "lightweight_greenshot.ini"),
             Path.Combine(InstallFolder, @"Data\Settings\freesnip.ini")
         };
         string defaultAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -503,14 +529,23 @@ public static class StartupTaskHelper
         if (string.Equals(ConfigurationFolder, Path.Combine(defaultAppData, "FreeSnip"), StringComparison.OrdinalIgnoreCase))
         {
             list.Add(Path.Combine(defaultAppData, "SnapVox", "snapvox.ini"));
+            list.Add(Path.Combine(defaultAppData, "lightweight_greenshot", "lightweight_greenshot.ini"));
+            list.Add(Path.Combine(defaultAppData, "LightweightGreenshot", "lightweight_greenshot.ini"));
+            list.Add(Path.Combine(defaultAppData, "Greenshot", "greenshot.ini"));
             list.Add(Path.Combine(defaultLocalAppData, "SnapVox", "snapvox.ini"));
+            list.Add(Path.Combine(defaultLocalAppData, "lightweight_greenshot", "lightweight_greenshot.ini"));
+            list.Add(Path.Combine(defaultLocalAppData, "LightweightGreenshot", "lightweight_greenshot.ini"));
             list.Add(Path.Combine(defaultLocalAppData, "FreeSnip", "freesnip.ini"));
             list.Add(Path.Combine(defaultLocalAppData, "Temp", "FreeSnip", "Config", "freesnip.ini"));
             list.Add(Path.Combine(defaultProgFiles, "SnapVox", "snapvox.ini"));
+            list.Add(Path.Combine(defaultProgFiles, "lightweight_greenshot", "lightweight_greenshot.ini"));
+            list.Add(Path.Combine(defaultProgFiles, "LightweightGreenshot", "lightweight_greenshot.ini"));
             string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
             if (!string.IsNullOrEmpty(progFilesX86))
             {
                 list.Add(Path.Combine(progFilesX86, "SnapVox", "snapvox.ini"));
+                list.Add(Path.Combine(progFilesX86, "lightweight_greenshot", "lightweight_greenshot.ini"));
+                list.Add(Path.Combine(progFilesX86, "LightweightGreenshot", "lightweight_greenshot.ini"));
             }
         }
         return list.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -520,12 +555,19 @@ public static class StartupTaskHelper
     {
         yield return new SettingsCandidate(Path.Combine(InstallFolder, "freesnip.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
         yield return new SettingsCandidate(Path.Combine(InstallFolder, "snapvox.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+        yield return new SettingsCandidate(Path.Combine(InstallFolder, "lightweight_greenshot.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
         yield return new SettingsCandidate(Path.Combine(InstallFolder, @"Data\Settings\freesnip.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
         if (!includeMachineLegacy) yield break;
         yield return new SettingsCandidate(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+        yield return new SettingsCandidate(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "lightweight_greenshot", "lightweight_greenshot.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+        yield return new SettingsCandidate(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LightweightGreenshot", "lightweight_greenshot.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
         string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
         if (!string.IsNullOrEmpty(progFilesX86))
+        {
             yield return new SettingsCandidate(Path.Combine(progFilesX86, "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+            yield return new SettingsCandidate(Path.Combine(progFilesX86, "lightweight_greenshot", "lightweight_greenshot.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+            yield return new SettingsCandidate(Path.Combine(progFilesX86, "LightweightGreenshot", "lightweight_greenshot.ini"), SettingsCandidateOrigin.ProgramFilesTemplate);
+        }
     }
 
     /// <summary>Classified candidates rooted at the static <see cref="ConfigurationFolder"/> (non-upgrade paths and legacy callers).</summary>
@@ -535,7 +577,8 @@ public static class StartupTaskHelper
         var list = new List<SettingsCandidate>
         {
             new(Path.Combine(configurationFolder, "freesnip.ini"), SettingsCandidateOrigin.CanonicalUserProfile),
-            new(Path.Combine(configurationFolder, "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile)
+            new(Path.Combine(configurationFolder, "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile),
+            new(Path.Combine(configurationFolder, "lightweight_greenshot.ini"), SettingsCandidateOrigin.LegacyUserProfile)
         };
         string defaultAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         string defaultLocalAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -543,7 +586,12 @@ public static class StartupTaskHelper
         if (isDefaultFolder)
         {
             list.Add(new(Path.Combine(defaultAppData, "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+            list.Add(new(Path.Combine(defaultAppData, "lightweight_greenshot", "lightweight_greenshot.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+            list.Add(new(Path.Combine(defaultAppData, "LightweightGreenshot", "lightweight_greenshot.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+            list.Add(new(Path.Combine(defaultAppData, "Greenshot", "greenshot.ini"), SettingsCandidateOrigin.LegacyUserProfile));
             list.Add(new(Path.Combine(defaultLocalAppData, "SnapVox", "snapvox.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+            list.Add(new(Path.Combine(defaultLocalAppData, "lightweight_greenshot", "lightweight_greenshot.ini"), SettingsCandidateOrigin.LegacyUserProfile));
+            list.Add(new(Path.Combine(defaultLocalAppData, "LightweightGreenshot", "lightweight_greenshot.ini"), SettingsCandidateOrigin.LegacyUserProfile));
             list.Add(new(Path.Combine(defaultLocalAppData, "FreeSnip", "freesnip.ini"), SettingsCandidateOrigin.LegacyUserProfile));
             list.Add(new(Path.Combine(defaultLocalAppData, "Temp", "FreeSnip", "Config", "freesnip.ini"), SettingsCandidateOrigin.LegacyUserProfile));
         }
@@ -597,7 +645,7 @@ public static class StartupTaskHelper
             @"Software\Microsoft\Windows\CurrentVersion\Run",
             @"Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"
         };
-        string[] valueNames = { "freesnip", "FreeSnip", "snapvox", "SnapVox" };
+        string[] valueNames = DeploymentFootprint.RunValueNames;
 
         foreach (RegistryHive hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
         {
@@ -657,7 +705,7 @@ public static class StartupTaskHelper
     internal static void PurgeRunKeysForUser(string userSid)
     {
         if (!UpgradeUserContext.IsValidSid(userSid)) return;
-        string[] valueNames = { "freesnip", "FreeSnip", "snapvox", "SnapVox" };
+        string[] valueNames = DeploymentFootprint.RunValueNames;
         foreach (string subKey in UserRunSubKeys)
         {
             try
@@ -675,6 +723,57 @@ public static class StartupTaskHelper
             {
                 LogSuppressedException("PurgeRunKeysForUser", ex);
             }
+        }
+    }
+
+    public static void PurgeLegacyShortcuts()
+    {
+        try
+        {
+            foreach (string folder in DeploymentFootprint.GetShortcutSearchFolders())
+            {
+                if (!Directory.Exists(folder)) continue;
+                foreach (string shortcutName in DeploymentFootprint.ShortcutFileNames)
+                {
+                    bool isLegacy = DeploymentFootprint.LegacyAppNames.Any(legacy => shortcutName.Contains(legacy, StringComparison.OrdinalIgnoreCase));
+                    bool isStartupFolder = folder.Contains("Startup", StringComparison.OrdinalIgnoreCase);
+
+                    if (isLegacy || isStartupFolder)
+                    {
+                        try
+                        {
+                            string fullPath = Path.Combine(folder, shortcutName);
+                            if (File.Exists(fullPath))
+                            {
+                                File.Delete(fullPath);
+                                LogInstallationElevationState($"Purged legacy/startup shortcut: {fullPath}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LogSuppressedException("PurgeLegacyShortcuts.Delete", ex);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogSuppressedException("PurgeLegacyShortcuts", ex);
+        }
+    }
+
+    public static void PurgeLegacyStartupResidue()
+    {
+        try
+        {
+            PurgeAllRunKeys();
+            PurgeLegacyShortcuts();
+            _ = Task.Run(PurgeLegacyScheduledTasksAsync);
+        }
+        catch (Exception ex)
+        {
+            LogSuppressedException("PurgeLegacyStartupResidue", ex);
         }
     }
 
@@ -771,12 +870,14 @@ public static class StartupTaskHelper
             }
             LogInstallationElevationState("Elevated scheduled task configured successfully. Purging Run registry entries to prevent dual startup.");
             PurgeAllRunKeys();
+            PurgeLegacyShortcuts();
         }
         else
         {
             LogInstallationElevationState("Configuring standard non-elevated user startup in HKCU Run...");
             await DeleteElevatedStartupTaskAsync().ConfigureAwait(false);
             PurgeAllRunKeys();
+            PurgeLegacyShortcuts();
             StartupHelper.SetRunUser("--autorun", InstallPath);
             LogInstallationElevationState("Standard user Run startup configured.");
         }
@@ -824,6 +925,7 @@ public static class StartupTaskHelper
                 throw new IOException("Could not restore administrator startup. Your settings backup has been kept.");
             }
             PurgeAllRunKeys();
+            PurgeLegacyShortcuts();
             PurgeRunKeysForUser(context.UserSid);
             LogInstallationElevationState("Elevated scheduled task configured successfully. Purging Run registry entries to prevent dual startup.");
         }
@@ -831,6 +933,7 @@ public static class StartupTaskHelper
         {
             await DeleteElevatedStartupTaskAsync().ConfigureAwait(false);
             PurgeAllRunKeys();
+            PurgeLegacyShortcuts();
             PurgeRunKeysForUser(context.UserSid);
             SetRunForUser(context.UserSid, "--autorun", InstallPath);
             LogInstallationElevationState("Standard user Run startup configured for original user.");

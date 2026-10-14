@@ -912,6 +912,11 @@ namespace freesnip.editor.forms
             return string.Equals(eString.Trim(), configHotkey.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
+        private bool MatchesAnyHotkey(KeyEventArgs e, string primary, string alt)
+        {
+            return MatchesHotkey(e, primary) || MatchesHotkey(e, alt);
+        }
+
         private static string FormatHotkeyForTooltip(string hotkey)
         {
             if (string.IsNullOrWhiteSpace(hotkey) || hotkey == "None") return "not set";
@@ -1038,8 +1043,8 @@ namespace freesnip.editor.forms
                     return;
                 }
             }
-            if (_selectedControl != null && MatchesHotkey(e, config.DeleteObjectHotkey)) { OnDeleteClick(null, null); e.Handled = true; return; }
-            if (_selectedControl != null && MatchesHotkey(e, config.DuplicateObjectHotkey)) { OnDuplicateClick(null, null); e.Handled = true; return; }
+            if (_selectedControl != null && MatchesAnyHotkey(e, config.DeleteObjectHotkey, config.DeleteObjectHotkeyAlt)) { OnDeleteClick(null, null); e.Handled = true; return; }
+            if (_selectedControl != null && MatchesAnyHotkey(e, config.DuplicateObjectHotkey, config.DuplicateObjectHotkeyAlt)) { OnDuplicateClick(null, null); e.Handled = true; return; }
 
             if (_selectedControl != null && (e.Key == Key.Up || e.Key == Key.Down || e.Key == Key.Left || e.Key == Key.Right))
             {
@@ -1054,19 +1059,19 @@ namespace freesnip.editor.forms
                 return;
             }
 
-            if (MatchesHotkey(e, config.CounterHotkey)) { TriggerToolButton("CounterTool"); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.ArrowHotkey)) { TriggerToolButton("ArrowTool"); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.LineHotkey)) { TriggerToolButton("LineTool"); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.FreehandHotkey)) { TriggerToolButton("FreeDrawTool"); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.HighlightHotkey)) { TriggerToolButton("HighlightTool"); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.CounterHotkey, config.CounterHotkeyAlt)) { TriggerToolButton("CounterTool"); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.ArrowHotkey, config.ArrowHotkeyAlt)) { TriggerToolButton("ArrowTool"); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.LineHotkey, config.LineHotkeyAlt)) { TriggerToolButton("LineTool"); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.FreehandHotkey, config.FreehandHotkeyAlt)) { TriggerToolButton("FreeDrawTool"); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.HighlightHotkey, config.HighlightHotkeyAlt)) { TriggerToolButton("HighlightTool"); e.Handled = true; return; }
 
-            if (MatchesHotkey(e, config.TextHotkey)) { TriggerToolButton("TextTool"); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.RotateCcwHotkey)) { OnRotateCcwClick(null, null); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.RotateCwHotkey)) { OnRotateCwClick(null, null); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.ResizeHotkey)) { OnResizeClick(null, null); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.EmojiHotkey)) { TriggerToolButton("EmojiTool"); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.PixelateHotkey1) || MatchesHotkey(e, config.PixelateHotkey2)) { TriggerToolButton("BlurTool"); e.Handled = true; return; }
-            if (MatchesHotkey(e, config.CropHotkey)) 
+            if (MatchesAnyHotkey(e, config.TextHotkey, config.TextHotkeyAlt)) { TriggerToolButton("TextTool"); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.RotateCcwHotkey, config.RotateCcwHotkeyAlt)) { OnRotateCcwClick(null, null); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.RotateCwHotkey, config.RotateCwHotkeyAlt)) { OnRotateCwClick(null, null); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.ResizeHotkey, config.ResizeHotkeyAlt)) { OnResizeClick(null, null); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.EmojiHotkey, config.EmojiHotkeyAlt)) { TriggerToolButton("EmojiTool"); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.PixelateHotkey1, config.PixelateHotkey1Alt) || MatchesAnyHotkey(e, config.PixelateHotkey2, config.PixelateHotkey2Alt)) { TriggerToolButton("BlurTool"); e.Handled = true; return; }
+            if (MatchesAnyHotkey(e, config.CropHotkey, config.CropHotkeyAlt)) 
             { 
                 bool hasCropObject = (_selectedControl != null && _selectedControl.Tag as string == "CropObject")
                     || (_canvas?.Children.Any(c => c.Tag as string == "CropObject") == true);
@@ -1448,6 +1453,10 @@ namespace freesnip.editor.forms
             {
                 _initialCenterPending = false;
             }
+            else
+            {
+                _initialCenterPending = true;
+            }
         }
 
         private void ApplyZoomAndFocalOffset()
@@ -1487,19 +1496,20 @@ namespace freesnip.editor.forms
             double totalW = Math.Max(scroller.Viewport.Width, scaledW + 2 * padX);
             double totalH = Math.Max(scroller.Viewport.Height, scaledH + 2 * padY);
 
+            scroller.Offset = EditorZoomEngine.CalculateDesiredOffset(
+                _zoomFactor,
+                padX,
+                padY,
+                totalW,
+                totalH,
+                scroller.Viewport.Width,
+                scroller.Viewport.Height,
+                null,
+                null);
+
             if (scroller.Extent.Width >= totalW - 2 && scroller.Extent.Height >= totalH - 2)
             {
                 _initialCenterPending = false;
-                scroller.Offset = EditorZoomEngine.CalculateDesiredOffset(
-                    _zoomFactor,
-                    padX,
-                    padY,
-                    totalW,
-                    totalH,
-                    scroller.Viewport.Width,
-                    scroller.Viewport.Height,
-                    null,
-                    null);
             }
         }
 
@@ -2686,7 +2696,7 @@ namespace freesnip.editor.forms
             }
             finally
             {
-                _isProgrammaticResize = false;
+                // Keep _isProgrammaticResize true until AutoFitWindowToContent completes initial layout
             }
         }
 
@@ -2701,6 +2711,7 @@ namespace freesnip.editor.forms
 
             if (_isUserManuallySized)
             {
+                _isProgrammaticResize = false;
                 _initialCenterPending = true;
                 Dispatcher.UIThread.Post(CenterImageInScrollViewer, DispatcherPriority.Render);
                 return;
@@ -2708,6 +2719,7 @@ namespace freesnip.editor.forms
 
             if (!_windowFitter.TryFit(Width, Height, scroller.Viewport.Width, scroller.Viewport.Height, _document.Width, _document.Height, _zoomFactor, Position, out var newSize, out var newPos))
             {
+                _isProgrammaticResize = false;
                 _initialCenterPending = true;
                 CenterImageInScrollViewer();
                 return;
@@ -2747,6 +2759,8 @@ namespace freesnip.editor.forms
             double scaling = screen.Scaling;
             double maxW = (screen.WorkingArea.Width - 24) / scaling;
             double maxH = (screen.WorkingArea.Height - 24) / scaling;
+            _isUserManuallySized = false;
+            _isProgrammaticResize = true;
             _windowFitter.Configure(screen.WorkingArea, scaling, maxW, maxH);
             Dispatcher.UIThread.Post(AutoFitWindowToContent, DispatcherPriority.Loaded);
         }

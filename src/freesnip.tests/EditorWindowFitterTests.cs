@@ -47,10 +47,29 @@ namespace freesnip.tests
                 imageHeight: 300,
                 zoomFactor: 2.0,
                 maxAllowedWidth: 1920,
-                maxAllowedHeight: 1080);
+                maxAllowedHeight: 1080,
+                contentPadding: 0);
 
             Assert.Equal(1000, w);
             Assert.Equal(800, h);
+        }
+
+        [Fact]
+        public void CalculateFitSize_AddsDefaultContentPadding()
+        {
+            var (w, h) = EditorWindowFitter.CalculateFitSize(
+                currentWidth: 1000,
+                currentHeight: 800,
+                viewportWidth: 800,
+                viewportHeight: 600,
+                imageWidth: 400,
+                imageHeight: 300,
+                zoomFactor: 2.0,
+                maxAllowedWidth: 1920,
+                maxAllowedHeight: 1080);
+
+            Assert.Equal(1000 + (EditorWindowFitter.DefaultContentPadding * 2), w);
+            Assert.Equal(800 + (EditorWindowFitter.DefaultContentPadding * 2), h);
         }
 
         [Fact]
@@ -92,6 +111,8 @@ namespace freesnip.tests
                 imageWidth: 800,
                 imageHeight: 600,
                 zoomFactor: 1.0,
+                currentPos: null,
+                contentPadding: 0,
                 out var newSize,
                 out var newPos);
 
@@ -112,6 +133,8 @@ namespace freesnip.tests
                 imageWidth: 1200,
                 imageHeight: 900,
                 zoomFactor: 1.0,
+                currentPos: null,
+                contentPadding: 0,
                 out var newSize,
                 out var newPos);
 
@@ -187,6 +210,7 @@ namespace freesnip.tests
                 imageHeight: 700,
                 zoomFactor: 1.0,
                 currentPos: currentPos,
+                contentPadding: 0,
                 out var newSize,
                 out var newPos);
 

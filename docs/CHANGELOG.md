@@ -5,6 +5,15 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 
 ---
 
+### [3.2.0] - 2026-10-14
+- **Responsive Alternate Editor Hotkeys**: Fully wired secondary alternate hotkeys across all editor tools and actions (Counter, Arrow, Line, FreeDraw, Highlight, Text, Rotate, Resize, Emoji, Blur, Crop, Duplicate, Delete).
+- **Responsive Setup Cancellation**: Enabled clean, immediate cancellation on the Setup & Uninstaller progress windows, halting staging, filesystem, and registry operations without leaving locked files.
+- **Legacy Rebranding Residue & Dual Startup Purge**: Automated background sanitization and cleanup for legacy app versions (`SnapVox`, `lightweight_greenshot`, `Greenshot`) across Task Scheduler, registry Run keys, shortcuts, and AppData directories, preventing duplicate app instances on startup.
+- **Accurate Hotkey Conflict Reporting**: Refined PrintScreen collision detection to isolate genuine capture key collisions from third-party app shortcuts (such as OneDrive Alt+PrintScreen), ending false conflict toasts and throttling duplicate notifications.
+- **Framed Canvas Centering & Dynamic Crop Resizing**: Added uniform 24px framing padding when opening snippet captures to eliminate right/bottom cutoff edges, and restored automatic window resizing after cropping.
+
+---
+
 ### [3.1.0] - 2026-10-11
 - **Anchor-Preserving Canvas Refit**: Cropping, slicing, or resizing dynamically resizes the editor window in place around its current center anchor without disorienting jumps to the monitor center.
 - **Intelligent Workspace Sizing & Zoom Guard**: Automatically resets zoom magnification to 100% on crop commit and detects manual window border resizing to preserve custom user frame dimensions.
@@ -32,9 +41,3 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 ### [2.8.0] - 2026-08-01
 - **Permanent Redaction & Blur Tool**: Irreversible pixelation and blur filters to mask sensitive credentials, passwords, and personal information.
 - **Global Hotkey Customization**: Configurable keyboard combinations with real-time clash detection preventing hotkey conflicts with other tools.
-
----
-
-### [2.7.0] - 2026-06-20
-- **Magnetic Window Snapping**: Cursor snapping directly to open application windows with a 10-pixel proximity threshold for quick window snips.
-- **Non-Destructive Crop & Slice**: Crop, resize, and slice canvas areas without flattening or rasterizing vector annotations.

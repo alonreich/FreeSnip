@@ -21,6 +21,7 @@ namespace freesnip.forms
         private readonly TaskCompletionSource<bool> _acknowledged = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task Acknowledged => _acknowledged.Task;
+        public event EventHandler CancelRequested;
 
         public DeploymentProgressWindow()
         {
@@ -108,8 +109,10 @@ namespace freesnip.forms
 
         private void OnCancelClick(object sender, Avalonia.Interactivity.RoutedEventArgs e)
         {
-            UpdateStatus("Installation cancelled by user.");
-            ShowError("Installation was cancelled. You can safely close this window and retry.");
+            if (_cancelButton != null) _cancelButton.IsEnabled = false;
+            UpdateStatus("Cancelling setup...");
+            ShowError("Cancellation requested. Halting operations...");
+            CancelRequested?.Invoke(this, EventArgs.Empty);
         }
 
         public void ShowError(string message)

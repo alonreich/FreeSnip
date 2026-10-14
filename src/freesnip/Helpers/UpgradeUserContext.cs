@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -47,8 +47,14 @@ internal sealed class UpgradeUserContext
     public IReadOnlyList<string> GetLegacyUserProfileCandidates() => new[]
     {
         Path.Combine(ConfigurationFolder, "snapvox.ini"),
+        Path.Combine(ConfigurationFolder, "lightweight_greenshot.ini"),
         Path.Combine(AppData, "SnapVox", "snapvox.ini"),
+        Path.Combine(AppData, "lightweight_greenshot", "lightweight_greenshot.ini"),
+        Path.Combine(AppData, "LightweightGreenshot", "lightweight_greenshot.ini"),
+        Path.Combine(AppData, "Greenshot", "greenshot.ini"),
         Path.Combine(LocalAppData, "SnapVox", "snapvox.ini"),
+        Path.Combine(LocalAppData, "lightweight_greenshot", "lightweight_greenshot.ini"),
+        Path.Combine(LocalAppData, "LightweightGreenshot", "lightweight_greenshot.ini"),
         Path.Combine(LocalAppData, "FreeSnip", "freesnip.ini"),
         Path.Combine(LocalAppData, "Temp", "FreeSnip", "Config", "freesnip.ini")
     };

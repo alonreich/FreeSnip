@@ -8,6 +8,7 @@ namespace freesnip.editor.Services
     {
         public const double MinEditorWindowWidth = 880;
         public const double MinEditorWindowHeight = 630;
+        public const double DefaultContentPadding = 24.0;
         public const int MaxRetries = 10;
 
         public bool IsPending { get; set; }
@@ -58,13 +59,14 @@ namespace freesnip.editor.Services
             double imageHeight,
             double zoomFactor,
             double maxAllowedWidth,
-            double maxAllowedHeight)
+            double maxAllowedHeight,
+            double contentPadding = DefaultContentPadding)
         {
             double chromeWidth = currentWidth - viewportWidth;
             double chromeHeight = currentHeight - viewportHeight;
 
-            double desiredWidth = Math.Clamp(chromeWidth + imageWidth * zoomFactor, MinEditorWindowWidth, maxAllowedWidth);
-            double desiredHeight = Math.Clamp(chromeHeight + imageHeight * zoomFactor, MinEditorWindowHeight, maxAllowedHeight);
+            double desiredWidth = Math.Clamp(chromeWidth + imageWidth * zoomFactor + (contentPadding * 2), MinEditorWindowWidth, maxAllowedWidth);
+            double desiredHeight = Math.Clamp(chromeHeight + imageHeight * zoomFactor + (contentPadding * 2), MinEditorWindowHeight, maxAllowedHeight);
 
             return (desiredWidth, desiredHeight);
         }
@@ -150,6 +152,33 @@ namespace freesnip.editor.Services
             out (double Width, double Height) newSize,
             out PixelPoint newPos)
         {
+            return TryFit(
+                currentWidth,
+                currentHeight,
+                viewportWidth,
+                viewportHeight,
+                imageWidth,
+                imageHeight,
+                zoomFactor,
+                currentPos,
+                DefaultContentPadding,
+                out newSize,
+                out newPos);
+        }
+
+        public bool TryFit(
+            double currentWidth,
+            double currentHeight,
+            double viewportWidth,
+            double viewportHeight,
+            double imageWidth,
+            double imageHeight,
+            double zoomFactor,
+            PixelPoint? currentPos,
+            double contentPadding,
+            out (double Width, double Height) newSize,
+            out PixelPoint newPos)
+        {
             newSize = (currentWidth, currentHeight);
             newPos = default;
 
@@ -167,7 +196,8 @@ namespace freesnip.editor.Services
                 imageHeight,
                 zoomFactor,
                 MaxWidth,
-                MaxHeight);
+                MaxHeight,
+                contentPadding);
 
             newSize = (desiredWidth, desiredHeight);
             if (currentPos.HasValue)
