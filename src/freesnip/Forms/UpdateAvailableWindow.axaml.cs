@@ -54,8 +54,8 @@ public partial class UpdateAvailableWindow : Window
         string remote = remoteTag.TrimStart('v', 'V');
         var yourVersion = this.FindControl<TextBlock>("YourVersionText");
         var newVersion = this.FindControl<TextBlock>("NewVersionText");
-        if (yourVersion != null) yourVersion.Text = $"Your version: v{local}";
-        if (newVersion != null) newVersion.Text = $"New version: v{remote}";
+        if (yourVersion != null) yourVersion.Text = $"v{local}";
+        if (newVersion != null) newVersion.Text = $"v{remote}";
 
         var notesExpander = this.FindControl<Expander>("ReleaseNotesExpander");
         var notesText = this.FindControl<TextBlock>("ReleaseNotesText");

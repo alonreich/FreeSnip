@@ -1492,6 +1492,8 @@ namespace freesnip.editor.forms
             var scroller = _editorScrollViewer;
             if (scroller == null || scroller.Viewport.Width <= 1 || scroller.Viewport.Height <= 1) return;
 
+            ApplyZoom();
+
             GetViewportPadding(_zoomFactor, out double padX, out double padY, out double scaledW, out double scaledH);
             double totalW = Math.Max(scroller.Viewport.Width, scaledW + 2 * padX);
             double totalH = Math.Max(scroller.Viewport.Height, scaledH + 2 * padY);
@@ -2713,6 +2715,7 @@ namespace freesnip.editor.forms
             {
                 _isProgrammaticResize = false;
                 _initialCenterPending = true;
+                _zoomEngine.ClearFocalPoints();
                 Dispatcher.UIThread.Post(CenterImageInScrollViewer, DispatcherPriority.Render);
                 return;
             }
@@ -2721,6 +2724,7 @@ namespace freesnip.editor.forms
             {
                 _isProgrammaticResize = false;
                 _initialCenterPending = true;
+                _zoomEngine.ClearFocalPoints();
                 CenterImageInScrollViewer();
                 return;
             }
@@ -2749,6 +2753,11 @@ namespace freesnip.editor.forms
                 _isProgrammaticResize = false;
             }
             _initialCenterPending = true;
+            _zoomEngine.ClearFocalPoints();
+            if (scroller != null)
+            {
+                scroller.Offset = new Avalonia.Vector(0, 0);
+            }
             Dispatcher.UIThread.Post(CenterImageInScrollViewer, DispatcherPriority.Render);
         }
 
@@ -2761,6 +2770,12 @@ namespace freesnip.editor.forms
             double maxH = (screen.WorkingArea.Height - 24) / scaling;
             _isUserManuallySized = false;
             _isProgrammaticResize = true;
+            _initialCenterPending = true;
+            _zoomEngine.ClearFocalPoints();
+            if (_editorScrollViewer != null)
+            {
+                _editorScrollViewer.Offset = new Avalonia.Vector(0, 0);
+            }
             _windowFitter.Configure(screen.WorkingArea, scaling, maxW, maxH);
             Dispatcher.UIThread.Post(AutoFitWindowToContent, DispatcherPriority.Loaded);
         }
@@ -6253,6 +6268,12 @@ namespace freesnip.editor.forms
                 UpdateThicknessPanelVisibility();
                 ShowUndoAvailableHint();
                 OverlayHelper.ShowLightToast("IMAGE RESIZED", this);
+                _zoomEngine.ClearFocalPoints();
+                _initialCenterPending = true;
+                if (_editorScrollViewer != null)
+                {
+                    _editorScrollViewer.Offset = new Avalonia.Vector(0, 0);
+                }
                 RefitWindowToImage();
             }
             catch (Exception ex)
@@ -8732,6 +8753,13 @@ namespace freesnip.editor.forms
 
                 if (!await Task.Run(() => MutateImage(img => img.Mutate(x => x.Crop(cropRect)))).ConfigureAwait(true)) return;
 
+                _zoomEngine.ClearFocalPoints();
+                _initialCenterPending = true;
+                if (_editorScrollViewer != null)
+                {
+                    _editorScrollViewer.Offset = new Avalonia.Vector(0, 0);
+                }
+
                 if (Math.Abs(_zoomFactor - 1.0) > 0.001)
                 {
                     ResetZoomToDefault();
@@ -8864,6 +8892,13 @@ namespace freesnip.editor.forms
                 if (_selectedControl != null && !_canvas.Children.Contains(_selectedControl))
                 {
                     _selectedControl = null;
+                }
+
+                _zoomEngine.ClearFocalPoints();
+                _initialCenterPending = true;
+                if (_editorScrollViewer != null)
+                {
+                    _editorScrollViewer.Offset = new Avalonia.Vector(0, 0);
                 }
 
                 if (Math.Abs(_zoomFactor - 1.0) > 0.001)
@@ -9007,6 +9042,12 @@ namespace freesnip.editor.forms
                 UpdateSelectionIndicator();
                 await UpdateDisplayAsync().ConfigureAwait(true);
                 ShowUndoAvailableHint();
+                _zoomEngine.ClearFocalPoints();
+                _initialCenterPending = true;
+                if (_editorScrollViewer != null)
+                {
+                    _editorScrollViewer.Offset = new Avalonia.Vector(0, 0);
+                }
                 RefitWindowToImage();
             }
             finally

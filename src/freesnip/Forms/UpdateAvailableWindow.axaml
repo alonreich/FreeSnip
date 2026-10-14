@@ -2,36 +2,24 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="freesnip.forms.UpdateAvailableWindow"
         Title="FreeSnip Update Available"
-        Width="580" MinWidth="580" SizeToContent="Height"
-        MinHeight="280"
+        Width="520" Height="360"
         Background="{DynamicResource FreeSnipCanvasBrush}"
         CanResize="False"
         WindowStartupLocation="CenterScreen">
 
-    <Grid Margin="16">
+    <Grid Margin="14">
         <Border Background="{DynamicResource FreeSnipPanelDarkBrush}" CornerRadius="8"
-                BorderBrush="{DynamicResource FreeSnipAccentBrush}" BorderThickness="2" Padding="20">
+                BorderBrush="{DynamicResource FreeSnipAccentBrush}" BorderThickness="1.5" Padding="18">
             <Grid RowDefinitions="Auto, *, Auto">
-                <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,15" Spacing="6">
-                    <TextBlock Text="FreeSnip Update Available"
+                <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,10" Spacing="6">
+                    <TextBlock Text="New Version Available"
                                Foreground="{DynamicResource FreeSnipAccentBrush}"
-                               FontSize="18" FontWeight="Bold"
+                               FontSize="16" FontWeight="Bold"
                                HorizontalAlignment="Center" TextAlignment="Center"/>
-                    <TextBlock Text="A new version of FreeSnip has been released!"
-                               Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
-                               FontSize="14" FontWeight="SemiBold"
-                               HorizontalAlignment="Center" TextAlignment="Center"/>
-                    <TextBlock Text="Would you like to download and install it now?"
-                               Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
-                               FontSize="12"
-                               HorizontalAlignment="Center" TextAlignment="Center"/>
-                </StackPanel>
-
-                <StackPanel Grid.Row="1" Spacing="10" Margin="0,0,0,15">
-                    <Border Background="{DynamicResource FreeSnipCanvasBrush}" CornerRadius="6"
+                    <Border Background="{DynamicResource FreeSnipCanvasBrush}" CornerRadius="4"
                             BorderBrush="{DynamicResource FreeSnipSeparatorBrush}" BorderThickness="1"
-                            Padding="12,8" HorizontalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Spacing="24">
+                            Padding="12,4" HorizontalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="16">
                             <TextBlock Name="YourVersionText" Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
                                        FontSize="12" VerticalAlignment="Center"/>
                             <TextBlock Text="➔" Foreground="{DynamicResource FreeSnipAccentBrush}"
@@ -40,78 +28,62 @@
                                        FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-
-                    <!-- Scrollable release notes fetched from GitHub release -->
-                    <Expander Name="ReleaseNotesExpander" Header="What's New in this Release"
-                              AutomationProperties.Name="What's new in this release"
-                              Cursor="Hand"
-                              IsExpanded="False" MaxHeight="220"
-                              Background="{DynamicResource FreeSnipCanvasBrush}"
-                              Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
-                              BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
-                              BorderThickness="1" CornerRadius="6">
-                        <Border Background="{DynamicResource FreeSnipCanvasBrush}"
-                                Padding="10" Margin="2">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="150">
-                                <TextBlock Name="ReleaseNotesText"
-                                           TextWrapping="Wrap"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
-                                           LineHeight="18"/>
-                            </ScrollViewer>
-                        </Border>
-                    </Expander>
                 </StackPanel>
 
-                <StackPanel Grid.Row="2" Spacing="10">
-                    <Button Name="UpdateNowBtn" Cursor="Hand" IsDefault="True"
-                            AutomationProperties.Name="Download and upgrade to the latest released version now"
-                            Background="{DynamicResource FreeSnipAccentBrush}"
-                            Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
-                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                            Padding="12,8" CornerRadius="4">
-                        <TextBlock Text="Yes. Please download and upgrade to the latest released version now."
-                                   FontWeight="SemiBold" TextWrapping="Wrap" TextAlignment="Center"/>
-                    </Button>
+                <!-- Scrollable release notes fetched from GitHub release -->
+                <Expander Name="ReleaseNotesExpander" Grid.Row="1" Header="What's New in this Release"
+                          AutomationProperties.Name="What's new in this release"
+                          Cursor="Hand"
+                          IsExpanded="True"
+                          Background="{DynamicResource FreeSnipCanvasBrush}"
+                          Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                          BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                          BorderThickness="1" CornerRadius="6"
+                          Margin="0,0,0,12" VerticalAlignment="Stretch">
+                    <Border Background="{DynamicResource FreeSnipCanvasBrush}"
+                            Padding="8" Margin="2">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="130">
+                            <TextBlock Name="ReleaseNotesText"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                       LineHeight="18"/>
+                        </ScrollViewer>
+                    </Border>
+                </Expander>
 
-                    <Button Name="RemindLaterBtn" Cursor="Hand" IsCancel="True"
-                            AutomationProperties.Name="Remind me later and keep using the current version"
-                            Background="{DynamicResource FreeSnipPanelDarkBrush}"
-                            Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
-                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
-                            BorderThickness="1"
-                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                            Padding="10,6" CornerRadius="4">
-                        <TextBlock Text="Remind me later — keep using the current version for now."
-                                   FontWeight="Normal" TextWrapping="Wrap" TextAlignment="Center"/>
-                    </Button>
-
-                    <Separator Background="{DynamicResource FreeSnipSeparatorBrush}" Height="1" Margin="0,4"/>
-
-                    <Button Name="SkipBtn" Cursor="Hand"
+                <!-- Footer Action Bar -->
+                <Grid Grid.Row="2" ColumnDefinitions="Auto, *">
+                    <Button Name="SkipBtn" Grid.Column="0" Content="Skip this version"
                             AutomationProperties.Name="Skip this version"
-                            Background="{DynamicResource FreeSnipCanvasBrush}"
-                            Foreground="{DynamicResource FreeSnipSecondaryTextBrush}"
-                            BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
-                            BorderThickness="1"
-                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                            Padding="10,6" CornerRadius="4">
-                        <TextBlock Text="Skip this version — only tell me when an even newer one comes out."
-                                   TextWrapping="Wrap" TextAlignment="Center"/>
-                    </Button>
+                            Cursor="Hand"
+                            Background="Transparent"
+                            Foreground="{DynamicResource FreeSnipDimTextBrush}"
+                            BorderThickness="0"
+                            Padding="2,6" FontSize="11"
+                            VerticalAlignment="Center"/>
 
-                    <Button Name="NeverBtn" Cursor="Hand"
-                            AutomationProperties.Name="Never check for updates again"
-                            Background="{DynamicResource FreeSnipDestructiveSurfaceBrush}"
-                            Foreground="{DynamicResource FreeSnipDestructiveHoverBrush}"
-                            BorderBrush="{DynamicResource FreeSnipDestructiveBrush}"
-                            BorderThickness="1"
-                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                            Padding="10,6" CornerRadius="4">
-                        <TextBlock Text="⚠ Never tell me about updates again (not recommended)."
-                                   TextWrapping="Wrap" TextAlignment="Center"/>
-                    </Button>
-                </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                        <Button Name="RemindLaterBtn" Content="Remind Me Later"
+                                AutomationProperties.Name="Remind me later"
+                                Cursor="Hand" IsCancel="True"
+                                Background="{DynamicResource FreeSnipSecondaryButtonBrush}"
+                                Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                BorderBrush="{DynamicResource FreeSnipSeparatorBrush}"
+                                BorderThickness="1" MinWidth="120"
+                                HorizontalContentAlignment="Center"
+                                Padding="14,6" CornerRadius="4"/>
+
+                        <Button Name="UpdateNowBtn" Content="Update Now"
+                                AutomationProperties.Name="Update now"
+                                Cursor="Hand" IsDefault="True"
+                                Background="{DynamicResource FreeSnipAccentBrush}"
+                                Foreground="{DynamicResource FreeSnipPrimaryTextBrush}"
+                                FontWeight="SemiBold" MinWidth="100"
+                                HorizontalContentAlignment="Center"
+                                Padding="16,6" CornerRadius="4"/>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
     </Grid>

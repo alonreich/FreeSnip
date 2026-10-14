@@ -10,7 +10,8 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 - **Responsive Setup Cancellation**: Enabled clean, immediate cancellation on the Setup & Uninstaller progress windows, halting staging, filesystem, and registry operations without leaving locked files.
 - **Legacy Rebranding Residue & Dual Startup Purge**: Automated background sanitization and cleanup for legacy app versions (`SnapVox`, `lightweight_greenshot`, `Greenshot`) across Task Scheduler, registry Run keys, shortcuts, and AppData directories, preventing duplicate app instances on startup.
 - **Accurate Hotkey Conflict Reporting**: Refined PrintScreen collision detection to isolate genuine capture key collisions from third-party app shortcuts (such as OneDrive Alt+PrintScreen), ending false conflict toasts and throttling duplicate notifications.
-- **Framed Canvas Centering & Dynamic Crop Resizing**: Added uniform 24px framing padding when opening snippet captures to eliminate right/bottom cutoff edges, and restored automatic window resizing after cropping.
+- **Framed Canvas Centering & Dynamic Crop Resizing**: Added uniform 24px framing padding when opening snippet captures to eliminate right/bottom cutoff edges, restored automatic window resizing after cropping, and guaranteed centered canvas placement by resetting zoom focal points, zeroing scroll offsets, and refreshing viewport padding on layout changes.
+- **Streamlined Update & Upgrade Dialogs**: Replaced brittle dynamic sizing with fixed geometry (`460x220` and `520x360`), eliminating text and border truncation. Converted wordy stacked buttons into clean, modern horizontal action bars ("Restart Now" / "Later" and "Update Now" / "Remind Me Later" / "Skip this version").
 
 ---
 

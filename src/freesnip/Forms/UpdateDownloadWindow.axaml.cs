@@ -63,7 +63,7 @@ public partial class UpdateDownloadWindow : Window
         var restartBtn = this.FindControl<Button>("RestartNowBtn");
 
         if (headline != null) headline.Text = "Update Download Complete!";
-        if (status != null) status.Text = "The update is verified and ready to be installed. Please choose an option:";
+        if (status != null) status.Text = "FreeSnip will restart to apply the update.";
         if (bar != null) bar.Value = 100;
         if (downloadingPanel != null) downloadingPanel.IsVisible = false;
         if (readyPanel != null) readyPanel.IsVisible = true;
