@@ -418,6 +418,10 @@ exit /b 0
 
 :DETECT_NATIVE_AOT
 
+rem The ILCompiler link step invokes bare vswhere.exe even when link.exe is already on PATH,
+rem so the Visual Studio Installer folder must always be reachable.
+if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" set "PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer;%PATH%"
+
 where link.exe >nul 2>&1
 
 if not errorlevel 1 goto DETECT_NATIVE_AOT_OK
