@@ -67,6 +67,11 @@ shift
 
 setlocal enabledelayedexpansion
 
+rem Native AOT linking runs ILCompiler's findvcvarsall.bat -> vcvarsall.bat, whose helper scripts call
+rem bare vswhere.exe. When the VS Installer folder is not on PATH that error text is captured as the
+rem linker path and the link fails, so make it reachable for every build.
+if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" set "PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer;!PATH!"
+
 cd /d "."
 
 set "PROJECT_FILE=src\freesnip\freesnip.csproj"
@@ -417,10 +422,6 @@ if errorlevel 1 (
 exit /b 0
 
 :DETECT_NATIVE_AOT
-
-rem The ILCompiler link step invokes bare vswhere.exe even when link.exe is already on PATH,
-rem so the Visual Studio Installer folder must always be reachable.
-if exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" set "PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer;%PATH%"
 
 where link.exe >nul 2>&1
 
