@@ -197,12 +197,9 @@ call :SIGN_BINARIES
 
 if errorlevel 1 exit /b 1
 
-echo.
-echo ###########################################################
-echo GENERATING DELTA UPDATE PACKAGES...
-echo ###########################################################
-powershell -NoProfile -Command "Compress-Archive -Path '.\compiled\FreeSnip.exe' -DestinationPath '.\compiled\FreeSnip_delta.zip' -Force" <nul
-powershell -NoProfile -Command "Compress-Archive -Path '.\compiled\FreeSnip_tesseract.exe' -DestinationPath '.\compiled\FreeSnip_tesseract_delta.zip' -Force" <nul
+call :VALIDATE_COMPILED_OUTPUT
+
+if errorlevel 1 exit /b 1
 
 echo.
 
@@ -343,7 +340,7 @@ exit /b 0
 
 :PURGE_COMPILED_EXTRAS
 for %%F in (".\compiled\*") do (
-  if /I not "%%~xF"==".exe" if /I not "%%~xF"==".zip" if /I not "%%~nxF"=="LICENSE.txt" (
+  if /I not "%%~nxF"=="FreeSnip.exe" if /I not "%%~nxF"=="FreeSnip_tesseract.exe" if /I not "%%~nxF"=="LICENSE.txt" (
     echo ERROR: Removing disallowed artifact from compiled: %%~nxF
     rd /s /q "%%~fF" 2>nul
     del /f /q "%%~fF" 2>nul
@@ -358,14 +355,15 @@ if not exist ".\compiled\FreeSnip.exe" set "INVALID=1"
 if not exist ".\compiled\FreeSnip_tesseract.exe" set "INVALID=1"
 if not exist ".\compiled\LICENSE.txt" set "INVALID=1"
 for %%F in (".\compiled\*") do (
-  if /I not "%%~xF"==".exe" if /I not "%%~xF"==".zip" if /I not "%%~nxF"=="LICENSE.txt" set "INVALID=1"
+  if /I not "%%~nxF"=="FreeSnip.exe" if /I not "%%~nxF"=="FreeSnip_tesseract.exe" if /I not "%%~nxF"=="LICENSE.txt" set "INVALID=1"
 )
+for /d %%D in (".\compiled\*") do set "INVALID=1"
 if "!INVALID!"=="1" (
-  echo ERROR: .\compiled must contain only FreeSnip binaries, delta archives, and LICENSE.txt
+  echo ERROR: .\compiled must contain exactly FreeSnip.exe, FreeSnip_tesseract.exe and LICENSE.txt
   dir /b ".\compiled" 2>nul
   exit /b 1
 )
-echo Verified .\compiled contains valid FreeSnip release assets and LICENSE.txt.
+echo Verified .\compiled contains exactly FreeSnip.exe, FreeSnip_tesseract.exe and LICENSE.txt.
 exit /b 0
 
 :SIGN_NATIVE_DEPENDENCIES
@@ -541,13 +539,7 @@ if not defined SHA256_OUT (
 )
 set "HASH_TESS=!SHA256_OUT!"
 
-call :GET_SHA256 ".\compiled\FreeSnip_delta.zip"
-set "HASH_NATIVE_DELTA=!SHA256_OUT!"
-
-call :GET_SHA256 ".\compiled\FreeSnip_tesseract_delta.zip"
-set "HASH_TESS_DELTA=!SHA256_OUT!"
-
-echo [PUBLISH] 3/7 Built standalone exes and delta archives fingerprinted, tag !TAG! ready.   [OK]
+echo [PUBLISH] 3/7 Built standalone exes fingerprinted, tag !TAG! ready.   [OK]
 
 rem ---------------------------------------------------------------------------
 rem  RELEASE RETENTION POLICY:
@@ -567,25 +559,27 @@ if not errorlevel 1 (
   git tag -d "!TAG!" >nul 2>&1
 )
 
-powershell -NoProfile -Command "$raw = if (Test-Path '.\docs\CHANGELOG.md') { Get-Content '.\docs\CHANGELOG.md' -Raw } else { '' }; $m = [regex]::Match($raw, '(?s)###\s+\[(.*?)\]\s*-\s*([0-9\-]+)\r?\n(.*?)(?=\r?\n---\r?\n|\z)'); $notesBody = if ($m.Success) { $m.Groups[3].Value.Trim() } else { 'Performance enhancements and bug fixes.' }; $notes = @('# What''s New in this Release', '', $notesBody, '', '---', '### Checksums (SHA-256):', '- FreeSnip.exe: sha256:!HASH_NATIVE!', '- FreeSnip_delta.zip: sha256:!HASH_NATIVE_DELTA!', '- FreeSnip_tesseract.exe: sha256:!HASH_TESS!', '- FreeSnip_tesseract_delta.zip: sha256:!HASH_TESS_DELTA!', '', 'Digitally signed with Authenticode and RFC 3161 timestamp.') -join [Environment]::NewLine; Set-Content -Path '.\compiled\release_notes.txt' -Value $notes -Encoding utf8" <nul
+rem Release notes are passed to gh from a temp file; .\compiled holds only the published assets.
+set "RELEASE_NOTES_FILE=%TEMP%\FreeSnip_release_notes_!TAG!.txt"
+powershell -NoProfile -Command "$raw = if (Test-Path '.\docs\CHANGELOG.md') { Get-Content '.\docs\CHANGELOG.md' -Raw } else { '' }; $m = [regex]::Match($raw, '(?s)###\s+\[(.*?)\]\s*-\s*([0-9\-]+)\r?\n(.*?)(?=\r?\n---\r?\n|\z)'); $notesBody = if ($m.Success) { $m.Groups[3].Value.Trim() } else { 'Performance enhancements and bug fixes.' }; $notes = @('# What''s New in this Release', '', $notesBody, '', '---', '### Checksums (SHA-256):', '- FreeSnip.exe: sha256:!HASH_NATIVE!', '- FreeSnip_tesseract.exe: sha256:!HASH_TESS!', '', 'Digitally signed with Authenticode and RFC 3161 timestamp.') -join [Environment]::NewLine; Set-Content -Path '!RELEASE_NOTES_FILE!' -Value $notes -Encoding utf8" <nul
 
-gh release create !TAG! ".\compiled\FreeSnip.exe#FreeSnip.exe - Native AOT" ".\compiled\FreeSnip_delta.zip#FreeSnip_delta.zip - Delta Update" ".\compiled\FreeSnip_tesseract.exe#FreeSnip_tesseract.exe - with OCR" ".\compiled\FreeSnip_tesseract_delta.zip#FreeSnip_tesseract_delta.zip - Delta Update" ".\compiled\LICENSE.txt#LICENSE.txt" --repo !REPO! --title "FreeSnip !TAG!" --notes-file ".\compiled\release_notes.txt" --latest >nul 2>&1
-if errorlevel 1 (
+gh release create !TAG! ".\compiled\FreeSnip.exe#FreeSnip.exe - Native AOT" ".\compiled\FreeSnip_tesseract.exe#FreeSnip_tesseract.exe - with OCR" ".\compiled\LICENSE.txt#LICENSE.txt" --repo !REPO! --title "FreeSnip !TAG!" --notes-file "!RELEASE_NOTES_FILE!" --latest >nul 2>&1
+set "CREATE_EXIT=!ERRORLEVEL!"
+del /f /q "!RELEASE_NOTES_FILE!" 2>nul
+if not "!CREATE_EXIT!"=="0" (
   echo [PUBLISH] STOPPED: creating release !TAG! failed.
   echo [PUBLISH] Your build is fine - only the upload failed. Retry, or publish by hand.
   exit /b 1
 )
-echo [PUBLISH] 5/7 Release !TAG! created, 5 assets uploaded.              [OK]
+echo [PUBLISH] 5/7 Release !TAG! created, 3 assets uploaded.              [OK]
 
 rem  THE UPLOAD IS VERIFIED BY HASH, NOT BY EXIT CODE: gh reports success even
 rem  when the asset that ends up attached is not the file you meant to send.
-powershell -NoProfile -Command "$assets = (gh release view !TAG! --repo !REPO! --json assets | ConvertFrom-Json).assets; $assets | ForEach-Object { Write-Host ('[PUBLISH]     remote: ' + $_.name + ' ' + $_.digest) }; $n = $assets | Where-Object name -eq 'FreeSnip.exe'; $t = $assets | Where-Object name -eq 'FreeSnip_tesseract.exe'; $nd = $assets | Where-Object name -eq 'FreeSnip_delta.zip'; $td = $assets | Where-Object name -eq 'FreeSnip_tesseract_delta.zip'; if (-not $n -or -not $t -or -not $nd -or -not $td -or $n.digest.ToLower() -ne ('sha256:!HASH_NATIVE!').ToLower() -or $t.digest.ToLower() -ne ('sha256:!HASH_TESS!').ToLower() -or $nd.digest.ToLower() -ne ('sha256:!HASH_NATIVE_DELTA!').ToLower() -or $td.digest.ToLower() -ne ('sha256:!HASH_TESS_DELTA!').ToLower()) { exit 1 }; exit 0" <nul
+powershell -NoProfile -Command "$assets = (gh release view !TAG! --repo !REPO! --json assets | ConvertFrom-Json).assets; $assets | ForEach-Object { Write-Host ('[PUBLISH]     remote: ' + $_.name + ' ' + $_.digest) }; $n = $assets | Where-Object name -eq 'FreeSnip.exe'; $t = $assets | Where-Object name -eq 'FreeSnip_tesseract.exe'; $l = $assets | Where-Object name -eq 'LICENSE.txt'; if ($assets.Count -ne 3 -or -not $n -or -not $t -or -not $l -or $n.digest.ToLower() -ne ('sha256:!HASH_NATIVE!').ToLower() -or $t.digest.ToLower() -ne ('sha256:!HASH_TESS!').ToLower()) { exit 1 }; exit 0" <nul
 if errorlevel 1 (
   echo [PUBLISH] STOPPED: an uploaded asset does NOT match the file that was just built.
   echo [PUBLISH]     FreeSnip.exe built                  sha256:!HASH_NATIVE!
-  echo [PUBLISH]     FreeSnip_delta.zip built            sha256:!HASH_NATIVE_DELTA!
   echo [PUBLISH]     FreeSnip_tesseract built            sha256:!HASH_TESS!
-  echo [PUBLISH]     FreeSnip_tesseract_delta.zip built  sha256:!HASH_TESS_DELTA!
   echo [PUBLISH] The release would be serving the WRONG binary - fix before telling anyone.
   exit /b 1
 )
