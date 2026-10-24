@@ -151,7 +151,7 @@ namespace freesnip.tests
         public void FailedSave_IsNotReportedAsCommitted_AndIsRetriedUntilPersisted()
         {
             string dir = CreateTempDir("FreeSnip_IniFail");
-            Exception raised = null;
+            Exception? raised = null;
             using var raisedSignal = new ManualResetEventSlim(false);
             Action<Exception> handler = ex => { raised = ex; raisedSignal.Set(); };
             try

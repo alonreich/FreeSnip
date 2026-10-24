@@ -14,13 +14,13 @@ namespace freesnip.tests
     {
         private sealed class FakeProvider : IOcrProvider
         {
-            private readonly OcrInformation _result;
-            public FakeProvider(string engineId, OcrInformation result) { EngineId = engineId; _result = result; }
+            private readonly OcrInformation? _result;
+            public FakeProvider(string engineId, OcrInformation? result) { EngineId = engineId; _result = result; }
             public string EngineId { get; }
             public string DisplayName => EngineId;
             public bool HasRequiredLanguages() => true;
-            public Task<OcrInformation> DoOcrAsync(Image image, CancellationToken cancellationToken, bool isAlreadyOwned = false) => Task.FromResult(_result);
-            public Task<OcrInformation> DoOcrAsync(Image image) => Task.FromResult(_result);
+            public Task<OcrInformation> DoOcrAsync(Image image, CancellationToken cancellationToken, bool isAlreadyOwned = false) => Task.FromResult(_result!);
+            public Task<OcrInformation> DoOcrAsync(Image image) => Task.FromResult(_result!);
         }
 
         [Fact]
@@ -56,7 +56,7 @@ namespace freesnip.tests
             var outcome = await service.RecognizeAsync(image, "a");
 
             Assert.Equal(EditorOcrStatus.Recognized, outcome.Status);
-            Assert.Equal("hello", outcome.Info.Text);
+            Assert.Equal("hello", outcome.Info!.Text);
         }
 
         [Fact]
