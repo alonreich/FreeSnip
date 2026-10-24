@@ -1,0 +1,35 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (.NET 9 Windows)
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET 9 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Restore Dependencies
+      run: dotnet restore FreeSnip.sln
+
+    - name: Run Headless Unit Test Suite
+      run: dotnet test src/freesnip.tests/freesnip.tests.csproj -c Release --nologo --verbosity normal
+
+    - name: Build Branch 1 (Native Windows OCR)
+      run: dotnet build src/freesnip/freesnip.csproj -c Release -p:PublishAot=false -p:USE_TESSERACT=false --nologo
+
+    - name: Build Branch 2 (Tesseract External OCR)
+      run: dotnet build src/freesnip/freesnip.csproj -c Release -p:PublishAot=false -p:USE_TESSERACT=true --nologo

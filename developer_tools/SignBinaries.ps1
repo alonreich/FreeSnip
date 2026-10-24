@@ -4,6 +4,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Ensure Microsoft.PowerShell.Security is loaded from the native WindowsPowerShell location
+# (prevents PowerShell 7 module collision in PSModulePath when running powershell.exe)
+if (-not (Get-Command Set-AuthenticodeSignature -ErrorAction SilentlyContinue)) {
+    $nativeSecModule = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1"
+    if (Test-Path $nativeSecModule) {
+        Import-Module $nativeSecModule -ErrorAction SilentlyContinue
+    } else {
+        Import-Module Microsoft.PowerShell.Security -ErrorAction SilentlyContinue
+    }
+}
+
 Write-Host "==========================================================="
 Write-Host "AUTOMATIC CODE SIGNING (FREE & SELF-MANAGED)"
 Write-Host "==========================================================="

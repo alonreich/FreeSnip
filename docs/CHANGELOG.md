@@ -5,6 +5,15 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 
 ---
 
+### [3.4.0] - 2026-10-24
+- **Verified Automatic Updates**: Updates are installed only when their digital signature is intact and comes from the same FreeSnip publisher certificate as your installed copy. Tampered or unsigned downloads are rejected, and verified files are locked until the installer starts.
+- **No More False Print Screen Warnings**: Fixed the "Print Screen is NOT working" notification appearing after waking the PC, unlocking, connecting via Remote Desktop or changing displays, even though Print Screen worked fine.
+- **Editor Opens Fully Centered**: Fixed captures sometimes opening slightly cut off on the right side of the editor until you zoomed.
+- **Reliable Settings Saving**: If settings cannot be written to disk, FreeSnip now tells you, keeps your changes, and retries automatically instead of silently losing them.
+- **Resilient Startup**: A problem preparing the offline OCR engine no longer stops FreeSnip from starting; screenshots keep working and OCR retries when you use it.
+
+---
+
 ### [3.3.0] - 2026-10-14
 - **Outward Canvas Frame Border Preview**: Added live canvas border preview matching configured thickness and color outward without altering captured image dimensions or suffering canvas edge clipping.
 - **Dynamic Editor Settings Synchronization**: Synchronized user preferences live across all active image editor windows upon saving settings.
@@ -39,11 +48,3 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 - **Intelligent Application-Agnostic Scroll Capture**: Continuous vertical and horizontal capturing with consensus motion tracking that filters out stationary ribbons, toolbars, and formulas.
 - **Context-Aware Save & Double Clipboard**: Lossless PNG exports with resilient download folder fallback, in-memory Ctrl+C/Ctrl+V vector duplication, and instant double-clipboard image plus quoted path copying.
 - **Shadow-Staged Resilient Updates**: Automatic background update checks with strict SHA-256 validation, resumable downloads, shadow staging, and settings preservation.
-
----
-
-### [2.9.0] - 2026-09-15
-- **Unified Cross-Monitor Capture**: Borderless virtual desktop rubberband selection supporting mixed-DPI multi-monitor layouts without coordinate drift.
-- **Magnifier Lens & Color Sampler**: 8x pixel magnification with live HEX color code display and circular zoom loupe for millimeter-precision region selection.
-- **Instant Snapshot Retention**: Optional 24-hour temporary backup storing raw captures locally with automated cleanup.
-
