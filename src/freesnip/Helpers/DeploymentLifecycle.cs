@@ -1252,30 +1252,6 @@ internal static class DeploymentLifecycle
         catch (Exception ex) { LogSwallowed("DetectConflictingSoftware", "scan", ex); return null; }
     }
 
-    private static async Task InstallFreshAsync(DeploymentProgress progress, DeploymentLogger logger, CancellationToken ct)
-    {
-        string installFolder = StartupTaskHelper.InstallFolder;
-        Directory.CreateDirectory(installFolder);
-
-        if (PayloadExtractor.HasEmbeddedPayload())
-        {
-            await CopyFileAggressiveAsync(RuntimePathHelper.ExecutablePath, StartupTaskHelper.InstallPath, logger, ct).ConfigureAwait(false);
-            await PayloadExtractor.ExtractToAsync(installFolder, ct).ConfigureAwait(false);
-            await CopyFileAggressiveAsync(StartupTaskHelper.InstallPath, StartupTaskHelper.UninstallExePath, logger, ct).ConfigureAwait(false);
-        }
-        else
-        {
-            await CopyFileAggressiveAsync(RuntimePathHelper.ExecutablePath, StartupTaskHelper.InstallPath, logger, ct).ConfigureAwait(false);
-            await CopyFileAggressiveAsync(RuntimePathHelper.ExecutablePath, StartupTaskHelper.UninstallExePath, logger, ct).ConfigureAwait(false);
-        }
-
-        await InitializeInstalledConfigurationAsync(logger, ct).ConfigureAwait(false);
-        await WriteUninstallRegistryAsync(logger, ct).ConfigureAwait(false);
-        await RegisterFileAssociationsAsync(logger, ct).ConfigureAwait(false);
-        await CreateStartMenuShortcutAsync(logger, ct).ConfigureAwait(false);
-        NotifyShellAssociationsChanged();
-    }
-
     public static async Task<int> RunUninstallLauncherAsync(string[] args, CancellationToken ct)
     {
         try

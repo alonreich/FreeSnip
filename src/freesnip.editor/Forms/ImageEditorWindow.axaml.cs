@@ -8101,11 +8101,6 @@ namespace freesnip.editor.forms
             }
         }
 
-        private void OnPasteClick(object sender, RoutedEventArgs e)
-        {
-            HandleContextualPaste();
-        }
-
         private async void HandleContextualPaste()
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -8124,14 +8119,6 @@ namespace freesnip.editor.forms
         }
 
         private void OnWindowActivated(object sender, EventArgs e)
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                _annotationClipboardSequence = UiClipboard.GetCurrentSequenceNumber();
-            }
-        }
-
-        private void OnWindowDeactivated(object sender, EventArgs e)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -9380,19 +9367,6 @@ namespace freesnip.editor.forms
             return new SixLabors.ImageSharp.Rectangle(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
         }
         
-        private async Task FlattenAnnotationsAsync()
-        {
-            if (GetUserAnnotations().Count == 0) return;
-            var flattened = await GetFlattenedImageAsync().ConfigureAwait(true); 
-            if (flattened == null) return;
-            SetImageUnderLock(flattened);
-            RemoveUserAnnotations(); 
-            _selectedControl = null; 
-            UpdateSelectionIndicator(); 
-            UpdateThicknessPanelVisibility(); 
-            await UpdateDisplayAsync().ConfigureAwait(true);
-        }
-
         private async void OnClearAllClick(object sender, RoutedEventArgs e)
         {
             if (GetUserAnnotations().Count == 0) return;

@@ -28,14 +28,8 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <EmojiDataTaskOutputDir>..\FreeSnip.BuildTasks\bin\$(Configuration)\$(TargetFramework)\</EmojiDataTaskOutputDir>
-    <EmojiDataTaskHostDir>$(BaseIntermediateOutputPath)EmojiDataTaskHost\$(Configuration)\$(TargetFramework)\</EmojiDataTaskHostDir>
-  </PropertyGroup>
-
   <ItemGroup>
-    <AvaloniaResource Include="icons\**\*" Exclude="icons\applicationIcon\**\*" />
-    <AvaloniaResource Remove="icons\svgs\**\*" />
+    <AvaloniaResource Include="icons\**\*" />
     <AvaloniaResource Include="FreeSnip.ico" />
     <EmbeddedResource Include="payload.zip" Condition="Exists('payload.zip')" />
   </ItemGroup>

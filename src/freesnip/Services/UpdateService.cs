@@ -38,7 +38,6 @@ public static class UpdateService
     private static readonly TimeSpan StartupGracePeriod = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan MinimumIntervalBetweenChecks = TimeSpan.FromHours(24);
-    private static readonly TimeSpan MinimumManualInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(15);
 
     private static readonly HttpClient Http = CreateHttpClient();

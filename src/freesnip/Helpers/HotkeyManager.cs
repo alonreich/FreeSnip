@@ -47,12 +47,8 @@ namespace freesnip.helpers
         private const uint WM_WTSSESSION_CHANGE = 0x02B1;
         private const uint NOTIFY_FOR_THIS_SESSION = 0;
         private const int WTS_CONSOLE_CONNECT = 0x1;
-        private const int WTS_CONSOLE_DISCONNECT = 0x2;
         private const int WTS_REMOTE_CONNECT = 0x3;
-        private const int WTS_REMOTE_DISCONNECT = 0x4;
         private const int WTS_SESSION_LOGON = 0x5;
-        private const int WTS_SESSION_LOGOFF = 0x6;
-        private const int WTS_SESSION_LOCK = 0x7;
         private const int WTS_SESSION_UNLOCK = 0x8;
         private static uint _wmTaskbarCreated;
         private const int HOTKEY_REGION = 1;

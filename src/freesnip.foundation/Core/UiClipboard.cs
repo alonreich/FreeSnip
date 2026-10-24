@@ -75,7 +75,6 @@ namespace freesnip.foundation.core
         private static readonly object _ownerLock = new object();
         private static readonly object _nativeClipboardLock = new object();
         private static IntPtr _clipboardOwnerHwnd = IntPtr.Zero;
-        private const int DefaultClipboardHistoryPromotionDelayMs = 0;
         public const string FreeSnipEditorImageFormat = "FreeSnip.ImageEditorSource";
         public const string FreeSnipAnnotationFormat = "FreeSnip.AnnotationObject";
         private static readonly byte[] FreeSnipEditorImageBytes = { 1 };
@@ -421,18 +420,6 @@ namespace freesnip.foundation.core
 
                 return false;
             }
-        }
-
-        [Obsolete("Deprecated. UiClipboard uses atomic Win32 multi-format clipboard batching with zero artificial delay.")]
-        private static int GetClipboardHistoryPromotionDelayMs()
-        {
-            try
-            {
-                var core = freesnip.foundation.IniFile.IniConfig.GetIniSection<CoreConfiguration>();
-                if (core != null && core.ClipboardHistoryPromotionDelayMs >= 0) return core.ClipboardHistoryPromotionDelayMs;
-            }
-            catch { }
-            return DefaultClipboardHistoryPromotionDelayMs;
         }
 
         public static async Task SetFilePathThenImageAsync(string filePath, Image image, bool markFreeSnipEditorImage = false)
@@ -1041,22 +1028,6 @@ namespace freesnip.foundation.core
             {
                 return IntPtr.Zero;
             }
-        }
-
-        private static bool SetClipboardBytes(uint format, byte[] bytes)
-        {
-            if (format == 0 || bytes == null || bytes.Length == 0) return false;
-
-            IntPtr hGlobal = AllocateGlobalBytes(bytes);
-            if (hGlobal == IntPtr.Zero) return false;
-
-            if (SetClipboardData(format, hGlobal) != IntPtr.Zero)
-            {
-                return true;
-            }
-
-            GlobalFree(hGlobal);
-            return false;
         }
 
         public static async Task SetImageAsync(Image image, bool markFreeSnipEditorImage = false)

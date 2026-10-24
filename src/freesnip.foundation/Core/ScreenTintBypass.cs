@@ -140,12 +140,6 @@ namespace freesnip.foundation.core
             Interlocked.Exchange(ref _lastProbeTicks, 0L);
         }
 
-        internal static void ClearProcessCache()
-        {
-            ProcessCacheTimestamps.Clear();
-            ProcessCache.Clear();
-        }
-
         private static bool Probe(RECT region)
         {
             if (region.Width <= 0 || region.Height <= 0) return false;
@@ -329,81 +323,6 @@ namespace freesnip.foundation.core
         public static void ApplyColorCorrectionIfActive(Image<Bgra32> image)
         {
             if (image == null || !IsEnabled()) return;
-        }
-
-        private static bool TryGetActiveColorTemperatureCompensation(out double gFactor, out double bFactor)
-        {
-            gFactor = 1.0;
-            bFactor = 1.0;
-
-            try
-            {
-                var fluxProcs = Process.GetProcessesByName("flux");
-                if (fluxProcs != null && fluxProcs.Length > 0)
-                {
-                    foreach (var p in fluxProcs) p.Dispose();
-
-                    using var key = Registry.CurrentUser.OpenSubKey(@"Software\Michael Herf\flux\Preferences");
-                    if (key != null)
-                    {
-                        object indoorObj = key.GetValue("Indoor");
-                        object lateObj = key.GetValue("Late");
-
-                        int indoor = indoorObj is int ind ? ind : (int.TryParse(indoorObj?.ToString(), out int pInd) ? pInd : 0);
-                        int late = lateObj is int lt ? lt : (int.TryParse(lateObj?.ToString(), out int pLt) ? pLt : 0);
-
-                        int hour = DateTime.Now.Hour;
-                        bool isNight = hour >= 18 || hour < 7;
-                        int temp = 0;
-                        if (isNight)
-                        {
-                            temp = (hour >= 23 || hour < 5) && late > 0 ? late : (indoor > 0 ? indoor : late);
-                        }
-                        else
-                        {
-                            object outdoorObj = key.GetValue("Outdoor");
-                            int outdoor = outdoorObj is int od ? od : (int.TryParse(outdoorObj?.ToString(), out int pOd) ? pOd : 0);
-                            temp = outdoor;
-                        }
-
-                        if (temp > 0 && temp < 6500)
-                        {
-                            CalculateKelvinFactors(temp, out gFactor, out bFactor);
-                            return true;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Debug("Querying f.lux preferences failed.", ex);
-            }
-
-            try
-            {
-                using var stateKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current\default$windows.data.bluelightreduction.bluelightreductionstate\windows.data.bluelightreduction.bluelightreductionstate");
-                if (stateKey != null && stateKey.GetValue("Data") is byte[] data && data.Length >= 19)
-                {
-                    if (data[18] == 0x13 || data[18] == 0x15)
-                    {
-                        CalculateKelvinFactors(4000, out gFactor, out bFactor);
-                        return true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Debug("Querying Windows Night Light state failed.", ex);
-            }
-
-            return false;
-        }
-
-        private static void CalculateKelvinFactors(int kelvin, out double gFactor, out double bFactor)
-        {
-            double k = Math.Clamp(kelvin, 1000, 6500) / 100.0;
-            gFactor = Math.Clamp((99.4708025861 * Math.Log(k) - 161.1195681661) / 255.0, 0.2, 1.0);
-            bFactor = Math.Clamp((138.5177312231 * Math.Log(Math.Max(1.0, k - 10.0)) - 305.0447927307) / 255.0, 0.2, 1.0);
         }
 
         private static long GetWindowLongValue(IntPtr hWnd, int index)

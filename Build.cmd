@@ -118,7 +118,7 @@ set "TAG=v!BUILD_VERSION!"
 set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!FILE_VERSION! -p:AssemblyVersion=!FILE_VERSION! -p:InformationalVersion=!INFORMATIONAL_VERSION!"
 echo Build version: !BUILD_VERSION!  ^(tag !TAG!, fileversion !FILE_VERSION!, commit !GIT_COMMIT!^)
 
-powershell -NoProfile -Command "$lines = @('<Project>', '  <PropertyGroup>', '    <Version>!BUILD_VERSION!</Version>', '    <AssemblyVersion>!FILE_VERSION!</AssemblyVersion>', '    <FileVersion>!FILE_VERSION!</FileVersion>', '    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>', '    <ProductVersion>!BUILD_VERSION!</ProductVersion>', '  </PropertyGroup>', '</Project>'); Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value $lines" <nul
+powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline" <nul
 
 echo ###########################################################
 
@@ -419,37 +419,6 @@ if errorlevel 1 (
 )
 exit /b 0
 
-:DETECT_NATIVE_AOT
-
-where link.exe >nul 2>&1
-
-if not errorlevel 1 goto DETECT_NATIVE_AOT_OK
-
-where vswhere.exe >nul 2>&1
-
-if errorlevel 1 (
-  echo ERROR: Native AOT platform linker ^(link.exe^) not found in PATH.
-  echo ERROR: Open a Developer Command Prompt or add Visual Studio tools to PATH.
-  exit /b 1
-)
-
-for /f "usebackq delims=" %%I in (`vswhere.exe -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2^>nul`) do (
-  if exist "%%I\Common7\Tools\VsDevCmd.bat" (
-    call "%%I\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul
-    where link.exe >nul 2>&1
-    if not errorlevel 1 goto DETECT_NATIVE_AOT_OK
-  )
-)
-
-echo ERROR: Native AOT platform linker ^(link.exe^) not found.
-echo ERROR: Open a Developer Command Prompt or add Visual Studio tools to PATH.
-exit /b 1
-
-:DETECT_NATIVE_AOT_OK
-
-echo Native AOT toolchain detected.
-exit /b 0
-
 :TERMINATE_PROCESSES
 
 taskkill /F /IM FreeSnip.exe /T 2>nul
@@ -460,25 +429,9 @@ exit /b 0
 
 
 
-:SLEEP_SEC
-
-set /a "_sleep_ping=%~1+1"
-
-ping 127.0.0.1 -n !_sleep_ping! >nul 2>&1
-
-exit /b 0
-
-
-
 :CLEAN_ALL
 
 for /d /r . %%d in (bin obj) do @if exist "%%d" rd /s /q "%%d" 2>nul
-
-exit /b 0
-
-
-
-:UNLOCK_MAIN_EXE
 
 exit /b 0
 

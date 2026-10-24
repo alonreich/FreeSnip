@@ -65,7 +65,7 @@ set "TAG=v!BUILD_VERSION!"
 set "VERSION_ARGS=-p:Version=!BUILD_VERSION! -p:FileVersion=!FILE_VERSION! -p:AssemblyVersion=!FILE_VERSION! -p:InformationalVersion=!INFORMATIONAL_VERSION!"
 echo Local Dev Build version: !BUILD_VERSION!  ^(tag !TAG!, fileversion !FILE_VERSION!, commit !GIT_COMMIT!^)
 
-powershell -NoProfile -Command "$lines = @('<Project>', '  <PropertyGroup>', '    <Version>!BUILD_VERSION!</Version>', '    <AssemblyVersion>!FILE_VERSION!</AssemblyVersion>', '    <FileVersion>!FILE_VERSION!</FileVersion>', '    <InformationalVersion>!INFORMATIONAL_VERSION!</InformationalVersion>', '    <ProductVersion>!BUILD_VERSION!</ProductVersion>', '  </PropertyGroup>', '</Project>'); Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline; Set-Content -Path '.\Directory.Build.props' -Value $lines" <nul
+powershell -NoProfile -Command "Set-Content -Path '.\version.txt' -Value '!BUILD_VERSION!' -NoNewline" <nul
 
 echo ###########################################################
 echo PREPARING LOCAL BUILD ENVIRONMENT...

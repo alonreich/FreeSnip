@@ -25,46 +25,6 @@ namespace freesnip.helpers
             return quotedPath + " " + arguments.Trim();
         }
 
-        public static object GetRunAllValue()
-        {
-            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(RunKey, false))
-            {
-                object runValue = key?.GetValue(ApplicationName);
-                if (runValue != null) return runValue;
-            }
-            if (IntPtr.Size != 8) return null;
-            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(RunKey6432, false))
-            {
-                return key?.GetValue(ApplicationName);
-            }
-        }
-
-        public static object GetRunUserValue()
-        {
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKey, false))
-            {
-                object runValue = key?.GetValue(ApplicationName);
-                if (runValue != null) return runValue;
-            }
-            if (IntPtr.Size != 8) return null;
-            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKey6432, false))
-            {
-                return key?.GetValue(ApplicationName);
-            }
-        }
-
-        public static bool HasRunAll()
-        {
-            try { return GetRunAllValue() != null; }
-            catch (Exception e) { Log.Error("Error retrieving RunAllValue", e); return false; }
-        }
-
-        public static bool HasRunUser()
-        {
-            try { return GetRunUserValue() != null; }
-            catch (Exception e) { Log.Error("Error retrieving RunUserValue", e); return false; }
-        }
-
         public static void DeleteRunAll()
         {
             try

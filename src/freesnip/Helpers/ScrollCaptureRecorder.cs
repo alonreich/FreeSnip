@@ -1350,45 +1350,6 @@ namespace freesnip.helpers
             return count == 0 ? 0 : (double)diff / count;
         }
 
-        private static double ComputeRowVariance(FrameLuma luma, int y, int xStart, int xEnd)
-        {
-            if (y < 0 || y >= luma.Height) return 0;
-            double sum = 0, sumSq = 0;
-            int count = 0;
-            int w = luma.Width;
-            int row = y * w;
-            int step = Math.Max(1, (xEnd - xStart) / 60);
-            for (int x = xStart; x < xEnd; x += step)
-            {
-                byte val = luma.Pixels[row + x];
-                sum += val;
-                sumSq += val * val;
-                count++;
-            }
-            if (count == 0) return 0;
-            double mean = sum / count;
-            return Math.Max(0, (sumSq / count) - (mean * mean));
-        }
-
-        private static double ComputeColVariance(FrameLuma luma, int x, int yStart, int yEnd)
-        {
-            if (x < 0 || x >= luma.Width) return 0;
-            double sum = 0, sumSq = 0;
-            int count = 0;
-            int w = luma.Width;
-            int step = Math.Max(1, (yEnd - yStart) / 60);
-            for (int y = yStart; y < yEnd; y += step)
-            {
-                byte val = luma.Pixels[y * w + x];
-                sum += val;
-                sumSq += val * val;
-                count++;
-            }
-            if (count == 0) return 0;
-            double mean = sum / count;
-            return Math.Max(0, (sumSq / count) - (mean * mean));
-        }
-
         public Image<Bgra32> BuildImage(IProgress<double> progress = null)
         {
             if (AcceptedFrames < 1 || _firstFrame == null) return null;
