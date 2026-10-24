@@ -5,6 +5,11 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 
 ---
 
+### [3.4.1] - 2026-10-24
+- **Editor Opens Fully Visible and Centered**: Fixed the editor sometimes opening with the right edge cut off: the Clear All button and the zoom reset button were hidden, and the image sat off-center until you zoomed. Everything now fits the window and the image is centered as soon as it opens.
+
+---
+
 ### [3.4.0] - 2026-10-24
 - **Verified Automatic Updates**: Updates are installed only when their digital signature is intact and comes from the same FreeSnip publisher certificate as your installed copy. Tampered or unsigned downloads are rejected, and verified files are locked until the installer starts.
 - **No More False Print Screen Warnings**: Fixed the "Print Screen is NOT working" notification appearing after waking the PC, unlocking, connecting via Remote Desktop or changing displays, even though Print Screen worked fine.
@@ -39,12 +44,3 @@ This log maintains a rolling cap of the latest 5 releases in clear, plain Englis
 - **Intelligent Workspace Sizing & Zoom Guard**: Automatically resets zoom magnification to 100% on crop commit and detects manual window border resizing to preserve custom user frame dimensions.
 - **Antivirus False-Positive Hardening**: Replaced temporary directory staging with direct Program Files staging and native reboot deletion (`MoveFileEx`), eliminating false-positive malware heuristics.
 - **Binary & Metadata Integrity**: Synchronized PE metadata (`OriginalFilename`, `InternalName`, `ProductVersion`), preserved portable PDB debug directories, Authenticode signed all bundled third-party libraries, and extended startup telemetry grace period.
-
----
-
-### [3.0.0] - 2026-10-10
-- **High-Performance Editor & Non-Destructive Canvas**: Built on Avalonia UI with vector annotations (arrows, shapes, text, emojis, counters), customizable line thickness, and instant undo/redo history.
-- **Dual-Engine Text Recognition (OCR)**: Fast offline text extraction using Windows OCR or bundled LTS Tesseract, copying recognized text to the clipboard and opening it in Notepad.
-- **Intelligent Application-Agnostic Scroll Capture**: Continuous vertical and horizontal capturing with consensus motion tracking that filters out stationary ribbons, toolbars, and formulas.
-- **Context-Aware Save & Double Clipboard**: Lossless PNG exports with resilient download folder fallback, in-memory Ctrl+C/Ctrl+V vector duplication, and instant double-clipboard image plus quoted path copying.
-- **Shadow-Staged Resilient Updates**: Automatic background update checks with strict SHA-256 validation, resumable downloads, shadow staging, and settings preservation.

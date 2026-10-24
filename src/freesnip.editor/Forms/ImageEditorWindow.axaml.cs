@@ -1733,6 +1733,16 @@ namespace freesnip.editor.forms
             {
                 _isUserManuallySized = true;
             }
+
+            // When the window shrinks (the auto-fit after first layout always does), Avalonia's Grid keeps the
+            // star width from the earlier, wider measure and arranges every row of EditorContentRoot wider than
+            // the window: the right side of the toolbars and canvas is clipped and the image is centered in a
+            // viewport that extends past the window edge. Forcing a re-measure makes the rows match the window;
+            // the resulting viewport change then re-centers the image.
+            if (Math.Abs(e.NewSize.Width - e.PreviousSize.Width) > 0.5 || Math.Abs(e.NewSize.Height - e.PreviousSize.Height) > 0.5)
+            {
+                _editorContentRoot?.InvalidateMeasure();
+            }
         }
 
         private string _sourceTitle;
