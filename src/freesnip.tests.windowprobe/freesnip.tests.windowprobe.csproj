@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Test helper, not shipped. Opens the real ImageEditorWindow on the Win32 platform (not headless) and writes
+    layout measurements as JSON. Driven by freesnip.tests/EditorRealWindowLayoutTests.cs, because the
+    stale-layout clipping bugs only reproduce with a real window and one process can host only one Avalonia platform.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RootNamespace>freesnip.tests.windowprobe</RootNamespace>
+    <AssemblyName>freesnip.tests.windowprobe</AssemblyName>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <OutputPath>$(MSBuildThisFileDirectory)bin\$(Configuration)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\freesnip.foundation\freesnip.foundation.csproj" />
+    <ProjectReference Include="..\freesnip.editor\freesnip.editor.csproj" />
+  </ItemGroup>
+</Project>

@@ -10,6 +10,10 @@ CANONICAL APPLICATION IDENTITY & ARCHITECTURAL MANDATE (FREESNIP)
 3. ROBUST UPGRADE & LIFECYCLE PRESERVATION: Any update, installer, or autostart modification MUST retain and respect the FreeSnip upgrade and lifecycle engine:
    - Durable Settings Preservation: Prioritize active configuration in %AppData%\FreeSnip\freesnip.ini, create verified recovery copies in %LocalAppData%\FreeSnipUpgradeBackups\[timestamp]\ during upgrades, and prevent empty template stubs from overriding user settings.
    - Atomic Switchover & Clean Registration: Register FreeSnip anchors (Start Menu shortcut, ProgID freesnip.editor.1, "Open with FreeSnip", uninstall key, elevated or user autostart task/Run key), maintain clean single-instance arbitration, and ensure clean shutdown and process handover.
+4. MANDATORY REGRESSION GATE (NO EXCEPTIONS): Before declaring any change done, fixed or verified, every AI agent and engineer MUST run, from the repository root, on an interactive Windows desktop:
+   - `dotnet test src/freesnip.tests/freesnip.tests.csproj`: the full suite. It includes `EditorRealWindowLayoutTests`, which opens real editor windows for a few seconds to prove that no side of the editor (rows, toolbars, Clear All, bottom pane) is cut off and that the image opens centered. It skips only when no desktop is available; a skip is not a pass for any UI change.
+   - `dotnet build src/freesnip/freesnip.csproj -p:USE_TESSERACT=true`: Branch 2 must compile too.
+   - A change is not done until every test passes. Report failures verbatim. Never delete, skip or weaken a test to get a green run. Every bug fix adds a test that fails without the fix.
 ================================================================================
 
 SYNCHRONIZED BRANCHES MANDATE
@@ -168,7 +172,8 @@ ROLES & PURPOSES MAP
 - **src\freesnip**: Application lifecycle, Tray Icon, Global Hotkeys, and Capture/OCR selection UI. Produces FreeSnip.exe and FreeSnip_tesseract.exe.
 - **src\freesnip.editor**: Image editing canvas, vector annotations, and high-performance saving workflows.
 - **src\freesnip.foundation**: Core abstractions, Win32 Interop (freesnip.foundation.Interop.Win32Interop), and OCR Interface definitions.
-- **src\freesnip.tests**: Validation suite for critical paths (Clipboard, Retention, I/O, Migration Safety, Snapping, Zoom, OCR, Scroll).
+- **src\freesnip.tests**: Validation suite for critical paths (Clipboard, Retention, I/O, Migration Safety, Snapping, Zoom, OCR, Scroll, editor layout).
+- **src\freesnip.tests.windowprobe**: Test-only helper exe (never shipped). Opens the real `ImageEditorWindow` on the Win32 platform and writes layout measurements as JSON for `EditorRealWindowLayoutTests`; the stale-layout clipping bugs do not reproduce under Avalonia headless.
 
 ENTRY POINT & CLI
 -----------------
@@ -501,6 +506,11 @@ FULL PROJECT MINIMAP & NAVIGATION GUIDE
 |   |           ShellLinkInterop.cs
 |   |           Win32Interop.cs
 |   |           
+|   +---freesnip.tests.windowprobe
+|   |       app.manifest
+|   |       freesnip.tests.windowprobe.csproj
+|   |       Program.cs
+|   |       
 |   \---freesnip.tests
 |           ApplicationAgnosticScrollCaptureTests.cs
 |           AutoUpdateSafetyTests.cs
@@ -513,7 +523,9 @@ FULL PROJECT MINIMAP & NAVIGATION GUIDE
 |           EditorDocumentTests.cs
 |           EditorExportServiceTests.cs
 |           EditorHistoryManagerTests.cs
+|           EditorInitialLayoutTests.cs
 |           EditorOcrServiceTests.cs
+|           EditorRealWindowLayoutTests.cs
 |           EditorSafetyTests.cs
 |           EditorWindowFitterTests.cs
 |           EditorZoomEngineTests.cs
@@ -662,4 +674,4 @@ RELIABILITY VERIFICATION
 - UpgradeSettingsBackup.cs stores verified recovery copies outside cleanup roots and preserves them on failure.
 - Crop/cutout/resize refit: `EditorWindowFitter.CalculateAnchoredPosition` resizes the window in place around its center; zoom resets to 100% on crop commit; `EditorWindowFitter.CalculateFitSize` applies `DefaultContentPadding` = 24.
 - AV hardening: installer/update payloads staged in Program Files; PE metadata (`OriginalFilename`, `InternalName`) synced via `ApplyVersionResource.ps1`; update check startup grace period 5 minutes; portable PDBs retained; bundled native libraries Authenticode signed.
-- Full regression coverage: 383 tests across 33 suites, 0 failures, warnings as errors, both branches. Per-suite counts are not tracked here; run `dotnet test src/freesnip.tests`.
+- Full regression coverage: 393 tests across 35 suites (including real-window layout checks), 0 failures, warnings as errors, both branches. Per-suite counts are not tracked here; run `dotnet test src/freesnip.tests`.

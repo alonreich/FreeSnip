@@ -62,6 +62,14 @@ cd FreeSnip
 
 The script compiles both binaries, stamps them with a `vYYYY.MM.DD.HHmm` version, then **replaces the one-and-only GitHub release**: every pre-existing release and tag — local and remote — is deleted first (no exceptions), a fresh release is published with `FreeSnip.exe`, `FreeSnip_tesseract.exe` and `LICENSE.txt` as assets, and the upload is verified by SHA256 digest.
 
+Before reporting any change as done, run the full test suite from the repository root on an interactive Windows desktop (it briefly opens real editor windows to check that nothing is cut off and the image opens centered):
+
+```powershell
+dotnet test src/freesnip.tests/freesnip.tests.csproj
+```
+
+See the regression gate in `project_structure.txt` for the full rule.
+
 To build without touching GitHub at all:
 
 ```powershell
