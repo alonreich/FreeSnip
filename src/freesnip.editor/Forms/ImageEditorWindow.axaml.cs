@@ -1308,6 +1308,21 @@ namespace freesnip.editor.forms
                 out scaledH);
         }
 
+        private EditorZoomEngine.ViewportLayout ComputeViewportLayout(Avalonia.Point? focalVp, Avalonia.Point? focalUnscaled)
+        {
+            var scrollViewer = _editorScrollViewer;
+            return EditorZoomEngine.CalculateLayout(
+                _zoomFactor,
+                _image?.Width ?? 0,
+                _image?.Height ?? 0,
+                scrollViewer?.Viewport.Width ?? 0,
+                scrollViewer?.Viewport.Height ?? 0,
+                Bounds.Width > 0 ? Bounds.Width : Width,
+                Bounds.Height > 0 ? Bounds.Height : Height,
+                focalVp,
+                focalUnscaled);
+        }
+
         public static void RefreshAllEditorSettings()
         {
             Dispatcher.UIThread.Post(() =>
@@ -1383,28 +1398,21 @@ namespace freesnip.editor.forms
                     zoomContainer.RenderTransform = new ScaleTransform(_zoomFactor, _zoomFactor);
                 }
 
-                GetViewportPadding(_zoomFactor, out double padX, out double padY, out double scaledW, out double scaledH);
-
-                var scrollViewer = _editorScrollViewer;
-                double vpW = scrollViewer?.Viewport.Width ?? 0;
-                double vpH = scrollViewer?.Viewport.Height ?? 0;
-
-                double totalW = Math.Max(vpW, scaledW + 2 * padX);
-                double totalH = Math.Max(vpH, scaledH + 2 * padY);
+                var layout = ComputeViewportLayout(null, null);
 
                 var scrollContentPanel = _scrollContentPanel;
                 if (scrollContentPanel != null)
                 {
-                    scrollContentPanel.Width = totalW;
-                    scrollContentPanel.Height = totalH;
+                    scrollContentPanel.Width = layout.ContentWidth;
+                    scrollContentPanel.Height = layout.ContentHeight;
                 }
 
                 var mainGrid = _mainGrid;
                 if (mainGrid != null)
                 {
-                    mainGrid.Width = scaledW;
-                    mainGrid.Height = scaledH;
-                    mainGrid.Margin = new Thickness(padX, padY, 0, 0);
+                    mainGrid.Width = layout.ScaledWidth;
+                    mainGrid.Height = layout.ScaledHeight;
+                    mainGrid.Margin = new Thickness(layout.PadX, layout.PadY, 0, 0);
                 }
 
                 var zoomText = _zoomText;
@@ -1465,29 +1473,14 @@ namespace freesnip.editor.forms
 
             ApplyZoom();
 
-            GetViewportPadding(_zoomFactor, out double padX, out double padY, out double scaledW, out double scaledH);
-            double totalW = Math.Max(scrollViewer.Viewport.Width, scaledW + 2 * padX);
-            double totalH = Math.Max(scrollViewer.Viewport.Height, scaledH + 2 * padY);
+            var layout = ComputeViewportLayout(null, null);
+            scrollViewer.Offset = layout.Offset;
+            _initialCenterPending = !IsExtentSettled(scrollViewer, layout);
+        }
 
-            scrollViewer.Offset = EditorZoomEngine.CalculateDesiredOffset(
-                _zoomFactor,
-                padX,
-                padY,
-                totalW,
-                totalH,
-                scrollViewer.Viewport.Width,
-                scrollViewer.Viewport.Height,
-                null,
-                null);
-
-            if (scrollViewer.Extent.Width >= totalW - 2 && scrollViewer.Extent.Height >= totalH - 2)
-            {
-                _initialCenterPending = false;
-            }
-            else
-            {
-                _initialCenterPending = true;
-            }
+        private static bool IsExtentSettled(ScrollViewer scrollViewer, EditorZoomEngine.ViewportLayout layout)
+        {
+            return scrollViewer.Extent.Width >= layout.ContentWidth - 2 && scrollViewer.Extent.Height >= layout.ContentHeight - 2;
         }
 
         private void ApplyZoomAndFocalOffset()
@@ -1498,21 +1491,7 @@ namespace freesnip.editor.forms
 
             ApplyZoom();
 
-            GetViewportPadding(_zoomFactor, out double padX, out double padY, out double scaledW, out double scaledH);
-
-            double totalW = Math.Max(scrollViewer.Viewport.Width, scaledW + 2 * padX);
-            double totalH = Math.Max(scrollViewer.Viewport.Height, scaledH + 2 * padY);
-
-            scrollViewer.Offset = EditorZoomEngine.CalculateDesiredOffset(
-                _zoomFactor,
-                padX,
-                padY,
-                totalW,
-                totalH,
-                scrollViewer.Viewport.Width,
-                scrollViewer.Viewport.Height,
-                _zoomEngine.FocalViewportPoint,
-                _zoomEngine.FocalUnscaledPoint);
+            scrollViewer.Offset = ComputeViewportLayout(_zoomEngine.FocalViewportPoint, _zoomEngine.FocalUnscaledPoint).Offset;
         }
 
         private bool _initialCenterPending = true;
@@ -1525,25 +1504,25 @@ namespace freesnip.editor.forms
 
             ApplyZoom();
 
-            GetViewportPadding(_zoomFactor, out double padX, out double padY, out double scaledW, out double scaledH);
-            double totalW = Math.Max(scroller.Viewport.Width, scaledW + 2 * padX);
-            double totalH = Math.Max(scroller.Viewport.Height, scaledH + 2 * padY);
-
-            scroller.Offset = EditorZoomEngine.CalculateDesiredOffset(
-                _zoomFactor,
-                padX,
-                padY,
-                totalW,
-                totalH,
-                scroller.Viewport.Width,
-                scroller.Viewport.Height,
-                null,
-                null);
-
-            if (scroller.Extent.Width >= totalW - 2 && scroller.Extent.Height >= totalH - 2)
+            var layout = ComputeViewportLayout(null, null);
+            scroller.Offset = layout.Offset;
+            if (IsExtentSettled(scroller, layout))
             {
                 _initialCenterPending = false;
             }
+        }
+
+        // Scrollbars are non-auto-hiding, so when one appears or disappears the viewport shrinks or grows
+        // while the ScrollViewer control itself keeps its size and SizeChanged never fires. Without this the
+        // centering padding stays computed for the old viewport and a scrollbar-wide strip of the image is
+        // hidden on the right until the next zoom recalculates the layout.
+        private void OnEditorScrollViewerPropertyChanged(object sender, AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property != ScrollViewer.ViewportProperty) return;
+            var oldSize = e.OldValue is Avalonia.Size o ? o : default;
+            var newSize = e.NewValue is Avalonia.Size n ? n : default;
+            if (Math.Abs(oldSize.Width - newSize.Width) < 0.5 && Math.Abs(oldSize.Height - newSize.Height) < 0.5) return;
+            Dispatcher.UIThread.Post(OnScrollViewerSizeChanged, DispatcherPriority.Render);
         }
 
         private void OnScrollViewerSizeChanged()
@@ -1565,6 +1544,7 @@ namespace freesnip.editor.forms
         private bool _forceClose = false;
         
         private readonly OcrOverlayController _ocrController = new OcrOverlayController();
+        private readonly EditorOcrService _ocrService = new EditorOcrService();
         private bool _isOcrInteractiveMode
         {
             get => _ocrController.IsInteractiveMode;
@@ -1711,6 +1691,7 @@ namespace freesnip.editor.forms
                 {
                     zoomViewer.SizeChanged += (_, _) => OnScrollViewerSizeChanged();
                     zoomViewer.LayoutUpdated += OnScrollViewerLayoutUpdated;
+                    zoomViewer.PropertyChanged += OnEditorScrollViewerPropertyChanged;
                 }
             }
 
@@ -1740,6 +1721,7 @@ namespace freesnip.editor.forms
             if (zoomViewer != null)
             {
                 zoomViewer.LayoutUpdated -= OnScrollViewerLayoutUpdated;
+                zoomViewer.PropertyChanged -= OnEditorScrollViewerPropertyChanged;
             }
             ReleaseImageResources(); 
             IniConfig.Flush();
@@ -6898,16 +6880,9 @@ namespace freesnip.editor.forms
                 using var tempImage = await GetFlattenedImageForOcrAsync().ConfigureAwait(true);
                 if (tempImage == null) return;
                 
-                var providers = SimpleServiceProvider.Current.GetAllInstances<IOcrProvider>();
-                var ocrProvider = OcrProviderSelector.Select(providers, config.OcrEngine);
-                if (ocrProvider == null)
-                {
-                    Dispatcher.UIThread.Post(() => OverlayHelper.ShowNotification("OCR UNAVAILABLE", this));
-                    return;
-                }
-
-                var ocrInfo = await ocrProvider.DoOcrAsync(tempImage).ConfigureAwait(true);
-                if (ocrInfo == null)
+                var outcome = await _ocrService.RecognizeAsync(tempImage, config.OcrEngine).ConfigureAwait(true);
+                var ocrInfo = outcome.Info;
+                if (outcome.Status != EditorOcrStatus.Recognized || ocrInfo == null)
                 {
                     Dispatcher.UIThread.Post(() => OverlayHelper.ShowNotification("OCR UNAVAILABLE", this));
                     return;
@@ -6946,12 +6921,7 @@ namespace freesnip.editor.forms
 
                     if (config.KeepBackup)
                     {
-                        string tempDir = Path.Combine(Path.GetTempPath(), "FreeSnip");
-                        await Task.Run(() => Directory.CreateDirectory(tempDir)).ConfigureAwait(true);
-                        string fileName = $"OCR_{DateTime.Now:yyyy-MM-dd_HH-mm-ss_fff}.txt";
-                        string fullPath = Path.Combine(tempDir, fileName);
-                        
-                        await File.WriteAllTextAsync(fullPath, text).ConfigureAwait(true);
+                        string fullPath = await _ocrService.SaveTextBackupAsync(text, DateTime.Now).ConfigureAwait(true);
                         _ = Task.Run(() => Process.Start(new ProcessStartInfo("notepad.exe", $"\"{fullPath}\"") { UseShellExecute = true }));
                         
                         Dispatcher.UIThread.Post(() => OverlayHelper.ShowNotification("TEXT COPIED & SAVED", this));

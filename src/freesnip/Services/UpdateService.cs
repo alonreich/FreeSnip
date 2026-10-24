@@ -158,6 +158,8 @@ public static class UpdateService
                             config.AutoUpdateChecks = false;
                             IniConfig.Save();
                         }
+                        SettingsWindow.NotifyAutoUpdateSettingChanged(false);
+                        ToastHelper.ShowToast("Updates Disabled", "Automatic update checks have been turned off in Settings.");
                         break;
 
                     case UpdateChoice.UpdateNow:
@@ -241,7 +243,9 @@ public static class UpdateService
                         config.AutoUpdateChecks = false;
                         IniConfig.Save();
                     }
+                    SettingsWindow.NotifyAutoUpdateSettingChanged(false);
                     statusCallback?.Invoke("Auto updates disabled in Settings.");
+                    ToastHelper.ShowToast("Updates Disabled", "Automatic update checks have been turned off in Settings.");
                     break;
 
                 case UpdateChoice.UpdateNow:
@@ -302,7 +306,14 @@ public static class UpdateService
     public static bool IsRemoteVersionNewer(Version remote, Version local)
     {
         if (remote == null || local == null) return false;
-        if (local.Major >= 2000 && remote.Major < 100) return true;
+        if (local.Major >= 2000 && remote.Major < 100)
+        {
+            return remote >= new Version(3, 0, 1);
+        }
+        if (local.Major < 100 && remote.Major >= 2000)
+        {
+            return true;
+        }
         return remote.CompareTo(local) > 0;
     }
 
@@ -474,18 +485,145 @@ public static class UpdateService
         }
     }
 
+    public sealed record PendingUpdateInfo(string InstallerPath, string Tag, string Sha256Hex, bool IsDelta);
+    private const string PendingUpdateFile = "pending_update.txt";
+
+    public static void SavePendingUpdate(string installerPath, string tag, string sha256Hex, bool isDelta)
+    {
+        try
+        {
+            string content = $"{installerPath}\n{tag}\n{sha256Hex}\n{isDelta}";
+            WriteStateFile(PendingUpdateFile, content);
+        }
+        catch { }
+    }
+
+    public static PendingUpdateInfo GetPendingUpdate()
+    {
+        try
+        {
+            string raw = ReadStateFile(PendingUpdateFile);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            string[] lines = raw.Split('\n', StringSplitOptions.TrimEntries);
+            if (lines.Length >= 4 && File.Exists(lines[0]))
+            {
+                bool.TryParse(lines[3], out bool isDelta);
+                return new PendingUpdateInfo(lines[0], lines[1], lines[2], isDelta);
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    public static void ClearPendingUpdate()
+    {
+        try
+        {
+            string path = Path.Combine(DeploymentFootprint.LocalAppDataFolder, PendingUpdateFile);
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch { }
+    }
+
+    public static bool ApplyPendingUpdateIfStaged()
+    {
+        try
+        {
+            var pending = GetPendingUpdate();
+            if (pending == null) return false;
+
+            ClearPendingUpdate();
+
+            using FileStream payloadLock = TryLockVerifiedPayload(pending.InstallerPath, pending.Sha256Hex, pending.IsDelta);
+            if (payloadLock == null) return false;
+
+            string launcherExe = pending.IsDelta ? StartupTaskHelper.InstallPath : pending.InstallerPath;
+            var installer = new ProcessStartInfo(launcherExe)
+            {
+                UseShellExecute = true
+            };
+            installer.ArgumentList.Add("--install");
+            installer.ArgumentList.Add("--auto-update");
+            if (pending.IsDelta)
+            {
+                installer.ArgumentList.Add("--delta");
+                installer.ArgumentList.Add(pending.InstallerPath);
+            }
+            installer.ArgumentList.Add("--wait-pid");
+            installer.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+
+            Process.Start(installer);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Fail-closed: the file must carry an intact Authenticode signature from the same certificate that
+    /// signed the running executable. The SHA-256 digest comes from the same release as the payload, so it
+    /// only proves transport integrity, never authenticity.
+    /// </summary>
+    public static bool VerifyAuthenticodeSignature(string filePath) => UpdateSignatureVerifier.IsSignedBySameSigner(filePath);
+
+    /// <summary>
+    /// Opens the staged payload with FileShare.Read (no writers, no rename/delete), then checks its SHA-256 and,
+    /// for full installers, its pinned Authenticode signer on that same handle. The caller keeps the returned
+    /// stream open until the installer has been started so verified bytes cannot be swapped before launch.
+    /// Delta packages are zip archives; their executables are signature-checked when the installer extracts them.
+    /// Returns null (and discards the payload) on any failure.
+    /// </summary>
+    internal static FileStream TryLockVerifiedPayload(string path, string expectedSha256, bool isDelta)
+    {
+        if (string.IsNullOrWhiteSpace(expectedSha256) || !IsUnderDownloadRoot(path) || !File.Exists(path)) return null;
+
+        FileStream fs = null;
+        try
+        {
+            fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            string actualHash = Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant();
+            bool valid = string.Equals(actualHash, expectedSha256, StringComparison.OrdinalIgnoreCase)
+                && (isDelta || UpdateSignatureVerifier.IsSignedBySameSigner(path, fs.SafeFileHandle));
+            if (valid) return fs;
+        }
+        catch (Exception ex)
+        {
+            LogHelper.GetLogger(typeof(UpdateService)).Warn($"Update payload verification failed for {path}: {ex.Message}");
+        }
+
+        fs?.Dispose();
+        TryDeleteFile(path);
+        return null;
+    }
+
+    private static bool IsUnderDownloadRoot(string path)
+    {
+        try
+        {
+            string root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), DownloadFolderRootName)) + Path.DirectorySeparatorChar;
+            return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static async Task DownloadVerifyLaunchAsync(Window owner, UpdateRelease release)
     {
         if (release == null) return;
-        PurgeOldDownloadFolders();
 
         if (!TrySanitizeTagForPath(release.Tag, out string tagFolderName))
         {
             throw new InvalidOperationException($"Invalid release tag format: {release.Tag}");
         }
 
+        PurgeOldDownloadFolders(keepTag: tagFolderName);
+
         string downloadRoot = Path.Combine(Path.GetTempPath(), DownloadFolderRootName);
-        string folder = Path.Combine(downloadRoot, tagFolderName, Guid.NewGuid().ToString("N"));
+        string folder = Path.Combine(downloadRoot, tagFolderName);
         string targetFileName = release.TargetFileName ?? (release.IsDelta ? GetExpectedDeltaAssetName() : GetExpectedAssetName());
         string finalPath = Path.Combine(folder, targetFileName);
         string partPath = finalPath + ".part";
@@ -526,7 +664,16 @@ public static class UpdateService
             long existingBytes = 0;
             if (File.Exists(partPath))
             {
-                try { existingBytes = new FileInfo(partPath).Length; } catch { existingBytes = 0; }
+                try
+                {
+                    existingBytes = new FileInfo(partPath).Length;
+                    if (release.Size > 0 && existingBytes >= release.Size)
+                    {
+                        TryDeleteFile(partPath);
+                        existingBytes = 0;
+                    }
+                }
+                catch { existingBytes = 0; }
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Get, release.DownloadUrl);
@@ -543,7 +690,18 @@ public static class UpdateService
             bool isPartial = response.StatusCode == System.Net.HttpStatusCode.PartialContent;
             if (!response.IsSuccessStatusCode && !isPartial)
             {
-                response.EnsureSuccessStatusCode();
+                if (response.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
+                {
+                    TryDeleteFile(partPath);
+                    existingBytes = 0;
+                    using var retryReq = new HttpRequestMessage(HttpMethod.Get, release.DownloadUrl);
+                    using var retryResp = await Http.SendAsync(retryReq, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+                    retryResp.EnsureSuccessStatusCode();
+                }
+                else
+                {
+                    response.EnsureSuccessStatusCode();
+                }
             }
 
             long total;
@@ -605,6 +763,14 @@ public static class UpdateService
 
             File.Move(partPath, finalPath, overwrite: true);
 
+            if (!release.IsDelta && !VerifyAuthenticodeSignature(finalPath))
+            {
+                TryDeleteFile(finalPath);
+                throw new InvalidOperationException(UpdateSignatureVerifier.IsRunningBuildSigned
+                    ? "Downloaded update is not signed by the FreeSnip publisher certificate. The unverified binary was discarded."
+                    : "This FreeSnip build is unsigned, so automatic updates cannot be verified and are disabled. Install the update manually.");
+            }
+
             cts.Token.ThrowIfCancellationRequested();
 
             UpdateReadyAction action = UpdateReadyAction.ContinueWorking;
@@ -618,6 +784,7 @@ public static class UpdateService
 
             if (action == UpdateReadyAction.RestartNow)
             {
+                ClearPendingUpdate();
                 Dispatcher.UIThread.Post(() => progressWindow?.MarkHandoffToInstaller());
 
                 string launcherExe = release.IsDelta ? StartupTaskHelper.InstallPath : finalPath;
@@ -635,18 +802,31 @@ public static class UpdateService
                 installer.ArgumentList.Add("--wait-pid");
                 installer.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
 
+                // The user may have sat on the "ready" prompt; re-verify and hold the lock until the
+                // installer starts. ShutdownForUpdate ends the process, which releases the handle.
+                FileStream payloadLock = TryLockVerifiedPayload(finalPath, release.Sha256Hex, release.IsDelta)
+                    ?? throw new InvalidOperationException("The downloaded update changed on disk after verification and was discarded.");
+
                 Dispatcher.UIThread.Post(() =>
                 {
                     try { progressWindow?.Close(); } catch { }
-                    App.ShutdownForUpdate(installer);
+                    try
+                    {
+                        App.ShutdownForUpdate(installer);
+                    }
+                    finally
+                    {
+                        payloadLock.Dispose();
+                    }
                 });
             }
             else
             {
+                SavePendingUpdate(finalPath, release.Tag, release.Sha256Hex, release.IsDelta);
                 Dispatcher.UIThread.Post(() =>
                 {
                     try { progressWindow?.Close(); } catch { }
-                    ToastHelper.ShowToast("Update Ready", "FreeSnip will complete the upgrade when restarted.");
+                    ToastHelper.ShowToast("Update Ready", "FreeSnip will complete the upgrade automatically when restarted.");
                 });
             }
         }
@@ -722,12 +902,25 @@ public static class UpdateService
         return true;
     }
 
-    private static void PurgeOldDownloadFolders()
+    private static void PurgeOldDownloadFolders(string keepTag = null)
     {
         try
         {
             string root = Path.Combine(Path.GetTempPath(), DownloadFolderRootName);
-            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            if (!Directory.Exists(root)) return;
+            if (string.IsNullOrEmpty(keepTag))
+            {
+                Directory.Delete(root, recursive: true);
+                return;
+            }
+            foreach (var dir in Directory.GetDirectories(root))
+            {
+                string dirName = Path.GetFileName(dir);
+                if (!string.Equals(dirName, keepTag, StringComparison.OrdinalIgnoreCase))
+                {
+                    try { Directory.Delete(dir, recursive: true); } catch { }
+                }
+            }
         }
         catch { }
     }

@@ -227,6 +227,41 @@ namespace freesnip.editor.Services
             focalUnscaledPoint = new Point(unscaledX, unscaledY);
         }
 
+        /// <summary>Complete scroll-content geometry for one zoom level and viewport.</summary>
+        public readonly record struct ViewportLayout(
+            double PadX,
+            double PadY,
+            double ScaledWidth,
+            double ScaledHeight,
+            double ContentWidth,
+            double ContentHeight,
+            Vector Offset);
+
+        /// <summary>
+        /// Single source of truth for centering/padding/offset math. The content size is always derived from
+        /// the same viewport the padding was computed against, so the image can never be laid out for a wider
+        /// viewport than the one actually visible.
+        /// </summary>
+        public static ViewportLayout CalculateLayout(
+            double zoom,
+            double imageWidth,
+            double imageHeight,
+            double viewportWidth,
+            double viewportHeight,
+            double windowWidth,
+            double windowHeight,
+            Point? focalVp,
+            Point? focalUnscaled)
+        {
+            CalculateViewportPadding(zoom, imageWidth, imageHeight, viewportWidth, viewportHeight, windowWidth, windowHeight,
+                out double padX, out double padY, out double scaledW, out double scaledH);
+
+            double contentW = Math.Max(viewportWidth, scaledW + 2 * padX);
+            double contentH = Math.Max(viewportHeight, scaledH + 2 * padY);
+            Vector offset = CalculateDesiredOffset(zoom, padX, padY, contentW, contentH, viewportWidth, viewportHeight, focalVp, focalUnscaled);
+            return new ViewportLayout(padX, padY, scaledW, scaledH, contentW, contentH, offset);
+        }
+
         public static Vector CalculateDesiredOffset(
             double zoom,
             double padX,

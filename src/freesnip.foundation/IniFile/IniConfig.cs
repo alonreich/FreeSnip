@@ -33,7 +33,23 @@ namespace freesnip.foundation.IniFile
         private static volatile int _isSaveQueued;
         private static long _requestedVersion;
         private static long _committedVersion;
+        private static long _failedVersion;
+        private static int _consecutiveSaveFailures;
+        private const int MaxSaveRetryDelayMs = 30000;
         internal static int SimulatedDiskLatencyMs { get; set; }
+        internal static Func<string, bool> SimulatedSaveFailure { get; set; }
+
+        /// <summary>
+        /// Raised (on a background thread) when settings could not be written to disk. The changes stay
+        /// dirty in memory and are retried with backoff; the UI should tell the user they are not persisted yet.
+        /// </summary>
+        public static event Action<Exception> SaveFailed;
+
+        /// <summary>The most recent write failure, cleared by the next successful save.</summary>
+        public static Exception LastSaveError { get; private set; }
+
+        /// <summary>True when the latest requested settings version has not reached disk.</summary>
+        public static bool HasUnsavedChanges => Interlocked.Read(ref _committedVersion) < Interlocked.Read(ref _requestedVersion);
         private static string _applicationName;
         private static string _configName;
         private static readonly IDictionary<string, IniSection> SectionMap = new Dictionary<string, IniSection>();
@@ -284,24 +300,25 @@ namespace freesnip.foundation.IniFile
                     catch (Exception ex)
                     {
                         Log.Error("Failed to determine ini save path", ex);
-                        lock (CommitLock)
-                        {
-                            if (targetVersion > _committedVersion) _committedVersion = targetVersion;
-                            Monitor.PulseAll(CommitLock);
-                        }
+                        RecordSaveFailure(targetVersion, defaultPath, ex);
                         break;
                     }
                 }
 
                 try
                 {
+                    if (SimulatedSaveFailure?.Invoke(path) == true) throw new IOException("Simulated ini save failure.");
                     SaveInternally(path);
                 }
                 catch (Exception ex)
                 {
                     Log.Error("Failed to save ini", ex);
+                    RecordSaveFailure(targetVersion, defaultPath, ex);
+                    break;
                 }
 
+                LastSaveError = null;
+                Interlocked.Exchange(ref _consecutiveSaveFailures, 0);
                 lock (CommitLock)
                 {
                     if (targetVersion > _committedVersion)
@@ -311,6 +328,33 @@ namespace freesnip.foundation.IniFile
                     Monitor.PulseAll(CommitLock);
                 }
             }
+        }
+
+        // A failed write must never be reported as committed: the version stays dirty, waiters are released
+        // with a failure result, and the save is re-queued with exponential backoff until the disk accepts it.
+        private static void RecordSaveFailure(long targetVersion, string path, Exception ex)
+        {
+            LastSaveError = ex;
+            lock (CommitLock)
+            {
+                if (targetVersion > _failedVersion) _failedVersion = targetVersion;
+                Monitor.PulseAll(CommitLock);
+            }
+            Interlocked.Exchange(ref _isSaveQueued, 0);
+
+            int failures = Interlocked.Increment(ref _consecutiveSaveFailures);
+            int delayMs = (int)Math.Min(MaxSaveRetryDelayMs, 250L << Math.Min(failures - 1, 10));
+            _ = Task.Delay(delayMs).ContinueWith(_ =>
+            {
+                if (!HasUnsavedChanges) return;
+                if (Interlocked.Exchange(ref _isSaveQueued, 1) == 0 && !SaveChannel.Writer.TryWrite(path))
+                {
+                    Interlocked.Exchange(ref _isSaveQueued, 0);
+                }
+            }, TaskScheduler.Default);
+
+            try { SaveFailed?.Invoke(ex); }
+            catch (Exception handlerEx) { Log.Warn("SaveFailed handler threw", handlerEx); }
         }
 
         public static IDictionary<string, string> PropertiesForSection(IniSection section)
@@ -382,6 +426,11 @@ namespace freesnip.foundation.IniFile
             {
                 while (Interlocked.Read(ref _committedVersion) < targetVersion)
                 {
+                    if (_failedVersion >= targetVersion)
+                    {
+                        Log.WarnFormat("WaitForPendingSaves: version {0} failed to persist: {1}", targetVersion, LastSaveError?.Message);
+                        return false;
+                    }
                     long remaining = timeoutMs - sw.ElapsedMilliseconds;
                     if (remaining <= 0)
                     {

@@ -75,6 +75,11 @@ public class FreeSnipMain
 
         if (!isInstaller && !isLifecycle)
         {
+            if (services.UpdateService.ApplyPendingUpdateIfStaged())
+            {
+                return;
+            }
+
             s_singleInstanceMutex = ResourceMutex.Create(ResourceMutex.SingleInstanceArbitratorName, "FreeSnip instance");
             if (!s_singleInstanceMutex.IsLocked)
             {

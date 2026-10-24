@@ -6,6 +6,7 @@ using Xunit;
 
 namespace freesnip.tests
 {
+    [Collection(IniConfigStateCollection.Name)]
     public class SettingsServiceTests
     {
         private readonly SettingsService _service = new();

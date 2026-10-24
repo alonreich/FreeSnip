@@ -1737,6 +1737,30 @@ internal static class DeploymentLifecycle
         }
     }
 
+    /// <summary>
+    /// Extracts a delta zip from a single locked read and rejects the whole package unless every executable
+    /// image it contains is Authenticode-signed by the same certificate as the running installer.
+    /// The zip digest comes from the same release as the payload, so it cannot vouch for authenticity.
+    /// </summary>
+    private static void ExtractVerifiedDeltaPackage(string deltaPackagePath, string shadowDir)
+    {
+        using var zipStream = new FileStream(deltaPackagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+        archive.ExtractToDirectory(shadowDir, overwriteFiles: true);
+
+        foreach (ZipArchiveEntry entry in archive.Entries)
+        {
+            string ext = Path.GetExtension(entry.FullName);
+            if (!ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) && !ext.Equals(".dll", StringComparison.OrdinalIgnoreCase)) continue;
+
+            string extracted = Path.GetFullPath(Path.Combine(shadowDir, entry.FullName));
+            if (!services.UpdateSignatureVerifier.IsSignedBySameSigner(extracted))
+            {
+                throw new InvalidDataException($"Delta package entry '{entry.FullName}' is not signed by the FreeSnip publisher certificate. Update aborted.");
+            }
+        }
+    }
+
     private static async Task PopulateStagingDirectoryAsync(string shadowDir, string deltaPackagePath, DeploymentLogger logger, CancellationToken ct)
     {
         await Task.Run(() => Directory.CreateDirectory(shadowDir), ct).ConfigureAwait(false);
@@ -1750,7 +1774,7 @@ internal static class DeploymentLifecycle
             {
                 await CopyDirectoryRecursiveAsync(StartupTaskHelper.InstallFolder, shadowDir, logger, ct).ConfigureAwait(false);
             }
-            await Task.Run(() => ZipFile.ExtractToDirectory(deltaPackagePath, shadowDir, overwriteFiles: true), ct).ConfigureAwait(false);
+            await Task.Run(() => ExtractVerifiedDeltaPackage(deltaPackagePath, shadowDir), ct).ConfigureAwait(false);
             if (await Task.Run(() => File.Exists(shadowExe), ct).ConfigureAwait(false))
             {
                 await CopyFileAggressiveAsync(shadowExe, shadowUninstall, logger, ct).ConfigureAwait(false);
@@ -1883,16 +1907,36 @@ internal static class DeploymentLifecycle
     {
         try
         {
-            foreach (string dir in DeploymentFootprint.GetVerificationTargets())
+            // A genuine installation requires binaries in the install folder
+            if (Directory.Exists(StartupTaskHelper.InstallFolder))
             {
-                if (Directory.Exists(dir) && Directory.EnumerateFileSystemEntries(dir).Any()) return true;
+                if (File.Exists(StartupTaskHelper.InstallPath) ||
+                    File.Exists(Path.Combine(StartupTaskHelper.InstallFolder, "FreeSnip_tesseract.exe")) ||
+                    Directory.EnumerateFiles(StartupTaskHelper.InstallFolder, "*.exe").Any())
+                {
+                    return true;
+                }
             }
 
+            // Or an active uninstall entry pointing to an existing file/folder on disk
             foreach (var reg in DeploymentFootprint.GetUninstallRegistryPurgeTargets())
             {
                 using var baseKey = RegistryKey.OpenBaseKey(reg.Hive, reg.View);
                 using var key = baseKey?.OpenSubKey(reg.SubKeyPath);
-                if (key != null) return true;
+                if (key != null)
+                {
+                    string uninstallStr = key.GetValue("UninstallString") as string;
+                    string installLoc = key.GetValue("InstallLocation") as string;
+                    if (!string.IsNullOrWhiteSpace(installLoc) && Directory.Exists(installLoc) && Directory.EnumerateFiles(installLoc, "*.exe").Any())
+                    {
+                        return true;
+                    }
+                    if (!string.IsNullOrWhiteSpace(uninstallStr))
+                    {
+                        string exeTarget = uninstallStr.Trim('"').Split('"')[0].Trim();
+                        if (File.Exists(exeTarget)) return true;
+                    }
+                }
             }
         }
         catch (Exception ex)

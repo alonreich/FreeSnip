@@ -33,6 +33,12 @@ namespace freesnip.helpers
 
         private const int WM_HOTKEY = 0x0312;
         private const int WM_APP_EXIT = 0x8001;
+        // RegisterHotKey/UnregisterHotKey only work on the thread that owns _hwnd. Any re-registration
+        // requested from elsewhere (timers, thread pool) must be marshalled here via these messages,
+        // otherwise every call fails with ERROR_WINDOW_OF_OTHER_THREAD and is misreported as a conflict.
+        private const int WM_APP_REREGISTER = 0x8002;
+        private const int WM_APP_REREGISTER_CONFIRM = 0x8003;
+        private static readonly TimeSpan FailureConfirmDelay = TimeSpan.FromSeconds(2);
         private const int WM_DESTROY = 0x0002;
         private const uint WM_POWERBROADCAST = 0x0218;
         private const int PBT_APMRESUMEAUTOMATIC = 0x0012;
@@ -161,6 +167,12 @@ namespace freesnip.helpers
                     return IntPtr.Zero;
                 }
 
+                if (msg == WM_APP_REREGISTER || msg == WM_APP_REREGISTER_CONFIRM)
+                {
+                    RegisterAll(confirmPass: msg == WM_APP_REREGISTER_CONFIRM);
+                    return IntPtr.Zero;
+                }
+
                 if (_wmTaskbarCreated != 0 && msg == _wmTaskbarCreated)
                 {
                     BootstrapDebug.Log("HotkeyManager: TaskbarCreated broadcast received. Restoring tray icon and re-verifying hotkeys.");
@@ -190,10 +202,7 @@ namespace freesnip.helpers
                         BootstrapDebug.Log("HotkeyManager: RDP or terminal session connect/unlock detected. Refreshing hotkeys.");
                         RegisterAll();
 
-                        Task.Delay(1000).ContinueWith(_ =>
-                        {
-                            RegisterAll();
-                        });
+                        PostRegistrationRequest(WM_APP_REREGISTER, TimeSpan.FromSeconds(1));
                     }
                     return IntPtr.Zero;
                 }
@@ -203,10 +212,7 @@ namespace freesnip.helpers
                     BootstrapDebug.Log("HotkeyManager: Display change notification received. Refreshing hotkeys.");
                     RegisterAll();
 
-                    Task.Delay(1000).ContinueWith(_ =>
-                    {
-                        RegisterAll();
-                    });
+                    PostRegistrationRequest(WM_APP_REREGISTER, TimeSpan.FromSeconds(1));
                     return IntPtr.Zero;
                 }
 
@@ -515,7 +521,25 @@ namespace freesnip.helpers
             }
         }
 
-        private static void RegisterAll()
+        private static void PostRegistrationRequest(uint message, TimeSpan delay)
+        {
+            IntPtr target = _hwnd;
+            if (target == IntPtr.Zero) return;
+            Task.Delay(delay).ContinueWith(_ =>
+            {
+                if (_running && _hwnd == target)
+                {
+                    PostMessageW(target, message, IntPtr.Zero, IntPtr.Zero);
+                }
+            }, TaskScheduler.Default);
+        }
+
+        /// <param name="confirmPass">
+        /// Failures right after resume/unlock/display changes are often transient (the shell or another app
+        /// briefly holds the key). A first failing pass only schedules a confirmation pass; the user is
+        /// notified only when the confirmation pass still fails.
+        /// </param>
+        private static void RegisterAll(bool confirmPass = false)
         {
             var cfg = IniConfig.GetIniSection<CoreConfiguration>();
             if (cfg.DisableHotkeys)
@@ -546,7 +570,12 @@ namespace freesnip.helpers
             _lastFailedHotkeys = failures.ToArray();
             _registrationCompleted = true;
 
-            if (failures.Count > 0)
+            if (failures.Count > 0 && !confirmPass)
+            {
+                BootstrapDebug.Log($"HotkeyManager: registration failed for {string.Join(", ", failures)}; confirming in {FailureConfirmDelay.TotalSeconds:0}s before notifying.");
+                PostRegistrationRequest(WM_APP_REREGISTER_CONFIRM, FailureConfirmDelay);
+            }
+            else if (failures.Count > 0)
             {
                 string failureKey = string.Join("|", failures);
                 if (!string.Equals(s_lastNotifiedFailures, failureKey, StringComparison.Ordinal))

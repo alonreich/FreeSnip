@@ -8,6 +8,42 @@ namespace freesnip.tests
     public class EditorZoomEngineTests
     {
         [Fact]
+        public void CalculateLayout_FittingImage_IsCenteredInsideActualViewport()
+        {
+            var layout = EditorZoomEngine.CalculateLayout(1.0, 800, 400, 1000, 600, 1200, 800, null, null);
+
+            Assert.Equal(100, layout.PadX, 3);
+            Assert.Equal(100, layout.PadY, 3);
+            Assert.Equal(1000, layout.ContentWidth, 3);
+            Assert.Equal(600, layout.ContentHeight, 3);
+            Assert.Equal(new Vector(0, 0), layout.Offset);
+        }
+
+        [Fact]
+        public void CalculateLayout_ViewportShrunkByScrollbar_NeverLeavesImageEdgeOutsideViewport()
+        {
+            // Same window, but a non-auto-hide vertical scrollbar took 17px of viewport width.
+            var wide = EditorZoomEngine.CalculateLayout(1.0, 990, 400, 1000, 600, 1200, 800, null, null);
+            var narrow = EditorZoomEngine.CalculateLayout(1.0, 990, 400, 983, 600, 1200, 800, null, null);
+
+            Assert.True(wide.PadX + wide.ScaledWidth <= 1000);
+            Assert.True(narrow.ContentWidth >= narrow.PadX * 2 + narrow.ScaledWidth - 0.001);
+            double visibleRight = narrow.Offset.X + 983;
+            double imageCenter = narrow.PadX + narrow.ScaledWidth / 2;
+            Assert.Equal(narrow.Offset.X + 983 / 2.0, imageCenter, 3);
+            Assert.True(visibleRight <= narrow.ContentWidth + 0.001);
+        }
+
+        [Fact]
+        public void CalculateLayout_UnmeasuredViewport_FallsBackToWindowEstimate()
+        {
+            var layout = EditorZoomEngine.CalculateLayout(1.0, 400, 300, 0, 0, 1060, 752, null, null);
+
+            Assert.Equal((1000 - 400) / 2.0, layout.PadX, 3);
+            Assert.Equal((600 - 300) / 2.0, layout.PadY, 3);
+        }
+
+        [Fact]
         public void ZoomFactor_ClampsToValidRange()
         {
             var engine = new EditorZoomEngine();

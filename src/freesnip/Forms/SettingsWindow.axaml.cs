@@ -41,8 +41,26 @@ namespace freesnip.forms
             Title = $"FreeSnip Settings v{RuntimePathHelper.ProductVersion}";
             UiLayoutDirection.Apply(this);
             _config = IniConfig.GetIniSection<CoreConfiguration>();
+            s_activeInstance = this;
+            Closed += (s, e) => { if (s_activeInstance == this) s_activeInstance = null; };
             LoadSettings();
             _loadedFingerprint = BuildFingerprint();
+        }
+
+        private static SettingsWindow s_activeInstance;
+
+        public static void NotifyAutoUpdateSettingChanged(bool enabled)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (s_activeInstance != null)
+                {
+                    var chk = s_activeInstance.FindControl<CheckBox>("ChkAutoUpdateChecks");
+                    if (chk != null) chk.IsChecked = enabled;
+                    if (s_activeInstance._config != null) s_activeInstance._config.AutoUpdateChecks = enabled;
+                    s_activeInstance._loadedFingerprint = s_activeInstance.BuildFingerprint();
+                }
+            });
         }
 
         private string BuildFingerprint()

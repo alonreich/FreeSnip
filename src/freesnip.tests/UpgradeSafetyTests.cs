@@ -8,6 +8,7 @@ using freesnip.helpers;
 
 namespace freesnip.tests;
 
+[Collection(IniConfigStateCollection.Name)]
 public class UpgradeSafetyTests
 {
     [Theory]

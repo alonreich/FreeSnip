@@ -177,7 +177,21 @@ namespace freesnip
                     ocrProviders.Add(new native.Win10OcrProvider());
 #endif
                     SimpleServiceProvider.Current.AddService<IOcrProvider>(ocrProviders);
-                    await OcrInstallationHelper.InstallHebrewOcrAsync();
+                    // OCR runtime preparation is warm-up only: capture, tray and hotkeys must never depend on it.
+                    // A failure here is retried lazily by the OCR path on first use, which reports "OCR UNAVAILABLE".
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await OcrInstallationHelper.InstallHebrewOcrAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) { }
+                        catch (Exception ocrEx)
+                        {
+                            log.Error("OCR runtime preparation failed; capture continues without OCR until it succeeds.", ocrEx);
+                        }
+                    });
+                    IniConfig.SaveFailed += OnSettingsSaveFailed;
                     RetentionHelper.Start();
                     _ = Task.Run(() => StartupTaskHelper.EnsureBatteryRestrictionsDisabledAsync());
                     freesnip.editor.forms.ImageEditorWindow.RequestRegionCaptureAction = () => CaptureHelper.CaptureRegion(true);
@@ -1079,6 +1093,19 @@ namespace freesnip
 
             try { _desktop?.Shutdown(exitCode); } catch { }
             Environment.Exit(exitCode);
+        }
+
+        private static long s_lastSaveFailureToastTicks;
+
+        private static void OnSettingsSaveFailed(Exception ex)
+        {
+            long now = Environment.TickCount64;
+            long last = Interlocked.Read(ref s_lastSaveFailureToastTicks);
+            if (last != 0 && now - last < (long)TimeSpan.FromMinutes(10).TotalMilliseconds) return;
+            if (Interlocked.CompareExchange(ref s_lastSaveFailureToastTicks, now, last) != last) return;
+
+            ToastHelper.ShowToast("FreeSnip: Settings not saved",
+                "Your settings could not be written to disk (" + ex?.Message + "). FreeSnip keeps them and retries automatically.");
         }
 
         public static void ShutdownForUpdate(ProcessStartInfo installerStartInfo)

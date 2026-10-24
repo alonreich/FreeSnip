@@ -5,6 +5,7 @@ using Xunit;
 
 namespace freesnip.tests
 {
+    [Collection(IniConfigStateCollection.Name)]
     public class IniConfigAtomicSaveTests
     {
         private static string TempDir() => Path.Combine(Path.GetTempPath(), "FreeSnip_IniAtomicTests_" + Path.GetRandomFileName());

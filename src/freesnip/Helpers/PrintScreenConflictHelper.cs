@@ -38,25 +38,22 @@ namespace freesnip.helpers
         }
 
         /// <summary>
-        /// True when the Print Screen key is unavailable to FreeSnip, either because the Windows
-        /// snipping setting is enabled or because hotkey registration for a Print Screen combo failed.
+        /// True only when FreeSnip actually failed to register one of its configured Print Screen hotkeys.
+        /// A successful RegisterHotKey is ground truth that FreeSnip owns the key, so the Windows snipping
+        /// setting alone is never reported as a conflict; it only selects the explanation shown to the user.
         /// </summary>
         public static bool IsPrintScreenBlocked(out string reason)
         {
-            if (IsWindowsSnippingPrintScreenEnabled())
+            if (!HotkeyManager.HasPrintScreenRegistrationFailure)
             {
-                reason = "Windows is grabbing the Print Screen key. The Windows setting \"Use the Print screen key to open screen capture\" is turned ON, so the Windows Snipping Tool (Snip & Sketch) steals Print Screen before FreeSnip can see it.";
-                return true;
+                reason = null;
+                return false;
             }
 
-            if (HotkeyManager.HasPrintScreenRegistrationFailure)
-            {
-                reason = "Another program is currently holding the Print Screen key, so FreeSnip could not register its Print Screen hotkeys.";
-                return true;
-            }
-
-            reason = null;
-            return false;
+            reason = IsWindowsSnippingPrintScreenEnabled()
+                ? "Windows is grabbing the Print Screen key. The Windows setting \"Use the Print screen key to open screen capture\" is turned ON, so the Windows Snipping Tool (Snip & Sketch) steals Print Screen before FreeSnip can see it."
+                : "Another program is currently holding the Print Screen key, so FreeSnip could not register its Print Screen hotkeys.";
+            return true;
         }
 
         /// <summary>Simple-English explanation shown inside the red banner in Settings.</summary>
@@ -92,10 +89,10 @@ namespace freesnip.helpers
         }
 
         /// <summary>
-        /// Boot-time check. Called once after HotkeyManager.Start(). When registration already failed
-        /// for Print Screen, RegisterAll() showed the friendly toast; this covers the remaining case
-        /// where the Windows snipping setting is ON but registration appeared to succeed (Windows
-        /// still intercepts the key at a lower level).
+        /// Boot-time check. Called once after HotkeyManager.Start(). Real Print Screen conflicts are
+        /// reported by HotkeyManager.RegisterAll() after a confirmation pass. When registration succeeded,
+        /// FreeSnip owns the key regardless of the Windows snipping setting, so no toast is shown here;
+        /// the setting is only logged for diagnostics.
         /// </summary>
         public static async Task NotifyOnBootAsync()
         {
@@ -103,20 +100,14 @@ namespace freesnip.helpers
             {
                 await WaitForHotkeyRegistrationAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
 
-                bool windowsSnippingEnabled = IsWindowsSnippingPrintScreenEnabled();
-                bool registrationFailedForPrintScreen = HotkeyManager.HasPrintScreenRegistrationFailure;
-
-                if (windowsSnippingEnabled && !registrationFailedForPrintScreen)
+                if (IsWindowsSnippingPrintScreenEnabled() && !HotkeyManager.HasPrintScreenRegistrationFailure)
                 {
-                    ToastHelper.ShowToast(
-                        "FreeSnip: Print Screen is NOT working",
-                        "Windows took the Print Screen key. FreeSnip cannot use it for screenshots. " +
-                        "Easy fix: open Windows Settings, go to Accessibility, then Keyboard, and turn OFF " +
-                        "\"Use the Print screen key to open screen capture\". Or open FreeSnip Settings and pick a different key.");
+                    BootstrapDebug.Log("PrintScreenConflictHelper: Windows snipping Print Screen setting is ON, but FreeSnip registered its Print Screen hotkeys successfully. No conflict reported.");
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                BootstrapDebug.Log($"PrintScreenConflictHelper: boot check failed: {ex.Message}");
             }
         }
     }

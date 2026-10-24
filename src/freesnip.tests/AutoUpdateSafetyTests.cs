@@ -10,6 +10,7 @@ using Xunit;
 
 namespace freesnip.tests;
 
+[Collection(IniConfigStateCollection.Name)]
 public class AutoUpdateSafetyTests
 {
     [Fact]
@@ -160,5 +161,118 @@ public class AutoUpdateSafetyTests
         Assert.Equal(expectedKeep, decision.KeepUserSettings);
         Assert.Equal(expectedWipe, decision.CleanWipe);
         Assert.Equal(expectedCancel, decision.Cancelled);
+    }
+
+    [Fact]
+    public void UpdateChoice_NeverTellMeAgain_HasDedicatedValue()
+    {
+        var choice = freesnip.forms.UpdateChoice.NeverTellMeAgain;
+        Assert.NotEqual(freesnip.forms.UpdateChoice.UpdateNow, choice);
+        Assert.NotEqual(freesnip.forms.UpdateChoice.NotNow, choice);
+        Assert.NotEqual(freesnip.forms.UpdateChoice.SkipThisVersion, choice);
+        Assert.NotEqual(freesnip.forms.UpdateChoice.Dismissed, choice);
+    }
+
+    [Fact]
+    public void PendingUpdate_SaveRetrieveClear_LifecycleWorksAccurately()
+    {
+        string fakeInstaller = Path.Combine(Path.GetTempPath(), "FreeSnip_FakeInstaller_" + Guid.NewGuid().ToString("N") + ".exe");
+        File.WriteAllText(fakeInstaller, "test executable stub");
+
+        try
+        {
+            UpdateService.SavePendingUpdate(fakeInstaller, "v2026.10.15", "abcdef123456", false);
+            var pending = UpdateService.GetPendingUpdate();
+            Assert.NotNull(pending);
+            Assert.Equal(fakeInstaller, pending.InstallerPath);
+            Assert.Equal("v2026.10.15", pending.Tag);
+            Assert.Equal("abcdef123456", pending.Sha256Hex);
+            Assert.False(pending.IsDelta);
+
+            UpdateService.ClearPendingUpdate();
+            Assert.Null(UpdateService.GetPendingUpdate());
+        }
+        finally
+        {
+            if (File.Exists(fakeInstaller)) File.Delete(fakeInstaller);
+            UpdateService.ClearPendingUpdate();
+        }
+    }
+
+    [Fact]
+    public void VerifyAuthenticodeSignature_NonExistentFile_ReturnsFalse()
+    {
+        Assert.False(UpdateService.VerifyAuthenticodeSignature(@"C:\NonExistent_Path_987654321\dummy.exe"));
+    }
+
+    [Fact]
+    public void VerifyAuthenticodeSignature_UnsignedFile_FailsClosed()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "freesnip_unsigned_" + Guid.NewGuid().ToString("N") + ".exe");
+        File.WriteAllBytes(path, new byte[] { 0x4D, 0x5A, 0x90, 0x00, 0x03 });
+        try
+        {
+            Assert.False(UpdateService.VerifyAuthenticodeSignature(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void TryLockVerifiedPayload_PathOutsideDownloadRoot_IsRejected()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "freesnip_outside_" + Guid.NewGuid().ToString("N") + ".exe");
+        byte[] bytes = Encoding.ASCII.GetBytes("payload");
+        File.WriteAllBytes(path, bytes);
+        try
+        {
+            string hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            Assert.Null(UpdateService.TryLockVerifiedPayload(path, hash, isDelta: true));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void TryLockVerifiedPayload_HashMismatch_IsRejectedAndDiscarded()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "FreeSnip_AutoUpdate", "test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string path = Path.Combine(folder, "FreeSnip_delta.zip");
+        File.WriteAllBytes(path, Encoding.ASCII.GetBytes("payload"));
+        try
+        {
+            Assert.Null(UpdateService.TryLockVerifiedPayload(path, new string('0', 64), isDelta: true));
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TryLockVerifiedPayload_MatchingDelta_HoldsWriteLock()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "FreeSnip_AutoUpdate", "test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string path = Path.Combine(folder, "FreeSnip_delta.zip");
+        byte[] bytes = Encoding.ASCII.GetBytes("payload");
+        File.WriteAllBytes(path, bytes);
+        try
+        {
+            string hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            using FileStream locked = UpdateService.TryLockVerifiedPayload(path, hash, isDelta: true);
+            Assert.NotNull(locked);
+            Assert.Throws<IOException>(() => File.WriteAllBytes(path, new byte[] { 1 }));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 }

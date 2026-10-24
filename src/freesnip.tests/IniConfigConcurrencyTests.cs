@@ -11,6 +11,7 @@ using Xunit;
 
 namespace freesnip.tests
 {
+    [Collection(IniConfigStateCollection.Name)]
     public class IniConfigConcurrencyTests
     {
         private static string CreateTempDir(string prefix)
@@ -142,6 +143,48 @@ namespace freesnip.tests
             }
             finally
             {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+        }
+
+        [Fact]
+        public void FailedSave_IsNotReportedAsCommitted_AndIsRetriedUntilPersisted()
+        {
+            string dir = CreateTempDir("FreeSnip_IniFail");
+            Exception raised = null;
+            using var raisedSignal = new ManualResetEventSlim(false);
+            Action<Exception> handler = ex => { raised = ex; raisedSignal.Set(); };
+            try
+            {
+                IniConfig.IniDirectory = dir;
+                IniConfig.Init("FreeSnipFail", "fail_config");
+                IniConfig.SaveFailed += handler;
+                IniConfig.SimulatedSaveFailure = path => path != null && path.StartsWith(dir, StringComparison.OrdinalIgnoreCase);
+
+                IniConfig.GetIniSection<CoreConfiguration>().Language = "fail-then-recover";
+                IniConfig.Save();
+
+                Assert.False(IniConfig.WaitForPendingSaves(3000));
+                Assert.True(IniConfig.HasUnsavedChanges);
+                Assert.NotNull(IniConfig.LastSaveError);
+                Assert.True(raisedSignal.Wait(3000));
+                Assert.NotNull(raised);
+
+                IniConfig.SimulatedSaveFailure = null;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                while (IniConfig.HasUnsavedChanges && sw.ElapsedMilliseconds < 10000)
+                {
+                    Thread.Sleep(50);
+                }
+
+                Assert.False(IniConfig.HasUnsavedChanges);
+                Assert.Null(IniConfig.LastSaveError);
+                Assert.Contains("fail-then-recover", File.ReadAllText(Path.Combine(dir, "fail_config.ini")));
+            }
+            finally
+            {
+                IniConfig.SimulatedSaveFailure = null;
+                IniConfig.SaveFailed -= handler;
                 try { Directory.Delete(dir, true); } catch { }
             }
         }
